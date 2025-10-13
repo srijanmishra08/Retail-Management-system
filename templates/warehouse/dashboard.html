@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Warehouse Dashboard - FIMS{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total Stock IN</h5>
+                <h2>{{ "%.2f"|format(total_stock_in or 0) }}</h2>
+                <p class="mb-0"><i class="bi bi-arrow-down-circle"></i> MT</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total Stock OUT</h5>
+                <h2>{{ "%.2f"|format(total_stock_out or 0) }}</h2>
+                <p class="mb-0"><i class="bi bi-arrow-up-circle"></i> MT</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Balance Stock</h5>
+                <h2>{{ "%.2f"|format((total_stock_in or 0) - (total_stock_out or 0)) }}</h2>
+                <p class="mb-0"><i class="bi bi-box-seam"></i> MT</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">Warehouses</h5>
+                <h2>{{ warehouse_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-building"></i> Active</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Stock Movements</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Builty Number</th>
+                                <th>Warehouse</th>
+                                <th>Quantity (MT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if recent_movements %}
+                                {% for movement in recent_movements %}
+                                <tr>
+                                    <td>{{ movement[0] }}</td>
+                                    <td>
+                                        {% if movement[1] == 'IN' %}
+                                        <span class="badge bg-success">Stock IN</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Stock OUT</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><strong>{{ movement[2] }}</strong></td>
+                                    <td>{{ movement[3] }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(movement[4]) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No stock movements yet</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('warehouse_stock_in') }}" class="btn btn-success">
+                        <i class="bi bi-arrow-down-circle"></i> Stock IN
+                    </a>
+                    <a href="{{ url_for('warehouse_stock_out') }}" class="btn btn-danger">
+                        <i class="bi bi-arrow-up-circle"></i> Stock OUT
+                    </a>
+                    <a href="{{ url_for('warehouse_balance_all') }}" class="btn btn-primary">
+                        <i class="bi bi-graph-up"></i> View Balance
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Warehouse Info</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2"><strong>Total Accounts:</strong> {{ account_count or 0 }}</p>
+                <p class="mb-2"><strong>Active Builties:</strong> {{ builty_count or 0 }}</p>
+                <p class="mb-0"><strong>Today's Stock IN:</strong> {{ "%.2f"|format(today_stock_in or 0) }} MT</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

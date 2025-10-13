@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Accountant Dashboard - FIMS{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total E-Bills</h5>
+                <h2>{{ ebill_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-file-earmark-pdf"></i> Generated</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Eway Bills Uploaded</h5>
+                <h2>{{ eway_bill_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-upload"></i> Files</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total Builties</h5>
+                <h2>{{ builty_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-file-text"></i> Available</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h5 class="card-title">Today's E-Bills</h5>
+                <h2>{{ today_ebill_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-calendar-day"></i> Today</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent E-Bills</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Builty Number</th>
+                                <th>Account</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if recent_ebills %}
+                                {% for ebill in recent_ebills %}
+                                <tr>
+                                    <td>{{ ebill[0] }}</td>
+                                    <td><strong>{{ ebill[1] }}</strong></td>
+                                    <td>{{ ebill[2] }}</td>
+                                    <td>₹{{ "%.2f"|format(ebill[3]) }}</td>
+                                    <td>
+                                        {% if ebill[5] %}
+                                        <span class="badge bg-success">Uploaded</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info" onclick="viewEbill({{ ebill[4] }})">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">No e-bills created yet</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('accountant_create_ebill') }}" class="btn btn-primary">
+                        <i class="bi bi-file-earmark-plus"></i> Create E-Bill from Builty
+                    </a>
+                    <a href="{{ url_for('accountant_all_ebills') }}" class="btn btn-info">
+                        <i class="bi bi-list-ul"></i> View All E-Bills
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Statistics</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2"><strong>Total Accounts:</strong> {{ account_count or 0 }}</p>
+                <p class="mb-2"><strong>Pending Uploads:</strong> {{ pending_uploads or 0 }}</p>
+                <p class="mb-0"><strong>This Month:</strong> {{ month_ebills or 0 }} E-Bills</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function viewEbill(ebillId) {
+    // This would open a modal or new window to view e-bill details
+    alert('View E-Bill ID: ' + ebillId);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h2><i class="bi bi-file-earmark-bar-graph"></i> Reports & Analytics</h2>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="bi bi-train-freight-front text-primary" style="font-size: 48px;"></i>
+                </div>
+                <h5 class="card-title">Rake-wise Report</h5>
+                <p class="text-muted">View detailed reports for each rake including stock allocation and dispatch details</p>
+                <a href="{{ url_for('rake_wise_report') }}" class="btn btn-primary">
+                    <i class="bi bi-file-earmark-text"></i> Generate Report
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="bi bi-building text-success" style="font-size: 48px;"></i>
+                </div>
+                <h5 class="card-title">Warehouse-wise Report</h5>
+                <p class="text-muted">Comprehensive stock status and movement reports for all warehouses</p>
+                <a href="{{ url_for('warehouse_wise_report') }}" class="btn btn-success">
+                    <i class="bi bi-file-earmark-text"></i> Generate Report
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="bi bi-people text-info" style="font-size: 48px;"></i>
+                </div>
+                <h5 class="card-title">Dealer-wise Report</h5>
+                <p class="text-muted">Track dispatch history and quantities for each dealer and company</p>
+                <a href="{{ url_for('dealer_wise_report') }}" class="btn btn-info">
+                    <i class="bi bi-file-earmark-text"></i> Generate Report
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <i class="bi bi-currency-rupee text-warning" style="font-size: 48px;"></i>
+                </div>
+                <h5 class="card-title">Billing Summary</h5>
+                <p class="text-muted">Complete billing summary with transport, rent, and lifting charges breakdown</p>
+                <a href="{{ url_for('billing_summary_report') }}" class="btn btn-warning">
+                    <i class="bi bi-file-earmark-text"></i> Generate Report
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

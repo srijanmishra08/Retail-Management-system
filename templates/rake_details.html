@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Rake Details - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('rakes') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Rakes
+    </a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-train-freight-front"></i> Rake Details - {{ rake[1] }}</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table table-borderless">
+                    <tr>
+                        <th>Rake Number:</th>
+                        <td>{{ rake[1] }}</td>
+                    </tr>
+                    <tr>
+                        <th>Supplier:</th>
+                        <td>{{ rake[7] }}</td>
+                    </tr>
+                    <tr>
+                        <th>Date:</th>
+                        <td>{{ rake[3] }}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-borderless">
+                    <tr>
+                        <th>Quantity:</th>
+                        <td>{{ "%.2f"|format(rake[4]) }} MT</td>
+                    </tr>
+                    <tr>
+                        <th>Allocation Type:</th>
+                        <td><span class="badge bg-primary">{{ rake[5]|capitalize }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Warehouse:</th>
+                        <td>{{ rake[8] if rake[8] else 'N/A' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if warehouse_stock %}
+<div class="card mb-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-building"></i> Warehouse Stock</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Warehouse</th>
+                        <th>Quantity In</th>
+                        <th>Quantity Out</th>
+                        <th>Current Balance</th>
+                        <th>Rent Start Date</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in warehouse_stock %}
+                    <tr>
+                        <td>{{ stock[10] }}</td>
+                        <td>{{ "%.2f"|format(stock[3]) }} MT</td>
+                        <td>{{ "%.2f"|format(stock[4]) }} MT</td>
+                        <td><strong>{{ "%.2f"|format(stock[5]) }} MT</strong></td>
+                        <td>{{ stock[6] }}</td>
+                        <td>{{ stock[8] if stock[8] else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if dispatches %}
+<div class="card">
+    <div class="card-header bg-white">
+        <h5 class="mb-0"><i class="bi bi-truck"></i> Dispatches</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Dispatch ID</th>
+                        <th>Warehouse</th>
+                        <th>Truck Number</th>
+                        <th>Destination</th>
+                        <th>Quantity</th>
+                        <th>Date</th>
+                        <th>Bill Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dispatch in dispatches %}
+                    <tr>
+                        <td>#{{ dispatch[0] }}</td>
+                        <td>{{ dispatch[11] }}</td>
+                        <td>{{ dispatch[5] }}</td>
+                        <td><span class="badge bg-info">{{ dispatch[3] }}</span></td>
+                        <td>{{ "%.2f"|format(dispatch[6]) }} MT</td>
+                        <td>{{ dispatch[7] }}</td>
+                        <td>
+                            {% if dispatch[9] %}
+                            <span class="badge bg-success">Generated</span>
+                            {% else %}
+                            <span class="badge bg-warning">Pending</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

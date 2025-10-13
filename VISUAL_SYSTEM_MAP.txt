@@ -1,0 +1,425 @@
+# FIMS - Visual System Map
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    FERTILIZER INVENTORY MANAGEMENT SYSTEM                    │
+│                              (FIMS) - Version 1.0                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                              SYSTEM ARCHITECTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER INTERFACE                                  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                   │
+│  │  ADMIN   │  │  RAKE    │  │ WAREHOUSE│  │ACCOUNTANT│                   │
+│  │Dashboard │  │  POINT   │  │ Dashboard│  │ Dashboard│                   │
+│  │          │  │Dashboard │  │          │  │          │                   │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘                   │
+│       │             │              │              │                          │
+└───────┼─────────────┼──────────────┼──────────────┼──────────────────────────┘
+        │             │              │              │
+        │             │              │              │
+┌───────┼─────────────┼──────────────┼──────────────┼──────────────────────────┐
+│       │             │              │              │                          │
+│       │    FLASK APPLICATION (app.py)            │                          │
+│       │             │              │              │                          │
+│  ┌────▼────┐   ┌───▼────┐    ┌───▼────┐    ┌───▼────┐                     │
+│  │ Admin   │   │ Rake   │    │ Ware-  │    │Account-│                     │
+│  │ Routes  │   │ Point  │    │ house  │    │ ant    │                     │
+│  │ (5)     │   │ Routes │    │ Routes │    │ Routes │                     │
+│  │         │   │ (3)    │    │ (4)    │    │ (3)    │                     │
+│  └────┬────┘   └───┬────┘    └───┬────┘    └───┬────┘                     │
+│       │            │             │             │                            │
+│       └────────────┼─────────────┼─────────────┘                            │
+│                    │             │                                          │
+│              ┌─────▼─────────────▼─────┐                                    │
+│              │  DATABASE MODULE        │                                    │
+│              │  (database.py)          │                                    │
+│              │  40+ Functions          │                                    │
+│              └─────────┬───────────────┘                                    │
+│                        │                                                    │
+└────────────────────────┼────────────────────────────────────────────────────┘
+                         │
+                         │
+┌────────────────────────▼────────────────────────────────────────────────────┐
+│                          DATABASE LAYER                                     │
+│                          (fims.db - SQLite)                                 │
+│                                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │  users   │  │  rakes   │  │ accounts │  │warehouses│  │  trucks  │    │
+│  │  (4)     │  │  (FK:    │  │  (3+)    │  │  (3)     │  │  (N)     │    │
+│  │          │  │rake_code)│  │          │  │          │  │          │    │
+│  └──────────┘  └────┬─────┘  └──────────┘  └──────────┘  └──────────┘    │
+│                     │                                                       │
+│                     │ rake_code (CRITICAL LINK)                            │
+│                     │                                                       │
+│       ┌─────────────┼─────────────┐                                        │
+│       │             │             │                                        │
+│  ┌────▼─────┐  ┌───▼─────┐  ┌───▼──────┐                                 │
+│  │ builty   │  │loading  │  │warehouse │                                  │
+│  │ (FK:     │  │ slips   │  │  stock   │                                  │
+│  │rake_code)│  │(FK:     │  │(FK:      │                                  │
+│  │  (N)     │  │rake_code│  │builty_id)│                                  │
+│  │          │  │builty_id│  │  (N)     │                                  │
+│  └────┬─────┘  │optional)│  └──────────┘                                  │
+│       │        │  (N)    │                                                 │
+│       │        └─────────┘                                                 │
+│       │                                                                     │
+│  ┌────▼─────┐                                                              │
+│  │ ebills   │                                                              │
+│  │ (FK:     │                                                              │
+│  │builty_id)│                                                              │
+│  │  (N)     │                                                              │
+│  └──────────┘                                                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                            DATA FLOW (Complete Cycle)
+═══════════════════════════════════════════════════════════════════════════════
+
+PHASE 1: PROCUREMENT (Admin)
+┌────────────────────────────────────────┐
+│  Railway Rake Arrives                  │
+│  ↓                                     │
+│  Admin Creates Rake Entry              │
+│  • Rake Code: RK-2023-001             │
+│  • Company: ABC Fertilizers            │
+│  • Product: Urea                       │
+│  • RR Quantity: 500 MT                 │
+│  • Rake Point: Station A               │
+└────────────┬───────────────────────────┘
+             │
+             ↓
+
+PHASE 2A: DISTRIBUTION (RakePoint) - Warehouse Path
+┌────────────────────────────────────────┐
+│  RakePoint User Actions                │
+│  ↓                                     │
+│  1. Create Loading Slips               │
+│     • Slip #1: Wagon 1 → Truck 1      │
+│     • Slip #2: Wagon 2 → Truck 2      │
+│     ...                                │
+│  ↓                                     │
+│  2. Create Builties (BLT-*)           │
+│     • BLT-001: 50 MT → Warehouse 1    │
+│     • BLT-002: 50 MT → Warehouse 1    │
+│     ...                                │
+│     (All link to RK-2023-001)         │
+└────────────┬───────────────────────────┘
+             │
+             ↓
+   ┌─────────────────────┐
+   │   Trucks Depart     │
+   │   to Warehouses     │
+   └─────────┬───────────┘
+             │
+             ↓
+
+PHASE 2B: STORAGE (Warehouse) - Stock IN
+┌────────────────────────────────────────┐
+│  Warehouse User Actions                │
+│  ↓                                     │
+│  1. Truck Arrives                      │
+│  ↓                                     │
+│  2. Record Stock IN                    │
+│     • Select Builty: BLT-001          │
+│     • Unloaded Qty: 49.8 MT           │
+│     • Warehouse: WH-1                  │
+│  ↓                                     │
+│  3. System Validates                   │
+│     ✓ 49.8 < 50 MT builty capacity    │
+│     ✓ Record Stock IN                  │
+│  ↓                                     │
+│  Warehouse Balance: 49.8 MT            │
+└────────────┬───────────────────────────┘
+             │
+             ↓
+        [Time Passes]
+        [Customer Orders]
+             │
+             ↓
+
+PHASE 3: DISPATCH (Warehouse) - Stock OUT
+┌────────────────────────────────────────┐
+│  Warehouse User Actions                │
+│  ↓                                     │
+│  1. Customer Order: 30 MT              │
+│  ↓                                     │
+│  2. Check Balance                      │
+│     ✓ 30 < 49.8 MT available          │
+│  ↓                                     │
+│  3. Create NEW Builty (BLTO-*)        │
+│     • BLTO-20231010-103045            │
+│     • Truck: GJ-05-CD-5678            │
+│     • Destination: Dealer A            │
+│     • Quantity: 30 MT                  │
+│     (Auto-links to RK-2023-001)       │
+│  ↓                                     │
+│  4. Record Stock OUT                   │
+│     New Balance: 19.8 MT               │
+└────────────┬───────────────────────────┘
+             │
+             ↓
+
+PHASE 4: BILLING (Accountant)
+┌────────────────────────────────────────┐
+│  Accountant User Actions               │
+│  ↓                                     │
+│  1. Create E-Bill                      │
+│     • Select Builty: BLTO-...-103045  │
+│     • E-Bill #: EB-2023-001           │
+│     • Amount: ₹1,50,000               │
+│  ↓                                     │
+│  2. Upload Eway Bill PDF               │
+│     • Eway Bill Number                 │
+│     • PDF File (max 5MB)              │
+│  ↓                                     │
+│  ✓ E-Bill Generated                   │
+│  ✓ Complete Audit Trail               │
+└────────────────────────────────────────┘
+
+RESULT: Complete Traceability Chain
+E-Bill EB-2023-001
+  → Builty BLTO-20231010-103045
+    → Warehouse Stock (30 MT OUT)
+      → Builty BLT-001 (49.8 MT IN)
+        → Rake RK-2023-001
+          → ABC Fertilizers, Urea, 500 MT
+
+═══════════════════════════════════════════════════════════════════════════════
+                        ALTERNATIVE PATH: Direct Dispatch
+═══════════════════════════════════════════════════════════════════════════════
+
+PHASE 1: PROCUREMENT (Admin)
+Same as above: Create Rake RK-2023-002
+
+PHASE 2: DIRECT DISPATCH (RakePoint) - Market Path
+┌────────────────────────────────────────┐
+│  RakePoint User Actions                │
+│  ↓                                     │
+│  Create Builties to Accounts           │
+│  (Not to Warehouses)                   │
+│  • BLT-101: 30 MT → Government A      │
+│  • BLT-102: 30 MT → Government B      │
+│  ...                                   │
+│  ↓                                     │
+│  Trucks Deliver Directly               │
+│  (Skip Warehouse)                      │
+└────────────┬───────────────────────────┘
+             │
+             ↓
+
+PHASE 3: BILLING (Accountant)
+┌────────────────────────────────────────┐
+│  Create E-Bills Directly               │
+│  • EB-2023-101 for BLT-101            │
+│  • EB-2023-102 for BLT-102            │
+│  ...                                   │
+└────────────────────────────────────────┘
+
+RESULT: Faster dispatch, no warehouse costs
+Still maintains complete traceability to Rake
+
+═══════════════════════════════════════════════════════════════════════════════
+                        VALIDATION CHECKPOINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+VALIDATION 1: Stock IN Capacity Check
+┌────────────────────────────────────────┐
+│  User tries to record Stock IN         │
+│  ↓                                     │
+│  System checks:                        │
+│  • Builty original quantity            │
+│  • Existing Stock IN for this builty   │
+│  • Requested new quantity              │
+│  ↓                                     │
+│  IF (Existing + New) > Builty Qty:    │
+│     ✗ REJECT                           │
+│     Show: "Only X.XX MT remaining"     │
+│  ELSE:                                 │
+│     ✓ ACCEPT                           │
+│     Show: "X.XX MT remaining"          │
+└────────────────────────────────────────┘
+
+VALIDATION 2: Stock OUT Balance Check
+┌────────────────────────────────────────┐
+│  User tries to record Stock OUT        │
+│  ↓                                     │
+│  System checks:                        │
+│  • Warehouse current balance           │
+│  • Requested dispatch quantity         │
+│  ↓                                     │
+│  IF Requested > Balance:               │
+│     ✗ REJECT                           │
+│     Show: "Only X.XX MT available"     │
+│  ELSE:                                 │
+│     ✓ ACCEPT                           │
+│     Create new builty, record OUT      │
+└────────────────────────────────────────┘
+
+VALIDATION 3: E-Bill Uniqueness
+┌────────────────────────────────────────┐
+│  Accountant creates E-Bill             │
+│  ↓                                     │
+│  System checks:                        │
+│  • Is builty already billed?           │
+│  ↓                                     │
+│  IF E-Bill exists:                     │
+│     ✗ REJECT                           │
+│     Show: "Already billed"             │
+│  ELSE:                                 │
+│     ✓ ACCEPT                           │
+│     Create E-Bill                      │
+└────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                        REPORT GENERATION
+═══════════════════════════════════════════════════════════════════════════════
+
+ADMIN REPORTS
+┌────────────────────────────────────────┐
+│  1. Rake Summary                       │
+│     • RR Quantity vs Stock IN/OUT      │
+│     • Company-wise distribution        │
+│     • Balance calculations             │
+│  ↓                                     │
+│  2. Overall System Health              │
+│     • Total rakes handled              │
+│     • Total stock in warehouses        │
+│     • Total dispatched                 │
+│     • Financial summary                │
+└────────────────────────────────────────┘
+
+WAREHOUSE REPORTS
+┌────────────────────────────────────────┐
+│  1. Warehouse Balance                  │
+│     • Stock IN/OUT by warehouse        │
+│     • Current balance                  │
+│  ↓                                     │
+│  2. Stock Movements                    │
+│     • Recent IN/OUT transactions       │
+│     • Date-wise tracking               │
+│  ↓                                     │
+│  3. Account Distribution               │
+│     • Stock by customer                │
+│     • Pending dispatches               │
+└────────────────────────────────────────┘
+
+ACCOUNTANT REPORTS
+┌────────────────────────────────────────┐
+│  1. E-Bill List                        │
+│     • All generated bills              │
+│     • Filter by date/status            │
+│  ↓                                     │
+│  2. Eway Bill Status                   │
+│     • Uploaded vs Pending              │
+│  ↓                                     │
+│  3. Financial Summary                  │
+│     • Total billed amount              │
+│     • Account receivables              │
+└────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                        SYSTEM STATISTICS
+═══════════════════════════════════════════════════════════════════════════════
+
+DATABASE TABLES: 9
+├─ users (4 roles)
+├─ rakes (N entries)
+├─ accounts (3+)
+├─ warehouses (3)
+├─ trucks (N)
+├─ builty (N, 2 types)
+├─ loading_slips (N)
+├─ warehouse_stock (N, IN/OUT)
+└─ ebills (N)
+
+APPLICATION ROUTES: 20+
+├─ Admin: 5 routes
+├─ RakePoint: 3 routes
+├─ Warehouse: 4 routes
+└─ Accountant: 3 routes
+
+USER INTERFACE: 15+ Templates
+├─ Dashboards: 4
+├─ Forms: 7
+├─ Reports: 4
+└─ Shared: base, login
+
+VALIDATIONS: 4 Critical
+├─ Stock IN capacity check ✓
+├─ Stock OUT balance check ✓
+├─ Unique constraints ✓
+└─ E-Bill uniqueness ✓
+
+═══════════════════════════════════════════════════════════════════════════════
+                        KEY FEATURES
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ CODE-BASED LINKING
+   Every entity links to rake_code
+   Complete traceability from source to destination
+
+✅ TWO BUILTY TYPES
+   BLT-*: RakePoint → Warehouse
+   BLTO-*: Warehouse → Customer
+   Both trace back to same rake
+
+✅ ROLE-BASED ACCESS
+   Each user sees only their functions
+   Secure, isolated operations
+
+✅ DATA VALIDATION
+   Prevent duplicate stock entries
+   Prevent negative warehouse balance
+   Ensure data integrity
+
+✅ FLEXIBLE DISTRIBUTION
+   Support warehouse storage
+   Support direct market dispatch
+   Support mixed distribution
+
+✅ COMPLETE AUDIT TRAIL
+   Timestamps on all operations
+   User attribution
+   No silent updates
+
+═══════════════════════════════════════════════════════════════════════════════
+                        FUTURE ENHANCEMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+PRIORITY 1 (Critical)
+⚠️ Enforce loading slip → builty link
+⚠️ Implement rent calculation
+⚠️ Add lifting charges
+⚠️ Stock aging tracking
+
+PRIORITY 2 (Financial)
+⚠️ Rent bill generation
+⚠️ Financial reports
+⚠️ Excel/PDF export
+⚠️ Account receivables
+
+PRIORITY 3 (UX)
+⚠️ Auto-complete forms
+⚠️ Dashboard charts
+⚠️ Mobile optimization
+⚠️ Real-time updates
+
+PRIORITY 4 (Advanced)
+⚠️ Predictive analytics
+⚠️ Activity logging
+⚠️ Performance optimization
+⚠️ Security enhancements
+
+═══════════════════════════════════════════════════════════════════════════════
+
+System Version: 1.0
+Documentation Date: October 9, 2025
+Status: Production Ready (with planned enhancements)
+
+═══════════════════════════════════════════════════════════════════════════════
+```

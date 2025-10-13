@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Stock OUT - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h4 class="mb-0"><i class="bi bi-arrow-up-circle"></i> Stock OUT - Create New Builty</h4>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> Stock OUT requires creating a new builty with all 14 fields
+        </div>
+        
+        <form method="POST" action="{{ url_for('warehouse_stock_out') }}">
+            <!-- Warehouse Selection -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="warehouse_name" class="form-label">Warehouse Name <span class="text-danger">*</span></label>
+                    <select class="form-select" id="warehouse_name" name="warehouse_name" required>
+                        <option value="">Select Warehouse</option>
+                        {% for warehouse in warehouses %}
+                        <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - {{ warehouse[2] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="stock_out_date" class="form-label">Stock OUT Date <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="stock_out_date" name="stock_out_date" required>
+                </div>
+            </div>
+            
+            <hr class="my-3">
+            <h5 class="text-primary mb-3">New Builty Details (14 Fields)</h5>
+            
+            <!-- Date & Rake Point Name -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="date" class="form-label">1. Date <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="date" name="date" required>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="rake_point_name" class="form-label">2. Rake Point Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="rake_point_name" name="rake_point_name" required placeholder="Enter rake point name">
+                </div>
+            </div>
+            
+            <!-- Account/Warehouse & Truck Number -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="account_warehouse" class="form-label">3. Account/Warehouse <span class="text-danger">*</span></label>
+                    <select class="form-select" id="account_warehouse" name="account_warehouse" required>
+                        <option value="">Select Account/Warehouse</option>
+                        {% for account in accounts %}
+                        <option value="{{ account[1] }}">{{ account[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="truck_number" class="form-label">4. Truck Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Enter truck number">
+                </div>
+            </div>
+            
+            <!-- Loading Point & Unloading Point -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="loading_point" class="form-label">5. Loading Point <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Enter loading point">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="unloading_point" class="form-label">6. Unloading Point <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="unloading_point" name="unloading_point" required placeholder="Enter unloading point">
+                </div>
+            </div>
+            
+            <!-- Truck Driver & Truck Owner -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="truck_driver" class="form-label">7. Truck Driver <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_driver" name="truck_driver" required placeholder="Enter driver name">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="truck_owner" class="form-label">8. Truck Owner <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_owner" name="truck_owner" required placeholder="Enter truck owner name">
+                </div>
+            </div>
+            
+            <!-- Mobile Numbers -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="mobile_number_1" class="form-label">9. Mobile Number 1 <span class="text-danger">*</span></label>
+                    <input type="tel" class="form-control" id="mobile_number_1" name="mobile_number_1" required placeholder="Enter mobile number">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="mobile_number_2" class="form-label">10. Mobile Number 2</label>
+                    <input type="tel" class="form-control" id="mobile_number_2" name="mobile_number_2" placeholder="Enter secondary mobile number">
+                </div>
+            </div>
+            
+            <!-- Goods Name & Number of Bags -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="goods_name" class="form-label">11. Goods Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="e.g., Urea, DAP">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="number_of_bags" class="form-label">12. Number of Bags <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="number_of_bags" name="number_of_bags" required placeholder="Enter number of bags">
+                </div>
+            </div>
+            
+            <!-- Quantity & Freight Details -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="quantity_wt_mt" class="form-label">13. Quantity (Weight in MT) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="quantity_wt_mt" name="quantity_wt_mt" required placeholder="0.00">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="freight_details" class="form-label">14. Freight Details <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="freight_details" name="freight_details" required placeholder="Enter freight amount/details">
+                </div>
+            </div>
+            
+            <!-- LR Number -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="lr_number" class="form-label">15. LR Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="lr_number" name="lr_number" required placeholder="Enter LR number">
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-save"></i> Record Stock OUT
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.getElementById('stock_out_date').valueAsDate = new Date();
+document.getElementById('date').valueAsDate = new Date();
+</script>
+{% endblock %}

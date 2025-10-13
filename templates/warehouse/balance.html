@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Balance Stock - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-graph-up"></i> Stock Balance Report</h2>
+    <button class="btn btn-success" onclick="window.print()">
+        <i class="bi bi-printer"></i> Print Report
+    </button>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3><i class="bi bi-arrow-down-circle"></i></h3>
+                <h2>{{ "%.2f"|format(total_stock_in or 0) }}</h2>
+                <p class="mb-0">Total Stock IN (MT)</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h3><i class="bi bi-arrow-up-circle"></i></h3>
+                <h2>{{ "%.2f"|format(total_stock_out or 0) }}</h2>
+                <p class="mb-0">Total Stock OUT (MT)</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3><i class="bi bi-box-seam"></i></h3>
+                <h2>{{ "%.2f"|format((total_stock_in or 0) - (total_stock_out or 0)) }}</h2>
+                <p class="mb-0">Balance Stock (MT)</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Balance by Warehouse -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-building"></i> Stock Balance by Warehouse</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Warehouse Name</th>
+                        <th>Location</th>
+                        <th>Stock IN (MT)</th>
+                        <th>Stock OUT (MT)</th>
+                        <th>Balance (MT)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if warehouse_balances %}
+                        {% for balance in warehouse_balances %}
+                        <tr>
+                            <td><strong>{{ balance[0] }}</strong></td>
+                            <td>{{ balance[1] }}</td>
+                            <td class="text-end text-success">{{ "%.2f"|format(balance[2]) }}</td>
+                            <td class="text-end text-danger">{{ "%.2f"|format(balance[3]) }}</td>
+                            <td class="text-end"><strong>{{ "%.2f"|format(balance[2] - balance[3]) }}</strong></td>
+                            <td>
+                                {% set bal = balance[2] - balance[3] %}
+                                {% if bal > 100 %}
+                                <span class="badge bg-success">High Stock</span>
+                                {% elif bal > 50 %}
+                                <span class="badge bg-warning">Medium Stock</span>
+                                {% elif bal > 0 %}
+                                <span class="badge bg-info">Low Stock</span>
+                                {% else %}
+                                <span class="badge bg-danger">Empty</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        
+                        <!-- Total Row -->
+                        <tr class="table-primary fw-bold">
+                            <td colspan="2">TOTAL</td>
+                            <td class="text-end">{{ "%.2f"|format(total_stock_in or 0) }}</td>
+                            <td class="text-end">{{ "%.2f"|format(total_stock_out or 0) }}</td>
+                            <td class="text-end">{{ "%.2f"|format((total_stock_in or 0) - (total_stock_out or 0)) }}</td>
+                            <td>-</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No stock data available</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Balance by Account -->
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-people"></i> Stock Balance by Account</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Account Name</th>
+                        <th>Stock IN (MT)</th>
+                        <th>Stock OUT (MT)</th>
+                        <th>Balance (MT)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if account_balances %}
+                        {% for balance in account_balances %}
+                        <tr>
+                            <td><strong>{{ balance[0] }}</strong></td>
+                            <td class="text-end text-success">{{ "%.2f"|format(balance[1]) }}</td>
+                            <td class="text-end text-danger">{{ "%.2f"|format(balance[2]) }}</td>
+                            <td class="text-end"><strong>{{ "%.2f"|format(balance[1] - balance[2]) }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">No account data available</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

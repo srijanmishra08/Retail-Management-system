@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Create E-Bill - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('accountant_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-file-earmark-plus"></i> Create E-Bill from Builty</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('accountant_create_ebill') }}" enctype="multipart/form-data">
+            <!-- Builty Selection -->
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="builty_id" class="form-label">Select Builty <span class="text-danger">*</span></label>
+                    <select class="form-select" id="builty_id" name="builty_id" required>
+                        <option value="">Select Builty</option>
+                        {% for builty in builties %}
+                        <option value="{{ builty[0] }}" 
+                                data-truck="{{ builty[22] }}"
+                                data-goods="{{ builty[10] }}"
+                                data-quantity="{{ builty[12] }}"
+                                data-account="{{ builty[20] }}"
+                                data-loading="{{ builty[8] }}"
+                                data-unloading="{{ builty[9] }}"
+                                data-freight="{{ builty[15] }}"
+                                data-lr="{{ builty[16] }}">
+                            LR: {{ builty[16] }} | Truck: {{ builty[22] }} | {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Auto-filled Builty Details -->
+            <div class="card bg-light mb-3">
+                <div class="card-body">
+                    <h6 class="card-title text-primary">Builty Details (Auto-filled)</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p class="mb-1"><strong>Truck Number:</strong> <span id="display_truck">-</span></p>
+                            <p class="mb-1"><strong>Goods Name:</strong> <span id="display_goods">-</span></p>
+                        </div>
+                        <div class="col-md-4">
+                            <p class="mb-1"><strong>Quantity:</strong> <span id="display_quantity">-</span> MT</p>
+                            <p class="mb-1"><strong>Account:</strong> <span id="display_account">-</span></p>
+                        </div>
+                        <div class="col-md-4">
+                            <p class="mb-1"><strong>Loading Point:</strong> <span id="display_loading">-</span></p>
+                            <p class="mb-1"><strong>Unloading Point:</strong> <span id="display_unloading">-</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- E-Bill Details -->
+            <h6 class="text-primary mb-3">E-Bill Information</h6>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="ebill_number" class="form-label">E-Bill Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="ebill_number" name="ebill_number" required placeholder="Auto-generated or Manual">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="ebill_date" class="form-label">E-Bill Date <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="ebill_date" name="ebill_date" required>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="amount" class="form-label">Amount (₹) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="amount" name="amount" required placeholder="0.00">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="tax_amount" class="form-label">Tax Amount (₹)</label>
+                    <input type="number" step="0.01" class="form-control" id="tax_amount" name="tax_amount" placeholder="0.00">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="2" placeholder="Additional details (optional)"></textarea>
+                </div>
+            </div>
+            
+            <!-- Eway Bill Upload -->
+            <hr class="my-4">
+            <h6 class="text-success mb-3">Upload Eway Bill (PDF)</h6>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="eway_bill_number" class="form-label">Eway Bill Number</label>
+                    <input type="text" class="form-control" id="eway_bill_number" name="eway_bill_number" placeholder="Enter eway bill number">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="eway_bill_pdf" class="form-label">Upload Eway Bill PDF</label>
+                    <input type="file" class="form-control" id="eway_bill_pdf" name="eway_bill_pdf" accept=".pdf">
+                    <small class="text-muted">Upload PDF file (Max 5MB)</small>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('accountant_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Create E-Bill
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.getElementById('ebill_date').valueAsDate = new Date();
+
+// Auto-fill builty details when selected
+document.getElementById('builty_id').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    
+    document.getElementById('display_truck').textContent = selectedOption.dataset.truck || '-';
+    document.getElementById('display_goods').textContent = selectedOption.dataset.goods || '-';
+    document.getElementById('display_quantity').textContent = selectedOption.dataset.quantity || '-';
+    document.getElementById('display_account').textContent = selectedOption.dataset.account || '-';
+    document.getElementById('display_loading').textContent = selectedOption.dataset.loading || '-';
+    document.getElementById('display_unloading').textContent = selectedOption.dataset.unloading || '-';
+    
+    // Auto-fill amount from freight details if available
+    const freight = selectedOption.dataset.freight;
+    if (freight && !isNaN(parseFloat(freight))) {
+        document.getElementById('amount').value = parseFloat(freight).toFixed(2);
+    }
+});
+
+// Validate file size
+document.getElementById('eway_bill_pdf').addEventListener('change', function() {
+    if (this.files[0]) {
+        const fileSize = this.files[0].size / 1024 / 1024; // Convert to MB
+        if (fileSize > 5) {
+            alert('File size must be less than 5MB');
+            this.value = '';
+        }
+    }
+});
+</script>
+{% endblock %}

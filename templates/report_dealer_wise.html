@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Dealer Report - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people"></i> Dealer-wise Dispatch Report</h2>
+    <button class="btn btn-success" onclick="window.print()">
+        <i class="bi bi-printer"></i> Print Report
+    </button>
+</div>
+
+{% for item in dealer_data %}
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">{{ item.dealer[1] }}</h5>
+            <div>
+                <strong>Total Dispatches:</strong> {{ item.dispatches|length }} | 
+                <strong>Total Quantity:</strong> {{ "%.2f"|format(item.total_quantity) }} MT
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="mb-2">
+            <strong>Contact:</strong> {{ item.dealer[2] }} | 
+            <strong>Address:</strong> {{ item.dealer[3] }}
+        </div>
+        
+        {% if item.dispatches %}
+        <div class="table-responsive mt-3">
+            <table class="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Dispatch ID</th>
+                        <th>Warehouse</th>
+                        <th>Truck Number</th>
+                        <th>Quantity</th>
+                        <th>Date</th>
+                        <th>Bill Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dispatch in item.dispatches %}
+                    <tr>
+                        <td>#{{ dispatch[0] }}</td>
+                        <td>{{ dispatch[11] }}</td>
+                        <td>{{ dispatch[5] }}</td>
+                        <td>{{ "%.2f"|format(dispatch[6]) }} MT</td>
+                        <td>{{ dispatch[7] }}</td>
+                        <td>
+                            {% if dispatch[9] %}
+                            <span class="badge bg-success">Billed</span>
+                            {% else %}
+                            <span class="badge bg-warning">Pending</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center">No dispatches yet</p>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

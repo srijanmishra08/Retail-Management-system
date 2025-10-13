@@ -1,0 +1,277 @@
+
+This SRS will cover:
+
+* System Overview
+* Scope
+* Functional & Non-functional Requirements
+* Modules (Rake Point, Warehouse, Market Dispatch, Billing, etc.)
+* User Roles
+* Data Flow & Architecture Diagrams (in text-based form so you can draw later)
+
+---
+
+# 📘 SOFTWARE REQUIREMENTS SPECIFICATION (SRS)
+
+### For
+
+## **Fertilizer Inventory Management System (FIMS)**
+
+---
+
+## **1. Introduction**
+
+### **1.1 Purpose**
+
+The purpose of this SRS document is to define the requirements for the **Fertilizer Inventory Management System (FIMS)**.
+The system manages the **flow of material** from the **Rake Point** to multiple **Warehouses**, and from there to **Dealers**, **Government departments**, and **Payal Fertilizers (own company)**.
+It automates **inventory tracking, dispatch, billing, and rent/lifting charge calculations** for an end-to-end supply chain of fertilizers.
+
+---
+
+### **1.2 Scope**
+
+The system handles:
+
+* Management of **rake unloading** and **distribution**.
+* **Stock monitoring** across **three warehouses** and one **rake point**.
+* **Dispatch management** to dealers, own company, or government.
+* **Billing system** for transportation, rent, and lifting charges.
+* **Automated reports** for monthly dispatches, warehouse stock, and pending bills.
+
+The goal is to ensure **accurate, real-time visibility** of fertilizer stock and simplify coordination between **suppliers, warehouse operators, dispatchers, and managers**.
+
+---
+
+### **1.3 Intended Users**
+
+| Role                           | Description                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| **Admin / Manager**            | Oversees all operations, adds new rake entries, assigns stock to warehouses or dispatches, and monitors reports. |
+| **Warehouse Worker**           | Records rake unloading details, manages stock in/out, and updates storage info.                                  |
+| **Dispatch Clerk**             | Handles truck dispatches to dealers, Payal Fertilizers, and Government. Generates transportation bills.          |
+| **Billing & Accounts Officer** | Calculates rent for leftover stock, lifting charges, and generates invoices.                                     |
+| **Dealer / Company User**      | Views dispatch records, pending deliveries, and billing details.                                                 |
+
+---
+
+## **2. Overall Description**
+
+### **2.1 System Environment**
+
+* The system will be a **web-based application**, accessible on desktop and tablet devices.
+* Backend will be connected to a **centralized database** managing all warehouses, rakes, and dispatch data.
+
+### **2.2 System Objectives**
+
+1. Maintain **real-time stock data** at all locations.
+2. Automate **dispatch & billing operations**.
+3. Provide **transparent and trackable** movement from rake point to final delivery.
+4. Support **multi-company & multi-location** configurations.
+
+---
+
+## **3. System Features**
+
+### **3.1 Rake Management Module**
+
+**Purpose:** Manage incoming rakes from multiple companies.
+
+**Features:**
+
+* Admin adds rake details:
+
+  * Rake Number, Date, Supplier Company
+  * Quantity (in MT)
+  * Destination allocation (Warehouse or Market Dispatch)
+* System divides stock among warehouses or market dispatch.
+* Warehouse user enters **unloading details** (e.g., actual received MT, shortages).
+
+---
+
+### **3.2 Warehouse Management Module**
+
+**Purpose:** Handle stock at 3 warehouse locations.
+
+**Features:**
+
+* Record stock in (from rake) and stock out (to dealers/company).
+* Maintain per-lot tracking with:
+
+  * Quantity in storage
+  * Rent start date
+  * Storage section details
+* Generate alerts for **old stock pending beyond threshold**.
+* Generate **warehouse-wise stock reports**.
+
+---
+
+### **3.3 Market Dispatch Module**
+
+**Purpose:** Manage direct dispatches from rake point to customers.
+
+**Features:**
+
+* Record direct dispatch to:
+
+  * Dealers
+  * Payal Fertilizers (own company)
+  * Government orders
+* Generate transportation bills for each dispatch.
+* Maintain **truck details**, **dispatch date**, and **quantity sent**.
+
+---
+
+### **3.4 Billing & Rent Module**
+
+**Purpose:** Automate billing for transport, rent, and lifting.
+
+**Features:**
+
+* Calculate **transportation bills** for market dispatches.
+* Calculate **rent** for stock stored in warehouse:
+
+  * Company and Dealers pay per day per MT.
+* Calculate **lifting charges** when stock is dispatched from warehouse.
+* Generate **monthly summaries** and **exportable invoices** (PDF/Excel).
+
+---
+
+### **3.5 Reporting & Analytics Module**
+
+**Purpose:** Provide visibility into stock and dispatch performance.
+
+**Features:**
+
+* Rake-wise, Warehouse-wise, and Dealer-wise reports.
+* Summary dashboards for:
+
+  * Total Rakes handled
+  * Total stock dispatched and in-hand
+  * Billing summary (Rent + Transport)
+* Downloadable in PDF/Excel formats.
+
+---
+
+## **4. System Architecture**
+
+### **4.1 Logical Architecture**
+
+```
+          +---------------------------+
+          |        Admin Panel        |
+          | (Rake Entry, Reports, etc)|
+          +------------+--------------+
+                       |
+                       v
+      +-----------------------------------+
+      |        Application Server         |
+      |  (Inventory Logic + Billing)      |
+      +-----------------------------------+
+                       |
+                       v
+          +-----------------------------+
+          |       Central Database       |
+          |  (Rakes, Stock, Bills, etc.) |
+          +-------------+---------------+
+                        |
+    --------------------------------------------------
+    |                   |                 |           |
+    v                   v                 v           v
+Warehouse 1       Warehouse 2       Warehouse 3    Rake Point
+(Stock mgmt)      (Stock mgmt)      (Stock mgmt)   (Dispatch/Unload)
+```
+
+---
+
+### **4.2 Data Flow Diagram (DFD)**
+
+**Level 0 – Overview:**
+
+```
+         +------------+
+         |  Supplier  |
+         +-----+------+
+               |
+               v
+        +-------------+
+        |  Rake Point |
+        +------+------+----------------------+
+               |                             |
+               v                             v
+     +----------------+              +----------------+
+     |  Warehouses    |              | Market Dispatch |
+     +-------+--------+              +--------+--------+
+             |                                |
+             v                                v
+     +----------------+               +----------------+
+     | Dealers/Company|               | Billing System |
+     +----------------+               +----------------+
+```
+
+---
+
+### **4.3 Entity Relationship Diagram (ERD)**
+
+```
+[Rake]
+ | rake_id
+ | supplier_id
+ | date
+ | quantity
+ | allocation_type (warehouse/market)
+        |
+        | 1..*
+        v
+[WarehouseStock]
+ | warehouse_id
+ | rake_id
+ | quantity_in
+ | quantity_out
+ | rent_start_date
+ | current_balance
+
+[Dispatch]
+ | dispatch_id
+ | destination_type (Dealer/Govt/Company)
+ | truck_no
+ | quantity
+ | transport_company
+ | bill_generated (Y/N)
+
+[Billing]
+ | bill_id
+ | type (rent/transport/lifting)
+ | rate
+ | total_amount
+ | generated_on
+```
+
+---
+
+## **5. Functional Requirements**
+
+| ID  | Function         | Description                                                   |
+| --- | ---------------- | ------------------------------------------------------------- |
+| FR1 | Add Rake         | Admin adds new rake with source and allocation details.       |
+| FR2 | Record Unloading | Warehouse worker enters rake unloading data.                  |
+| FR3 | Allocate Stock   | System distributes rake material across warehouses or market. |
+| FR4 | Dispatch Stock   | Record truck dispatch and bill generation.                    |
+| FR5 | Calculate Rent   | Rent auto-calculated for stock held beyond threshold days.    |
+| FR6 | Generate Bills   | Create and export transport, rent, and lifting bills.         |
+| FR7 | Generate Reports | Produce rake-wise and warehouse-wise summaries.               |
+
+---
+
+## **6. Non-Functional Requirements**
+
+| Type            | Description                                                      |
+| --------------- | ---------------------------------------------------------------- |
+| **Performance** | Must handle up to 100 concurrent users with <2s response time.   |
+| **Scalability** | Should support addition of new warehouses or rake points easily. |
+| **Security**    | Role-based authentication (Admin, Warehouse, Dispatch, Billing). |
+| **Usability**   | Clean UI with minimal data entry fields per screen.              |
+| **Backup**      | Daily backup of data with cloud sync.                            |
+
+---
+
+

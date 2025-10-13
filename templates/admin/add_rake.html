@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Add Rake - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Add New Rake</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('admin_add_rake') }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="rake_code" class="form-label">Rake Code <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="rake_code" name="rake_code" required placeholder="e.g., RK001">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="date" name="date" required>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="company_name" class="form-label">Company Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="company_name" name="company_name" required placeholder="e.g., ABC Fertilizers Ltd">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="company_code" class="form-label">Company Code</label>
+                    <input type="text" class="form-control" id="company_code" name="company_code" placeholder="e.g., ABC01">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="product_name" class="form-label">Product Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="product_name" name="product_name" required placeholder="e.g., Urea">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="product_code" class="form-label">Product Code</label>
+                    <input type="text" class="form-control" id="product_code" name="product_code" placeholder="e.g., URE01">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="rr_quantity" class="form-label">RR Quantity (MT) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="rr_quantity" name="rr_quantity" required placeholder="0.00">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="rake_point_name" class="form-label">Rake Point Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="rake_point_name" name="rake_point_name" required placeholder="e.g., Main Rake Point">
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Add Rake
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.getElementById('date').valueAsDate = new Date();
+</script>
+{% endblock %}

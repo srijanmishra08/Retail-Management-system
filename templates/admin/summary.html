@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Rake Summary - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-table"></i> Rake Summary</h2>
+    <button class="btn btn-success" onclick="window.print()">
+        <i class="bi bi-printer"></i> Print
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Rake Code</th>
+                        <th>Company Name</th>
+                        <th>Date</th>
+                        <th>RR Quantity (MT)</th>
+                        <th>Stock IN (MT)</th>
+                        <th>Stock OUT (MT)</th>
+                        <th>Balance (MT)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if summary %}
+                        {% for item in summary %}
+                        <tr>
+                            <td><strong>{{ item[0] }}</strong></td>
+                            <td>{{ item[1] }}</td>
+                            <td>{{ item[2] }}</td>
+                            <td class="text-end">{{ "%.2f"|format(item[3]) }}</td>
+                            <td class="text-end text-success">{{ "%.2f"|format(item[4]) }}</td>
+                            <td class="text-end text-danger">{{ "%.2f"|format(item[5]) }}</td>
+                            <td class="text-end"><strong>{{ "%.2f"|format(item[4] - item[5]) }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                        
+                        <!-- Totals Row -->
+                        <tr class="table-primary fw-bold">
+                            <td colspan="3">TOTAL</td>
+                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='3')) }}</td>
+                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='4')) }}</td>
+                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='5')) }}</td>
+                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='4') - summary|sum(attribute='5')) }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">No rakes found</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

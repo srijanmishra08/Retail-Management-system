@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Warehouse Report - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-building"></i> Warehouse-wise Stock Report</h2>
+    <button class="btn btn-success" onclick="window.print()">
+        <i class="bi bi-printer"></i> Print Report
+    </button>
+</div>
+
+{% for item in warehouse_data %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">{{ item.warehouse[1] }}</h5>
+            <div>
+                <strong>Total Stock:</strong> {{ "%.2f"|format(item.total_stock) }} MT / 
+                <strong>Capacity:</strong> {{ "%.2f"|format(item.warehouse[3]) }} MT
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if item.details %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Rake Number</th>
+                        <th>Supplier</th>
+                        <th>Quantity In</th>
+                        <th>Quantity Out</th>
+                        <th>Current Balance</th>
+                        <th>Rent Start Date</th>
+                        <th>Days in Storage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in item.details %}
+                    <tr>
+                        <td>{{ stock[11] }}</td>
+                        <td>{{ stock[12] }}</td>
+                        <td>{{ "%.2f"|format(stock[3]) }} MT</td>
+                        <td>{{ "%.2f"|format(stock[4]) }} MT</td>
+                        <td><strong>{{ "%.2f"|format(stock[5]) }} MT</strong></td>
+                        <td>{{ stock[6] }}</td>
+                        <td>{{ ((datetime.now().date() - datetime.strptime(stock[6], '%Y-%m-%d').date()).days) if stock[6] else 0 }} days</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center">No stock available in this warehouse</p>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

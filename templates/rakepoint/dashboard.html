@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Rake Point Dashboard - FIMS{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total Builties</h5>
+                <h2>{{ builty_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-file-earmark-text"></i> Created</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Loading Slips</h5>
+                <h2>{{ loading_slip_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-receipt"></i> Generated</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">Active Rakes</h5>
+                <h2>{{ rake_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-train-front"></i> Available</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h5 class="card-title">Today's Builties</h5>
+                <h2>{{ today_builty_count or 0 }}</h2>
+                <p class="mb-0"><i class="bi bi-calendar-day"></i> Today</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Builties</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Truck Number</th>
+                                <th>Goods Name</th>
+                                <th>Quantity (MT)</th>
+                                <th>LR Number</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if recent_builties %}
+                                {% for builty in recent_builties %}
+                                <tr>
+                                    <td>{{ builty[3] }}</td>
+                                    <td><strong>{{ builty[22] }}</strong></td>
+                                    <td>{{ builty[10] }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(builty[12]) }}</td>
+                                    <td>{{ builty[16] }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No builties created yet</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('rakepoint_create_loading_slip') }}" class="btn btn-success">
+                        <i class="bi bi-receipt"></i> 1. Create Loading Slip (First)
+                    </a>
+                    <a href="{{ url_for('rakepoint_create_builty') }}" class="btn btn-primary">
+                        <i class="bi bi-file-earmark-plus"></i> 2. Create Builty (After Slip)
+                    </a>
+                    <a href="{{ url_for('rakepoint_loading_slips') }}" class="btn btn-info">
+                        <i class="bi bi-list-ul"></i> View All Loading Slips
+                    </a>
+                </div>
+                <div class="alert alert-info mt-3 mb-0" style="font-size: 0.85rem;">
+                    <i class="bi bi-info-circle"></i> <strong>Workflow:</strong> First create Loading Slip for wagon unloading, then create Builty for truck dispatch.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Stock IN - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <h4 class="mb-0"><i class="bi bi-arrow-down-circle"></i> Stock IN Entry</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('warehouse_stock_in') }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="builty_number" class="form-label">Builty Number <span class="text-danger">*</span></label>
+                    <select class="form-select" id="builty_number" name="builty_number" required>
+                        <option value="">Select Builty</option>
+                        {% for builty in builties %}
+                        <option value="{{ builty[1] }}" 
+                                data-goods="{{ builty[10] }}" 
+                                data-quantity="{{ builty[12] }}"
+                                data-account="{{ builty[20] }}">
+                            {{ builty[1] }} - {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="unloaded_quantity" class="form-label">Unloaded Quantity (MT) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="unloaded_quantity" name="unloaded_quantity" required placeholder="0.00">
+                    <small class="text-muted" id="builty_quantity_hint"></small>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="unloader_employee" class="form-label">Unloader Employee <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="unloader_employee" name="unloader_employee" required placeholder="Enter employee name">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="warehouse_name" class="form-label">Warehouse Name <span class="text-danger">*</span></label>
+                    <select class="form-select" id="warehouse_name" name="warehouse_name" required>
+                        <option value="">Select Warehouse</option>
+                        {% for warehouse in warehouses %}
+                        <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - {{ warehouse[2] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="account_name" class="form-label">Account Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="account_name" name="account_name" required placeholder="Auto-filled from builty" readonly>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="stock_in_date" class="form-label">Stock IN Date <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="stock_in_date" name="stock_in_date" required>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="remarks" class="form-label">Remarks</label>
+                    <textarea class="form-control" id="remarks" name="remarks" rows="2" placeholder="Additional notes (optional)"></textarea>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-save"></i> Record Stock IN
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Recent Stock IN Entries -->
+<div class="card mt-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Stock IN Entries</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Builty Number</th>
+                        <th>Warehouse</th>
+                        <th>Account</th>
+                        <th>Quantity (MT)</th>
+                        <th>Unloader</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if recent_stock_in %}
+                        {% for stock in recent_stock_in %}
+                        <tr>
+                            <td>{{ stock[0] }}</td>
+                            <td><strong>{{ stock[1] }}</strong></td>
+                            <td>{{ stock[2] }}</td>
+                            <td>{{ stock[3] }}</td>
+                            <td class="text-end text-success">{{ "%.2f"|format(stock[4]) }}</td>
+                            <td>{{ stock[5] }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No recent stock IN entries</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.getElementById('stock_in_date').valueAsDate = new Date();
+
+// Auto-fill account name from selected builty
+document.getElementById('builty_number').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const accountName = selectedOption.dataset.account;
+    const quantity = selectedOption.dataset.quantity;
+    
+    document.getElementById('account_name').value = accountName || '';
+    
+    if (quantity) {
+        document.getElementById('builty_quantity_hint').textContent = 'Builty quantity: ' + quantity + ' MT';
+    } else {
+        document.getElementById('builty_quantity_hint').textContent = '';
+    }
+});
+</script>
+{% endblock %}

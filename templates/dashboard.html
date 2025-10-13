@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <div class="text-muted">
+        <i class="bi bi-calendar3"></i> {{ datetime.now().strftime('%B %d, %Y') }}
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                    <i class="bi bi-train-freight-front"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Total Rakes</div>
+                    <h3 class="mb-0">{{ stats.total_rakes }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-success bg-opacity-10 text-success">
+                    <i class="bi bi-boxes"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Current Stock</div>
+                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock) }} MT</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                    <i class="bi bi-truck"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Total Dispatches</div>
+                    <h3 class="mb-0">{{ stats.total_dispatches }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-info bg-opacity-10 text-info">
+                    <i class="bi bi-currency-rupee"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Total Billing</div>
+                    <h3 class="mb-0">₹{{ "%.2f"|format(stats.total_billing) }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Rakes and Alerts -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-train-freight-front"></i> Recent Rakes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Rake Number</th>
+                                <th>Supplier</th>
+                                <th>Date</th>
+                                <th>Quantity</th>
+                                <th>Allocation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rake in recent_rakes %}
+                            <tr>
+                                <td><a href="{{ url_for('rake_details', rake_id=rake[0]) }}">{{ rake[1] }}</a></td>
+                                <td>{{ rake[7] }}</td>
+                                <td>{{ rake[3] }}</td>
+                                <td>{{ "%.2f"|format(rake[4]) }} MT</td>
+                                <td>
+                                    <span class="badge bg-{{ 'primary' if rake[5] == 'warehouse' else 'success' }}">
+                                        {{ rake[5]|capitalize }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card border-warning">
+            <div class="card-header bg-warning bg-opacity-10">
+                <h5 class="mb-0 text-warning"><i class="bi bi-exclamation-triangle"></i> Low Stock Alerts</h5>
+            </div>
+            <div class="card-body">
+                {% if low_stock_alerts %}
+                    <ul class="list-unstyled">
+                        {% for alert in low_stock_alerts %}
+                        <li class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold">{{ alert[1] }}</span>
+                                <span class="text-danger">{{ "%.2f"|format(alert[2]) }} MT</span>
+                            </div>
+                            <small class="text-muted">Stock below threshold</small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted text-center mb-0">
+                        <i class="bi bi-check-circle text-success"></i><br>
+                        All warehouses have sufficient stock
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh dashboard every 60 seconds
+// setTimeout(function(){ location.reload(); }, 60000);
+</script>
+{% endblock %}

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Dispatches - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-truck"></i> Dispatch Management</h2>
+    {% if current_user.role in ['Admin', 'Manager', 'Dispatch'] %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDispatchModal">
+        <i class="bi bi-plus-circle"></i> Add Dispatch
+    </button>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Dispatch ID</th>
+                        <th>Warehouse</th>
+                        <th>Truck Number</th>
+                        <th>Destination</th>
+                        <th>Quantity (MT)</th>
+                        <th>Date</th>
+                        <th>Bill Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dispatch in dispatches %}
+                    <tr>
+                        <td><strong>#{{ dispatch[0] }}</strong></td>
+                        <td>{{ dispatch[11] if dispatch[11] else 'Rake Point' }}</td>
+                        <td>{{ dispatch[5] }}</td>
+                        <td>
+                            <span class="badge bg-info">{{ dispatch[3] }}</span>
+                        </td>
+                        <td>{{ "%.2f"|format(dispatch[6]) }}</td>
+                        <td>{{ dispatch[7] }}</td>
+                        <td>
+                            {% if dispatch[9] %}
+                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Generated</span>
+                            {% else %}
+                            <span class="badge bg-warning"><i class="bi bi-clock"></i> Pending</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('dispatch_details', dispatch_id=dispatch[0]) }}" 
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Dispatch Modal -->
+<div class="modal fade" id="addDispatchModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('add_dispatch') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Dispatch</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="warehouse_id" class="form-label">Warehouse</label>
+                        <select class="form-select" id="warehouse_id" name="warehouse_id" required>
+                            <option value="">Select Warehouse</option>
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse[0] }}">{{ warehouse[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="destination_type" class="form-label">Destination Type</label>
+                        <select class="form-select" id="destination_type" name="destination_type" required>
+                            <option value="Dealer">Dealer</option>
+                            <option value="Company">Payal Fertilizers (Company)</option>
+                            <option value="Government">Government</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="destination_id" class="form-label">Destination</label>
+                        <select class="form-select" id="destination_id" name="destination_id" required>
+                            <option value="">Select Destination</option>
+                            {% for dealer in dealers %}
+                            <option value="{{ dealer[0] }}">{{ dealer[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="truck_number" class="form-label">Truck Number</label>
+                        <input type="text" class="form-control" id="truck_number" name="truck_number" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantity (MT)</label>
+                        <input type="number" step="0.01" class="form-control" id="quantity" name="quantity" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="dispatch_date" class="form-label">Dispatch Date</label>
+                        <input type="date" class="form-control" id="dispatch_date" name="dispatch_date" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="transport_company" class="form-label">Transport Company</label>
+                        <input type="text" class="form-control" id="transport_company" name="transport_company">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Dispatch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.getElementById('dispatch_date').valueAsDate = new Date();
+</script>
+{% endblock %}

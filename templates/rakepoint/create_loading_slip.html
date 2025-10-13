@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Create Loading Slip - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <h4 class="mb-0"><i class="bi bi-receipt"></i> Create Loading Slip</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('rakepoint_create_loading_slip') }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="rake_code" class="form-label">Rake Code <span class="text-danger">*</span></label>
+                    <select class="form-select" id="rake_code" name="rake_code" required>
+                        <option value="">Select Rake</option>
+                        {% for rake in rakes %}
+                        <option value="{{ rake[1] }}">{{ rake[1] }} - {{ rake[2] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="serial_number" class="form-label">Serial Number (S.No) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="serial_number" name="serial_number" required placeholder="Enter serial number">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="loading_point" class="form-label">Loading Point <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Enter loading point">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="destination" class="form-label">Destination <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="destination" name="destination" required placeholder="Enter destination">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="account" class="form-label">Account <span class="text-danger">*</span></label>
+                    <select class="form-select" id="account" name="account" required>
+                        <option value="">Select Account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account[1] }}">{{ account[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="wagon_number" class="form-label">Wagon Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="wagon_number" name="wagon_number" required placeholder="Enter wagon number">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="quantity_in_bags" class="form-label">Quantity in Bags <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="quantity_in_bags" name="quantity_in_bags" required placeholder="Enter quantity">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="quantity_in_mt" class="form-label">Quantity in MT <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="quantity_in_mt" name="quantity_in_mt" required placeholder="0.00">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="truck_number" class="form-label">Truck Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Enter truck number">
+                </div>
+            </div>
+            
+            <!-- Truck & Driver Details Section -->
+            <div class="alert alert-info mt-3">
+                <i class="bi bi-truck"></i> <strong>Truck & Driver Details</strong> (Will auto-fill in Builty)
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="truck_driver" class="form-label">Truck Driver Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_driver" name="truck_driver" required placeholder="Enter driver name">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="truck_owner" class="form-label">Truck Owner <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_owner" name="truck_owner" required placeholder="Enter owner name">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="mobile_number_1" class="form-label">Mobile Number 1 <span class="text-danger">*</span></label>
+                    <input type="tel" class="form-control" id="mobile_number_1" name="mobile_number_1" required placeholder="Enter mobile number">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="mobile_number_2" class="form-label">Mobile Number 2</label>
+                    <input type="tel" class="form-control" id="mobile_number_2" name="mobile_number_2" placeholder="Optional">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="goods_name" class="form-label">Goods Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="e.g., Urea, DAP">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="truck_details" class="form-label">Additional Truck/Transport Details</label>
+                    <textarea class="form-control" id="truck_details" name="truck_details" rows="2" placeholder="Any additional information"></textarea>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" name="action" value="save" class="btn btn-success">
+                    <i class="bi bi-save"></i> Save Loading Slip
+                </button>
+                <button type="submit" name="action" value="print" class="btn btn-primary">
+                    <i class="bi bi-printer"></i> Save & Print
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-calculate MT from bags (assuming 50kg per bag)
+document.getElementById('quantity_in_bags').addEventListener('input', function() {
+    const bags = parseFloat(this.value) || 0;
+    const mt = (bags * 50) / 1000;
+    document.getElementById('quantity_in_mt').value = mt.toFixed(2);
+});
+</script>
+{% endblock %}

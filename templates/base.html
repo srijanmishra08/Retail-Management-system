@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FIMS{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1e40af 0%, #1e3a8a 100%);
+            color: white;
+            position: fixed;
+            width: 250px;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 4px 10px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-card .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+        
+        .alert {
+            border: none;
+            border-radius: 8px;
+        }
+        
+        .table {
+            background: white;
+        }
+        
+        .badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if current_user.is_authenticated %}
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="p-4">
+            <h4 class="mb-0"><i class="bi bi-building"></i> FIMS</h4>
+            <small>Fertilizer Inventory Management</small>
+        </div>
+        
+        <nav class="nav flex-column mt-4">
+            {% if current_user.role == 'Admin' %}
+                <a class="nav-link {% if 'admin_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'admin_add_rake' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_add_rake') }}">
+                    <i class="bi bi-plus-circle"></i> Add Rake
+                </a>
+                <a class="nav-link {% if 'admin_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_summary') }}">
+                    <i class="bi bi-table"></i> Summary
+                </a>
+                <a class="nav-link {% if 'admin_manage_accounts' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_manage_accounts') }}">
+                    <i class="bi bi-people"></i> Manage Accounts
+                </a>
+            {% elif current_user.role == 'RakePoint' %}
+                <a class="nav-link {% if 'rakepoint_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'rakepoint_create_loading_slip' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_create_loading_slip') }}">
+                    <i class="bi bi-receipt"></i> Create Loading Slip
+                </a>
+                <a class="nav-link {% if 'rakepoint_create_builty' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_create_builty') }}">
+                    <i class="bi bi-file-plus"></i> Create Builty
+                </a>
+            {% elif current_user.role == 'Warehouse' %}
+                <a class="nav-link {% if 'warehouse_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'warehouse_stock_in' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_stock_in') }}">
+                    <i class="bi bi-box-arrow-in-down"></i> Stock IN
+                </a>
+                <a class="nav-link {% if 'warehouse_stock_out' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_stock_out') }}">
+                    <i class="bi bi-box-arrow-up"></i> Stock OUT
+                </a>
+            {% elif current_user.role == 'Accountant' %}
+                <a class="nav-link {% if 'accountant_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_dashboard') }}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a class="nav-link {% if 'accountant_create_ebill' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_create_ebill') }}">
+                    <i class="bi bi-file-earmark-text"></i> Create E-Bill
+                </a>
+                <a class="nav-link {% if 'accountant_all_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_all_ebills') }}">
+                    <i class="bi bi-list-ul"></i> All E-Bills
+                </a>
+            {% endif %}
+        </nav>
+        
+        <div class="p-4 mt-auto" style="position: absolute; bottom: 0; width: 100%;">
+            <div class="d-flex align-items-center mb-3">
+                <div class="flex-shrink-0">
+                    <div class="bg-white rounded-circle p-2">
+                        <i class="bi bi-person-fill text-primary"></i>
+                    </div>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <div class="fw-bold">{{ current_user.username }}</div>
+                    <small>{{ current_user.role }}</small>
+                </div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-light w-100">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+    {% else %}
+    <!-- Login Page (no sidebar) -->
+    {% block login_content %}{% endblock %}
+    {% endif %}
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
