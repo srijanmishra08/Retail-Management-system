@@ -150,6 +150,7 @@ class Database:
                 loading_point_name TEXT NOT NULL,
                 destination TEXT NOT NULL,
                 account_id INTEGER,
+                warehouse_id INTEGER,
                 quantity_bags INTEGER NOT NULL,
                 quantity_mt REAL NOT NULL,
                 truck_id INTEGER NOT NULL,
@@ -163,6 +164,7 @@ class Database:
                 builty_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
+                FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id),
                 FOREIGN KEY (builty_id) REFERENCES builty(builty_id)
             )
@@ -311,6 +313,36 @@ class Database:
         conn.close()
         return rake
     
+    def get_rake_balance(self, rake_code):
+        """Get rake quantity balance (total - dispatched via loading slips)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Get total rake quantity
+        cursor.execute('SELECT rr_quantity FROM rakes WHERE rake_code = ?', (rake_code,))
+        rake_result = cursor.fetchone()
+        if not rake_result:
+            conn.close()
+            return None
+        
+        total_quantity = rake_result[0]
+        
+        # Get total dispatched via loading slips
+        cursor.execute('''
+            SELECT COALESCE(SUM(quantity_mt), 0)
+            FROM loading_slips
+            WHERE rake_code = ?
+        ''', (rake_code,))
+        dispatched_quantity = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            'total': total_quantity,
+            'dispatched': dispatched_quantity,
+            'remaining': total_quantity - dispatched_quantity
+        }
+    
     # ========== Account Operations ==========
     
     def add_account(self, account_name, account_type, contact, address):
@@ -455,6 +487,23 @@ class Database:
         conn.close()
         return builties
     
+    def get_warehouse_builties(self):
+        """Get only builties destined for warehouses (warehouse_id NOT NULL)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT b.*, a.account_name, w.warehouse_name, t.truck_number
+            FROM builty b
+            LEFT JOIN accounts a ON b.account_id = a.account_id
+            LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
+            LEFT JOIN trucks t ON b.truck_id = t.truck_id
+            WHERE b.warehouse_id IS NOT NULL
+            ORDER BY b.created_at DESC
+        ''')
+        builties = cursor.fetchall()
+        conn.close()
+        return builties
+    
     def get_builty_by_id(self, builty_id):
         """Get builty by ID"""
         conn = self.get_connection()
@@ -475,19 +524,19 @@ class Database:
     # ========== Loading Slip Operations (Rake Point) ==========
     
     def add_loading_slip(self, rake_code, slip_number, loading_point_name, destination,
-                        account_id, quantity_bags, quantity_mt, truck_id, wagon_number, 
+                        account_id, warehouse_id, quantity_bags, quantity_mt, truck_id, wagon_number, 
                         goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id=None):
-        """Add new loading slip with complete truck and goods details"""
+        """Add new loading slip with complete truck and goods details - supports both accounts and warehouses"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
                 INSERT INTO loading_slips (rake_code, slip_number, loading_point_name, destination,
-                                          account_id, quantity_bags, quantity_mt, truck_id, 
+                                          account_id, warehouse_id, quantity_bags, quantity_mt, truck_id, 
                                           wagon_number, goods_name, truck_driver, truck_owner,
                                           mobile_number_1, mobile_number_2, truck_details, builty_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (rake_code, slip_number, loading_point_name, destination, account_id,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (rake_code, slip_number, loading_point_name, destination, account_id, warehouse_id,
                   quantity_bags, quantity_mt, truck_id, wagon_number, goods_name,
                   truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id))
             
@@ -518,19 +567,46 @@ class Database:
         return slips
     
     def get_all_loading_slips(self):
-        """Get all loading slips that haven't been used for builty yet - with all details"""
+        """Get all loading slips that haven't been used for builty yet - with all details (accounts & warehouses)"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
             SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
-                   ls.destination, a.account_name, ls.wagon_number, 
+                   ls.destination, 
+                   COALESCE(a.account_name, w.warehouse_name) as destination_name,
+                   ls.wagon_number, 
                    ls.quantity_bags, ls.quantity_mt, t.truck_number,
                    ls.goods_name, ls.truck_driver, ls.truck_owner,
                    ls.mobile_number_1, ls.mobile_number_2
             FROM loading_slips ls
             LEFT JOIN accounts a ON ls.account_id = a.account_id
+            LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
             LEFT JOIN trucks t ON ls.truck_id = t.truck_id
             WHERE ls.builty_id IS NULL
+            ORDER BY ls.slip_id DESC
+        ''')
+        slips = cursor.fetchall()
+        conn.close()
+        return slips
+    
+    def get_all_loading_slips_with_status(self):
+        """Get ALL loading slips (including those converted to builties) with status"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
+                   ls.destination, 
+                   COALESCE(a.account_name, w.warehouse_name) as destination_name,
+                   ls.quantity_bags, ls.quantity_mt, t.truck_number,
+                   ls.wagon_number, ls.builty_id, ls.created_at,
+                   ls.goods_name, ls.truck_driver, ls.truck_owner,
+                   ls.mobile_number_1, ls.mobile_number_2,
+                   b.builty_number
+            FROM loading_slips ls
+            LEFT JOIN accounts a ON ls.account_id = a.account_id
+            LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+            LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+            LEFT JOIN builty b ON ls.builty_id = b.builty_id
             ORDER BY ls.slip_id DESC
         ''')
         slips = cursor.fetchall()

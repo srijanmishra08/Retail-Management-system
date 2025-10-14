@@ -3,7 +3,7 @@ Fertilizer Inventory Management System (FIMS) - Redesigned
 Role-based application with specific dashboards
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -166,10 +166,45 @@ def rakepoint_dashboard():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    recent_builties = db.get_all_builties()[:10]
-    rakes = db.get_all_rakes()
+    # Get all data
+    all_builties = db.get_all_builties()
+    all_loading_slips = db.get_all_loading_slips_with_status()
+    all_rakes = db.get_all_rakes()
     
-    return render_template('rakepoint/dashboard.html', recent_builties=recent_builties, rakes=rakes)
+    # Recent builties (last 10)
+    recent_builties = all_builties[:10]
+    
+    # Calculate statistics
+    total_builties = len(all_builties)
+    total_loading_slips = len(all_loading_slips)
+    
+    # Count active rakes (rakes with remaining quantity > 0)
+    active_rakes = 0
+    for rake in all_rakes:
+        rake_code = rake[1]
+        balance = db.get_rake_balance(rake_code)
+        if balance and balance['remaining'] > 0:
+            active_rakes += 1
+    
+    # Today's builties (created today)
+    today = datetime.now().date()
+    today_builties = 0
+    for builty in all_builties:
+        builty_date_str = builty[3]  # date field
+        try:
+            builty_date = datetime.strptime(builty_date_str, '%Y-%m-%d').date()
+            if builty_date == today:
+                today_builties += 1
+        except:
+            pass
+    
+    return render_template('rakepoint/dashboard.html', 
+                         recent_builties=recent_builties,
+                         rakes=all_rakes,
+                         total_builties=total_builties,
+                         total_loading_slips=total_loading_slips,
+                         active_rakes=active_rakes,
+                         today_builties=today_builties)
 
 @app.route('/rakepoint/create-builty', methods=['GET', 'POST'])
 @login_required
@@ -288,13 +323,34 @@ def rakepoint_create_loading_slip():
         mobile_number_2 = request.form.get('mobile_number_2', '')
         truck_details = request.form.get('truck_details', '')
         
-        # Find account_id
+        # CRITICAL: Check rake quantity balance before creating loading slip
+        rake_balance = db.get_rake_balance(rake_code)
+        if not rake_balance:
+            flash('Error: Invalid rake code', 'error')
+            return redirect(url_for('rakepoint_create_loading_slip'))
+        
+        if quantity_in_mt > rake_balance['remaining']:
+            flash(f'Error: Insufficient rake quantity! Remaining: {rake_balance["remaining"]:.2f} MT, Requested: {quantity_in_mt:.2f} MT', 'error')
+            return redirect(url_for('rakepoint_create_loading_slip'))
+        
+        # Determine if dispatch is to account or warehouse
         accounts = db.get_all_accounts()
+        warehouses = db.get_all_warehouses()
         account_id = None
+        warehouse_id = None
+        
+        # Check if it's an account
         for acc in accounts:
             if acc[1] == account:
                 account_id = acc[0]
                 break
+        
+        # If not found in accounts, check warehouses
+        if account_id is None:
+            for wh in warehouses:
+                if wh[1] == account:
+                    warehouse_id = wh[0]
+                    break
         
         # Check if truck exists, if not create it with driver/owner details
         truck = db.get_truck_by_number(truck_number)
@@ -304,7 +360,7 @@ def rakepoint_create_loading_slip():
             truck_id = truck[0]
         
         slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
-                                      account_id, quantity_in_bags, quantity_in_mt, truck_id, 
+                                      account_id, warehouse_id, quantity_in_bags, quantity_in_mt, truck_id, 
                                       wagon_number, goods_name, truck_driver, truck_owner,
                                       mobile_number_1, mobile_number_2, truck_details, None)
         
@@ -319,14 +375,29 @@ def rakepoint_create_loading_slip():
     
     rakes = db.get_all_rakes()
     accounts = db.get_all_accounts()
+    warehouses = db.get_all_warehouses()
     trucks = db.get_all_trucks()
     builties = db.get_all_builties()
     
     return render_template('rakepoint/create_loading_slip.html', 
                          rakes=rakes,
                          accounts=accounts,
+                         warehouses=warehouses,
                          trucks=trucks,
                          builties=builties)
+
+@app.route('/api/rake-balance/<rake_code>')
+@login_required
+def get_rake_balance_api(rake_code):
+    """API endpoint to get rake balance"""
+    if current_user.role != 'RakePoint':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    balance = db.get_rake_balance(rake_code)
+    if balance:
+        return jsonify(balance)
+    else:
+        return jsonify({'error': 'Rake not found'}), 404
 
 @app.route('/rakepoint/loading-slips')
 @login_required
@@ -335,7 +406,7 @@ def rakepoint_loading_slips():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    loading_slips = db.get_all_loading_slips()
+    loading_slips = db.get_all_loading_slips_with_status()
     
     return render_template('rakepoint/loading_slips.html', loading_slips=loading_slips)
 
@@ -378,7 +449,7 @@ def warehouse_dashboard():
         total_stock_out += balance['stock_out']
     
     # Get recent stock movements (last 10)
-    recent_movements = db.execute_query('''
+    recent_movements = db.execute_custom_query('''
         SELECT ws.date, ws.transaction_type, b.builty_number, w.warehouse_name, ws.quantity_mt
         FROM warehouse_stock ws
         JOIN builty b ON ws.builty_id = b.builty_id
@@ -392,7 +463,7 @@ def warehouse_dashboard():
     builty_count = len(db.get_all_builties())
     
     # Today's stock IN
-    today_stock_in_result = db.execute_query('''
+    today_stock_in_result = db.execute_custom_query('''
         SELECT COALESCE(SUM(quantity_mt), 0)
         FROM warehouse_stock
         WHERE transaction_type = 'IN' AND date = date('now')
@@ -426,8 +497,8 @@ def warehouse_stock_in():
         remarks = request.form.get('remarks', '')
         
         # Get IDs from names/numbers
-        builty = db.execute_query('SELECT builty_id, account_id, rake_code, quantity_mt FROM builty WHERE builty_number = ?', (builty_number,))
-        warehouse = db.execute_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
+        builty = db.execute_custom_query('SELECT builty_id, account_id, rake_code, quantity_mt FROM builty WHERE builty_number = ?', (builty_number,))
+        warehouse = db.execute_custom_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
         
         if builty and warehouse:
             builty_id = builty[0][0]
@@ -437,7 +508,7 @@ def warehouse_stock_in():
             warehouse_id = warehouse[0][0]
             
             # CRITICAL CHECK: Verify this builty hasn't been fully stocked IN already
-            existing_stock_in = db.execute_query('''
+            existing_stock_in = db.execute_custom_query('''
                 SELECT COALESCE(SUM(quantity_mt), 0)
                 FROM warehouse_stock
                 WHERE builty_id = ? AND transaction_type = 'IN'
@@ -470,10 +541,13 @@ def warehouse_stock_in():
             flash('Invalid builty or warehouse', 'error')
     
     warehouses = db.get_all_warehouses()
-    builties = db.get_all_builties()
+    
+    # SECURITY: Only show builties destined for warehouses (not dealers/retailers)
+    # This prevents warehouse staff from processing stock meant for accounts
+    builties = db.get_warehouse_builties()
     
     # Get recent stock IN entries for display
-    recent_stock_in = db.execute_query('''
+    recent_stock_in = db.execute_custom_query('''
         SELECT ws.date, b.builty_number, w.warehouse_name, COALESCE(a.account_name, 'N/A') as account_name, 
                ws.quantity_mt, ws.unloader_employee
         FROM warehouse_stock ws
@@ -519,7 +593,7 @@ def warehouse_stock_out():
         lr_number = request.form.get('lr_number')
         
         # Get warehouse ID
-        warehouse = db.execute_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
+        warehouse = db.execute_custom_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
         if not warehouse:
             flash('Invalid warehouse', 'error')
             return redirect(url_for('warehouse_stock_out'))
@@ -560,7 +634,7 @@ def warehouse_stock_out():
         rate_per_mt = total_freight / quantity_wt_mt if quantity_wt_mt > 0 else 0
         
         # Get rake_code from warehouse stock (use most recent rake)
-        rake_code_result = db.execute_query('''
+        rake_code_result = db.execute_custom_query('''
             SELECT b.rake_code
             FROM warehouse_stock ws
             JOIN builty b ON ws.builty_id = b.builty_id

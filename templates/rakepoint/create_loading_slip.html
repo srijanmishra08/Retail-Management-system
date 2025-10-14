@@ -15,15 +15,38 @@
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('rakepoint_create_loading_slip') }}">
+            <!-- Rake Balance Alert (hidden by default) -->
+            <div id="rake-balance-alert" class="alert alert-info" style="display: none;">
+                <h6 class="mb-2"><i class="bi bi-info-circle"></i> Rake Quantity Status</h6>
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Total:</strong> <span id="rake-total">0</span> MT
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Dispatched:</strong> <span id="rake-dispatched">0</span> MT
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Remaining:</strong> <span id="rake-remaining" class="text-success fw-bold">0</span> MT
+                    </div>
+                </div>
+            </div>
+            
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="rake_code" class="form-label">Rake Code <span class="text-danger">*</span></label>
                     <select class="form-select" id="rake_code" name="rake_code" required>
                         <option value="">Select Rake</option>
                         {% for rake in rakes %}
-                        <option value="{{ rake[1] }}">{{ rake[1] }} - {{ rake[2] }}</option>
+                        <option value="{{ rake[1] }}" 
+                                data-company="{{ rake[2] }}"
+                                data-product="{{ rake[6] }}"
+                                data-rakepoint="{{ rake[8] }}"
+                                data-total="{{ rake[5] }}">
+                            {{ rake[1] }} - {{ rake[2] }} ({{ "%.2f"|format(rake[5]) }} MT)
+                        </option>
                         {% endfor %}
                     </select>
+                    <small class="text-muted">Product and loading point will auto-fill when rake is selected</small>
                 </div>
                 
                 <div class="col-md-6 mb-3">
@@ -35,7 +58,8 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="loading_point" class="form-label">Loading Point <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Enter loading point">
+                    <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Auto-filled from rake" readonly>
+                    <small class="text-muted">Auto-filled from rake details (cannot be changed)</small>
                 </div>
                 
                 <div class="col-md-6 mb-3">
@@ -46,13 +70,21 @@
             
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label for="account" class="form-label">Account <span class="text-danger">*</span></label>
+                    <label for="account" class="form-label">Dispatch To (Account/Warehouse) <span class="text-danger">*</span></label>
                     <select class="form-select" id="account" name="account" required>
-                        <option value="">Select Account</option>
-                        {% for account in accounts %}
-                        <option value="{{ account[1] }}">{{ account[1] }}</option>
-                        {% endfor %}
+                        <option value="">-- Select Destination --</option>
+                        <optgroup label="👥 Accounts (Dealers/Retailers)">
+                            {% for account in accounts %}
+                            <option value="{{ account[1] }}">{{ account[1] }} - {{ account[2] }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="🏢 Warehouses">
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - Warehouse</option>
+                            {% endfor %}
+                        </optgroup>
                     </select>
+                    <small class="text-muted">Stock can be sent to dealers/retailers OR warehouses</small>
                 </div>
                 
                 <div class="col-md-6 mb-3">
@@ -108,7 +140,8 @@
                 
                 <div class="col-md-4 mb-3">
                     <label for="goods_name" class="form-label">Goods Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="e.g., Urea, DAP">
+                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="Auto-filled from rake" readonly>
+                    <small class="text-muted">Auto-filled from rake product (cannot be changed)</small>
                 </div>
             </div>
             
@@ -137,11 +170,115 @@
 
 {% block extra_js %}
 <script>
+let currentRakeBalance = null;
+
 // Auto-calculate MT from bags (assuming 50kg per bag)
 document.getElementById('quantity_in_bags').addEventListener('input', function() {
     const bags = parseFloat(this.value) || 0;
     const mt = (bags * 50) / 1000;
     document.getElementById('quantity_in_mt').value = mt.toFixed(2);
+    
+    // Validate against rake remaining quantity
+    validateQuantity(mt);
+});
+
+// Validate quantity against rake balance
+document.getElementById('quantity_in_mt').addEventListener('input', function() {
+    validateQuantity(parseFloat(this.value) || 0);
+});
+
+function validateQuantity(quantity) {
+    if (currentRakeBalance && quantity > 0) {
+        const remaining = currentRakeBalance.remaining;
+        const quantityField = document.getElementById('quantity_in_mt');
+        
+        if (quantity > remaining) {
+            quantityField.classList.add('border-danger');
+            quantityField.classList.remove('border-success');
+            alert(`Error: Quantity exceeds remaining rake balance!\nRemaining: ${remaining.toFixed(2)} MT\nRequested: ${quantity.toFixed(2)} MT`);
+        } else {
+            quantityField.classList.remove('border-danger');
+            quantityField.classList.add('border-success');
+        }
+    }
+}
+
+// Auto-fill goods name and loading point from rake selection
+document.getElementById('rake_code').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const rakeCode = this.value;
+    
+    // Get data attributes
+    const productName = selectedOption.getAttribute('data-product');
+    const rakePoint = selectedOption.getAttribute('data-rakepoint');
+    
+    const goodsField = document.getElementById('goods_name');
+    const loadingField = document.getElementById('loading_point');
+    const balanceAlert = document.getElementById('rake-balance-alert');
+    
+    // Auto-fill fields
+    if (productName) {
+        goodsField.value = productName;
+        goodsField.classList.add('bg-light', 'border-success');
+    }
+    if (rakePoint) {
+        loadingField.value = rakePoint;
+        loadingField.classList.add('bg-light', 'border-success');
+    }
+    
+    // Fetch and display rake balance
+    if (rakeCode) {
+        fetch(`/api/rake-balance/${rakeCode}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.error) {
+                    currentRakeBalance = data;
+                    
+                    // Update balance display
+                    document.getElementById('rake-total').textContent = data.total.toFixed(2);
+                    document.getElementById('rake-dispatched').textContent = data.dispatched.toFixed(2);
+                    document.getElementById('rake-remaining').textContent = data.remaining.toFixed(2);
+                    
+                    // Show balance alert
+                    balanceAlert.style.display = 'block';
+                    
+                    // Color code remaining quantity
+                    const remainingSpan = document.getElementById('rake-remaining');
+                    if (data.remaining <= 0) {
+                        remainingSpan.classList.remove('text-success');
+                        remainingSpan.classList.add('text-danger');
+                    } else if (data.remaining < data.total * 0.2) {
+                        remainingSpan.classList.remove('text-success');
+                        remainingSpan.classList.add('text-warning');
+                    } else {
+                        remainingSpan.classList.add('text-success');
+                        remainingSpan.classList.remove('text-danger', 'text-warning');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching rake balance:', error);
+            });
+    } else {
+        // Clear fields and hide balance if "Select Rake" option is chosen
+        goodsField.value = '';
+        loadingField.value = '';
+        goodsField.classList.remove('bg-light', 'border-success');
+        loadingField.classList.remove('bg-light', 'border-success');
+        balanceAlert.style.display = 'none';
+        currentRakeBalance = null;
+    }
+});
+
+// Form submission validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const quantity = parseFloat(document.getElementById('quantity_in_mt').value) || 0;
+    
+    if (currentRakeBalance && quantity > currentRakeBalance.remaining) {
+        e.preventDefault();
+        alert(`Cannot create loading slip!\nRemaining rake quantity: ${currentRakeBalance.remaining.toFixed(2)} MT\nRequested quantity: ${quantity.toFixed(2)} MT`);
+        return false;
+    }
 });
 </script>
 {% endblock %}

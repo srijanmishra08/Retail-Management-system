@@ -24,11 +24,13 @@
                         <option value="{{ builty[1] }}" 
                                 data-goods="{{ builty[10] }}" 
                                 data-quantity="{{ builty[12] }}"
-                                data-account="{{ builty[20] }}">
+                                data-account="{{ builty[20] }}"
+                                data-warehouse="{{ builty[21] }}">
                             {{ builty[1] }} - {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
                         </option>
                         {% endfor %}
                     </select>
+                    <small class="text-muted">Warehouse will auto-fill from builty destination</small>
                 </div>
                 
                 <div class="col-md-6 mb-3">
@@ -133,14 +135,35 @@
 // Set today's date as default
 document.getElementById('stock_in_date').valueAsDate = new Date();
 
-// Auto-fill account name from selected builty
+// Auto-fill account name and warehouse from selected builty
 document.getElementById('builty_number').addEventListener('change', function() {
     const selectedOption = this.options[this.selectedIndex];
     const accountName = selectedOption.dataset.account;
     const quantity = selectedOption.dataset.quantity;
+    const warehouseName = selectedOption.dataset.warehouse;
     
+    // Auto-fill account name
     document.getElementById('account_name').value = accountName || '';
     
+    // Auto-fill warehouse if specified in builty
+    const warehouseSelect = document.getElementById('warehouse_name');
+    if (warehouseName && warehouseName !== 'None') {
+        // Find and select the matching warehouse option
+        for (let option of warehouseSelect.options) {
+            if (option.value === warehouseName) {
+                warehouseSelect.value = warehouseName;
+                // Highlight the field to show it was auto-filled
+                warehouseSelect.classList.add('border-success', 'border-2');
+                break;
+            }
+        }
+    } else {
+        // Reset if no warehouse in builty
+        warehouseSelect.value = '';
+        warehouseSelect.classList.remove('border-success', 'border-2');
+    }
+    
+    // Show quantity hint
     if (quantity) {
         document.getElementById('builty_quantity_hint').textContent = 'Builty quantity: ' + quantity + ' MT';
     } else {

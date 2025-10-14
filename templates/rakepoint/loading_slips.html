@@ -26,13 +26,13 @@
                         <th>S.No</th>
                         <th>Loading Point</th>
                         <th>Destination</th>
-                        <th>Account</th>
+                        <th>Account/Warehouse</th>
                         <th>Quantity (Bags)</th>
                         <th>Quantity (MT)</th>
                         <th>Truck Number</th>
                         <th>Wagon Number</th>
+                        <th>Status</th>
                         <th>Created At</th>
-                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -49,12 +49,18 @@
                             <td class="text-end">{{ "%.2f"|format(slip[7]) }}</td>
                             <td>{{ slip[8] }}</td>
                             <td>{{ slip[9] }}</td>
-                            <td>{{ slip[11] }}</td>
                             <td>
-                                <button class="btn btn-sm btn-primary" onclick="printSlip({{ slip[0] }})">
-                                    <i class="bi bi-printer"></i> Print
-                                </button>
+                                {% if slip[10] %}
+                                    <span class="badge bg-success" title="Builty Number: {{ slip[17] }}">
+                                        <i class="bi bi-check-circle"></i> Builty Created
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning">
+                                        <i class="bi bi-clock"></i> Pending Builty
+                                    </span>
+                                {% endif %}
                             </td>
+                            <td>{{ slip[11] }}</td>
                         </tr>
                         {% endfor %}
                     {% else %}

@@ -11,20 +11,23 @@
 
 <div class="card">
     <div class="card-header bg-primary text-white">
-        <h4 class="mb-0"><i class="bi bi-file-earmark-plus"></i> Create New Builty (Goods Transport Receipt)</h4>
-        <small>Form based on physical builty document</small>
+        <h4 class="mb-0"><i class="bi bi-file-earmark-plus"></i> Create Builty (Goods Transport Receipt)</h4>
+        <small>Select loading slip → Auto-fills everything → Just add freight & LR number</small>
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('rakepoint_create_builty') }}">
-            <!-- Loading Slip Selection - AUTO-FILL FROM THIS -->
-            <div class="row">
-                <div class="col-md-12 mb-4">
-                    <div class="alert alert-warning">
-                        <i class="bi bi-receipt"></i> <strong>Step 1: Select Loading Slip</strong> (Auto-fills ALL fields below)
-                    </div>
-                    <label for="loading_slip_id" class="form-label">Select Loading Slip <span class="text-danger">*</span></label>
-                    <select class="form-select" id="loading_slip_id" name="loading_slip_id" required>
-                        <option value="">-- Select Loading Slip to Auto-Fill --</option>
+            
+            <!-- STEP 1: Select Loading Slip -->
+            <div class="alert alert-warning border-start border-4 border-warning">
+                <h5><i class="bi bi-receipt"></i> Step 1: Select Loading Slip</h5>
+                <p class="mb-0">All details will be auto-filled from the loading slip</p>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <label for="loading_slip_id" class="form-label fw-bold">Select Loading Slip <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-lg" id="loading_slip_id" name="loading_slip_id" required>
+                        <option value="">-- Choose a Loading Slip --</option>
                         {% if loading_slips %}
                             {% for slip in loading_slips %}
                             <option value="{{ slip[0] }}" 
@@ -42,185 +45,153 @@
                                     data-owner="{{ slip[12] }}"
                                     data-mobile1="{{ slip[13] }}"
                                     data-mobile2="{{ slip[14] }}">
-                                Slip #{{ slip[2] }} | Rake: {{ slip[1] }} | {{ slip[8] }} MT | Truck: {{ slip[9] }} | {{ slip[10] }}
+                                Slip #{{ slip[2] }} | {{ slip[1] }} | {{ slip[8] }} MT | Truck: {{ slip[9] }} | Driver: {{ slip[11] }}
                             </option>
                             {% endfor %}
                         {% else %}
-                            <option value="" disabled>No loading slips available - Create loading slip first!</option>
+                            <option value="" disabled>⚠️ No loading slips available - Please create a loading slip first!</option>
                         {% endif %}
                     </select>
-                    <small class="text-muted"><strong>Everything auto-fills!</strong> Just add freight details and LR number below.</small>
                 </div>
             </div>
-            
-            <!-- Hidden Rake Selection (Auto-filled from Loading Slip) -->
-            <div class="row">
-                <div class="col-md-12 mb-3">
-                    <label for="rake_code" class="form-label">Rake Code (Auto-filled from Loading Slip)</label>
-                    <input type="text" class="form-control" id="rake_code_display" disabled placeholder="Will auto-fill when you select loading slip">
-                    <input type="hidden" id="rake_code" name="rake_code" required>
-                </div>
-            </div>
-            
-            <!-- SECTION 1: Basic Details (Matching Physical Form) -->
-            <div class="alert alert-primary">
-                <strong>Section 1: Transport Details</strong>
-            </div>
-            
-            <!-- Date & G.T.R. No (Auto-generated Builty Number) -->
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
-                    <input type="date" class="form-control" id="date" name="date" required>
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="builty_number_preview" class="form-label">G.T.R. No. (Builty Number)</label>
-                    <input type="text" class="form-control" id="builty_number_preview" disabled placeholder="Auto-generated: BLT-YYYYMMDD-HHMMSS">
-                    <small class="text-muted">This will be auto-generated when you submit</small>
-                </div>
-            </div>
-            
-            <!-- SECTION 2: Loading Point (Consignor) -->
-            <div class="alert alert-success">
-                <strong>Section 2: Loading Point (Consignor)</strong>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="loading_point" class="form-label">Loading Point <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Auto-filled from loading slip">
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="rake_point_name" class="form-label">Rake Point Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="rake_point_name" name="rake_point_name" required placeholder="Auto-filled from rake">
-                </div>
-            </div>
-            
-            <!-- SECTION 3: Consignee (Delivery Location) -->
-            <div class="alert alert-info">
-                <strong>Section 3: Consignee (Delivery Location)</strong>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="unloading_point" class="form-label">Unloading Point / Destination <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="unloading_point" name="unloading_point" required placeholder="Auto-filled from loading slip">
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="account_warehouse" class="form-label">Consignee (Account/Warehouse) <span class="text-danger">*</span></label>
-                    <select class="form-select" id="account_warehouse" name="account_warehouse" required>
-                        <option value="">Select Account/Warehouse</option>
-                        {% for account in accounts %}
-                        <option value="{{ account[1] }}">{{ account[1] }} ({{ account[2] }})</option>
-                        {% endfor %}
-                        {% for warehouse in warehouses %}
-                        <option value="{{ warehouse[1] }}">{{ warehouse[1] }} (Warehouse)</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            
-            <!-- SECTION 4: Description of Goods -->
-            <div class="alert alert-warning">
-                <strong>Section 4: Description of Goods</strong>
-            </div>
-            
-            <!-- Goods Name & Number of Bags -->
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="goods_name" class="form-label">Goods Name / Description <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="e.g., Urea, DAP (Auto-filled from rake)">
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="number_of_bags" class="form-label">No. of Bags <span class="text-danger">*</span></label>
-                    <input type="number" class="form-control" id="number_of_bags" name="number_of_bags" required placeholder="Auto-filled from loading slip">
-                </div>
-            </div>
-            
-            <!-- Weight in M.T. (Matching physical form) -->
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="quantity_wt_mt" class="form-label">Weight in M.T. <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" class="form-control" id="quantity_wt_mt" name="quantity_wt_mt" required placeholder="Auto-filled from loading slip">
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="lr_number" class="form-label">LR Number <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="lr_number" name="lr_number" required placeholder="Enter LR number">
-                </div>
-            </div>
-            
-            <!-- SECTION 5: Freight Details (Matching physical form) -->
-            <div class="alert alert-danger">
-                <strong>Section 5: Freight Details</strong>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="rate_per_mt" class="form-label">Rate (per MT)</label>
-                    <input type="number" step="0.01" class="form-control" id="rate_per_mt" name="rate_per_mt" placeholder="₹ 0.00">
-                    <small class="text-muted">Will auto-calculate from freight</small>
-                </div>
-                
-                <div class="col-md-4 mb-3">
-                    <label for="freight_details" class="form-label">Freight / To Pay <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="freight_details" name="freight_details" required placeholder="₹ Enter total freight">
-                </div>
-                
-                <div class="col-md-4 mb-3">
-                    <label for="freight_advance" class="form-label">Freight Advance</label>
-                    <input type="number" step="0.01" class="form-control" id="freight_advance" name="freight_advance" placeholder="₹ 0.00">
-                </div>
-            </div>
-            
-            <!-- SECTION 6: Truck & Driver Details -->
-            <div class="alert alert-secondary">
-                <strong>Section 6: Truck & Driver Details</strong>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="truck_number" class="form-label">Signature of Truck Driver / Truck No. <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Auto-filled from loading slip">
-                    <small class="text-muted">Will auto-fill driver details when you enter/select truck</small>
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="truck_driver" class="form-label">Truck Driver Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="truck_driver" name="truck_driver" required placeholder="Auto-filled from truck database">
-                </div>
-            </div>
-            
-            <!-- Truck Owner & Mobile Numbers -->
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="truck_owner" class="form-label">Truck Owner <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="truck_owner" name="truck_owner" required placeholder="Auto-filled or enter manually">
-                </div>
-                
-                <div class="col-md-3 mb-3">
-                    <label for="mobile_number_1" class="form-label">Mobile No. 1 <span class="text-danger">*</span></label>
-                    <input type="tel" class="form-control" id="mobile_number_1" name="mobile_number_1" required placeholder="Enter mobile">
-                </div>
-                
-                <div class="col-md-3 mb-3">
-                    <label for="mobile_number_2" class="form-label">Mobile No. 2</label>
-                    <input type="tel" class="form-control" id="mobile_number_2" name="mobile_number_2" placeholder="Optional">
-                </div>
-            </div>
-            
+
             <hr class="my-4">
-            
-            <div class="d-flex justify-content-end gap-2">
-                <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save"></i> Create Builty
-                </button>
+
+            <!-- AUTO-FILLED DATA (Read-Only Display) -->
+            <div id="auto-filled-section" style="display: none;">
+                <div class="alert alert-success border-start border-4 border-success">
+                    <h5><i class="bi bi-check-circle"></i> Auto-Filled Data from Loading Slip</h5>
+                    <p class="mb-0">Review the details below (auto-populated)</p>
+                </div>
+
+                <!-- Hidden Fields for Submission -->
+                <input type="hidden" id="rake_code" name="rake_code">
+                <input type="hidden" id="loading_point" name="loading_point">
+                <input type="hidden" id="unloading_point" name="unloading_point">
+                <input type="hidden" id="account_warehouse" name="account_warehouse">
+                <input type="hidden" id="goods_name" name="goods_name">
+                <input type="hidden" id="number_of_bags" name="number_of_bags">
+                <input type="hidden" id="quantity_wt_mt" name="quantity_wt_mt">
+                <input type="hidden" id="truck_number" name="truck_number">
+                <input type="hidden" id="truck_driver" name="truck_driver">
+                <input type="hidden" id="truck_owner" name="truck_owner">
+                <input type="hidden" id="mobile_number_1" name="mobile_number_1">
+                <input type="hidden" id="mobile_number_2" name="mobile_number_2">
+                <input type="hidden" id="rake_point_name" name="rake_point_name">
+
+                <!-- Display Auto-Filled Data in Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">📦 Goods Details</h6>
+                                <p class="mb-1"><strong>Goods Name:</strong> <span id="display_goods_name" class="text-primary"></span></p>
+                                <p class="mb-1"><strong>Quantity:</strong> <span id="display_bags" class="text-primary"></span> bags</p>
+                                <p class="mb-0"><strong>Weight:</strong> <span id="display_mt" class="text-primary"></span> MT</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">🚚 Truck & Driver Details</h6>
+                                <p class="mb-1"><strong>Truck Number:</strong> <span id="display_truck" class="text-primary"></span></p>
+                                <p class="mb-1"><strong>Driver:</strong> <span id="display_driver" class="text-primary"></span></p>
+                                <p class="mb-0"><strong>Owner:</strong> <span id="display_owner" class="text-primary"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">📍 Route Details</h6>
+                                <p class="mb-1"><strong>From:</strong> <span id="display_loading" class="text-primary"></span></p>
+                                <p class="mb-0"><strong>To:</strong> <span id="display_destination" class="text-primary"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-3">📞 Contact Details</h6>
+                                <p class="mb-1"><strong>Mobile 1:</strong> <span id="display_mobile1" class="text-primary"></span></p>
+                                <p class="mb-0"><strong>Mobile 2:</strong> <span id="display_mobile2" class="text-primary"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- STEP 2: Enter Required Fields Only -->
+                <div class="alert alert-info border-start border-4 border-info">
+                    <h5><i class="bi bi-pencil-square"></i> Step 2: Add Freight & LR Details</h5>
+                    <p class="mb-0">Enter the freight amount and LR number below</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="builty_date" class="form-label fw-bold">Builty Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control form-control-lg" id="builty_date" name="builty_date" required>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="lr_number" class="form-label fw-bold">LR Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-lg" id="lr_number" name="lr_number" required placeholder="Enter LR Number">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="freight_details" class="form-label fw-bold">Total Freight Amount <span class="text-danger">*</span></label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control" id="freight_details" name="freight_details" required placeholder="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <label for="freight_advance" class="form-label fw-bold">Freight Advance</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control" id="freight_advance" name="freight_advance" placeholder="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <label for="rate_per_mt" class="form-label fw-bold">Rate per MT</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control" id="rate_per_mt" name="rate_per_mt" readonly placeholder="Auto-calculated">
+                        </div>
+                        <small class="text-muted">Auto-calculated from freight ÷ quantity</small>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{{ url_for('rakepoint_dashboard') }}" class="btn btn-secondary btn-lg">
+                        <i class="bi bi-x-circle"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-check-circle"></i> Create Builty
+                    </button>
+                </div>
             </div>
+
+            <!-- Show message when no loading slip selected -->
+            <div id="no-selection-message">
+                <div class="alert alert-info text-center">
+                    <i class="bi bi-info-circle fs-1"></i>
+                    <h5 class="mt-3">Please select a loading slip above to continue</h5>
+                    <p class="mb-0">All builty details will be auto-filled from the loading slip</p>
+                </div>
+            </div>
+
         </form>
     </div>
 </div>
@@ -229,27 +200,21 @@
 {% block extra_js %}
 <script>
 // Set today's date as default
-document.getElementById('builty_date').valueAsDate = new Date();
-
-// Generate GTR number preview when date is selected
-document.getElementById('builty_date').addEventListener('change', function() {
-    var date = new Date(this.value);
-    var year = date.getFullYear().toString().slice(-2);
-    var month = ('0' + (date.getMonth() + 1)).toString().slice(-2);
-    var day = ('0' + date.getDate()).toString().slice(-2);
-    var random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    var gtrNumber = 'GTR-' + year + month + day + '-' + random;
-    document.getElementById('gtr_number').value = gtrNumber;
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('builty_date').valueAsDate = new Date();
 });
 
-// AUTO-FILL FROM LOADING SLIP - Main functionality (ALL FIELDS!)
+// AUTO-FILL FROM LOADING SLIP - Show/hide sections and populate data
 document.getElementById('loading_slip_id').addEventListener('change', function() {
     var selectedOption = this.options[this.selectedIndex];
     
     if (selectedOption.value) {
-        // Auto-fill ALL fields from loading slip data attributes
+        // Show auto-filled section, hide no-selection message
+        document.getElementById('auto-filled-section').style.display = 'block';
+        document.getElementById('no-selection-message').style.display = 'none';
+        
+        // Auto-fill ALL hidden fields from loading slip data attributes
         document.getElementById('rake_code').value = selectedOption.getAttribute('data-rake-code') || '';
-        document.getElementById('rake_code_display').value = selectedOption.getAttribute('data-rake-code') || '';
         document.getElementById('loading_point').value = selectedOption.getAttribute('data-loading-point') || '';
         document.getElementById('unloading_point').value = selectedOption.getAttribute('data-destination') || '';
         document.getElementById('account_warehouse').value = selectedOption.getAttribute('data-account') || '';
@@ -261,43 +226,37 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
         document.getElementById('truck_owner').value = selectedOption.getAttribute('data-owner') || '';
         document.getElementById('mobile_number_1').value = selectedOption.getAttribute('data-mobile1') || '';
         document.getElementById('mobile_number_2').value = selectedOption.getAttribute('data-mobile2') || '';
+        document.getElementById('rake_point_name').value = 'Rake Point - ' + selectedOption.getAttribute('data-rake-code');
         
-        // Auto-fill rake point name from rake data
-        var rakeCode = selectedOption.getAttribute('data-rake-code');
-        if (rakeCode) {
-            // Set rake point name if available (you can enhance this with AJAX later)
-            document.getElementById('rake_point_name').value = 'Rake Point'; // Placeholder
-        }
+        // Update display fields in cards
+        document.getElementById('display_goods_name').textContent = selectedOption.getAttribute('data-goods') || 'N/A';
+        document.getElementById('display_bags').textContent = selectedOption.getAttribute('data-bags') || '0';
+        document.getElementById('display_mt').textContent = selectedOption.getAttribute('data-quantity-mt') || '0';
+        document.getElementById('display_truck').textContent = selectedOption.getAttribute('data-truck') || 'N/A';
+        document.getElementById('display_driver').textContent = selectedOption.getAttribute('data-driver') || 'N/A';
+        document.getElementById('display_owner').textContent = selectedOption.getAttribute('data-owner') || 'N/A';
+        document.getElementById('display_loading').textContent = selectedOption.getAttribute('data-loading-point') || 'N/A';
+        document.getElementById('display_destination').textContent = selectedOption.getAttribute('data-destination') || 'N/A';
+        document.getElementById('display_mobile1').textContent = selectedOption.getAttribute('data-mobile1') || 'N/A';
+        document.getElementById('display_mobile2').textContent = selectedOption.getAttribute('data-mobile2') || '-';
         
-        // Show success message
-        var alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
-        alertDiv.innerHTML = '<strong>✓ All fields auto-filled!</strong> Please just add freight details and LR number below. <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-        document.querySelector('form').insertBefore(alertDiv, document.querySelector('form').firstChild);
-        
-        // Auto-dismiss after 5 seconds
-        setTimeout(function() {
-            alertDiv.remove();
-        }, 5000);
+        // Scroll to the form
+        document.getElementById('auto-filled-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        // Hide auto-filled section, show no-selection message
+        document.getElementById('auto-filled-section').style.display = 'none';
+        document.getElementById('no-selection-message').style.display = 'block';
     }
 });
 
 // Auto-calculate rate per MT when freight is entered
 document.getElementById('freight_details').addEventListener('input', function() {
-    var freightValue = this.value.replace(/[₹,\s]/g, ''); // Remove currency symbols
-    var freight = parseFloat(freightValue) || 0;
+    var freight = parseFloat(this.value) || 0;
     var quantity = parseFloat(document.getElementById('quantity_wt_mt').value) || 1;
     if (quantity > 0) {
         var rate = (freight / quantity).toFixed(2);
         document.getElementById('rate_per_mt').value = rate;
     }
-});
-
-// Auto-fill truck details when truck number is selected/entered
-document.getElementById('truck_number').addEventListener('change', function() {
-    // This would typically fetch truck details via AJAX
-    // For now, it's a placeholder for future implementation
-    console.log('Truck number changed: ' + this.value);
 });
 </script>
 {% endblock %}
