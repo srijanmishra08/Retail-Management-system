@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Warehouse Transactions - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-box-seam"></i> Warehouse Stock Transactions</h2>
+        <div>
+            <input type="text" id="searchInput" class="form-control" placeholder="Search..." style="width: 300px;">
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped" id="transactionsTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Transaction ID</th>
+                            <th>Type</th>
+                            <th>Warehouse</th>
+                            <th>Builty Number</th>
+                            <th>Goods</th>
+                            <th>Account</th>
+                            <th>Quantity (MT)</th>
+                            <th>Date</th>
+                            <th>Remarks</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if transactions %}
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>{{ transaction[0] }}</td>
+                            <td>
+                                {% if transaction[1] == 'IN' %}
+                                    <span class="badge bg-success">STOCK IN</span>
+                                {% else %}
+                                    <span class="badge bg-danger">STOCK OUT</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ transaction[6] }}</td>
+                            <td>{{ transaction[7] if transaction[7] else 'N/A' }}</td>
+                            <td>{{ transaction[8] if transaction[8] else 'N/A' }}</td>
+                            <td>{{ transaction[9] }}</td>
+                            <td><strong>{{ transaction[2] }} MT</strong></td>
+                            <td>{{ transaction[3][:10] if transaction[3] else 'N/A' }}</td>
+                            <td>{{ transaction[4] if transaction[4] else '-' }}</td>
+                            <td>{{ transaction[5][:16] if transaction[5] else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if not transactions %}
+    <div class="alert alert-info mt-3">
+        <i class="bi bi-info-circle"></i> No warehouse transactions found in the system.
+    </div>
+    {% endif %}
+
+    <!-- Summary Stats -->
+    {% if transactions %}
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5><i class="bi bi-arrow-down-circle"></i> Total Stock IN</h5>
+                    <h3>
+                        {% set total_in = transactions|selectattr('1', 'equalto', 'IN')|map(attribute='2')|sum %}
+                        {{ "{:,.2f}".format(total_in) }} MT
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5><i class="bi bi-arrow-up-circle"></i> Total Stock OUT</h5>
+                    <h3>
+                        {% set total_out = transactions|selectattr('1', 'equalto', 'OUT')|map(attribute='2')|sum %}
+                        {{ "{:,.2f}".format(total_out) }} MT
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('keyup', function() {
+        const searchText = this.value.toLowerCase();
+        const table = document.getElementById('transactionsTable');
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchText) ? '' : 'none';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Builty - {{ builty.builty_number }}</title>
+    <style>
+        @media print {
+            body {
+                margin: 0;
+                padding: 15px;
+            }
+            .no-print {
+                display: none;
+            }
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #000;
+        }
+        
+        .header h2 {
+            margin: 5px 0;
+            font-size: 20px;
+            color: #333;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            background: #f0f0f0;
+            padding: 8px;
+            font-weight: bold;
+            border-left: 4px solid #2563eb;
+            margin-bottom: 10px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .info-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            min-width: 150px;
+            color: #555;
+        }
+        
+        .info-value {
+            flex: 1;
+            color: #000;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        table th,
+        table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        table th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        
+        .signature-section {
+            margin-top: 50px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 40px;
+        }
+        
+        .signature-box {
+            text-align: center;
+            padding-top: 50px;
+            border-top: 2px solid #000;
+        }
+        
+        .print-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .print-button:hover {
+            background: #1d4ed8;
+        }
+        
+        .amount-section {
+            background: #f9f9f9;
+            padding: 15px;
+            border: 2px solid #ddd;
+            margin-top: 20px;
+        }
+        
+        .amount-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 16px;
+        }
+        
+        .amount-row.total {
+            border-top: 2px solid #000;
+            padding-top: 10px;
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <button class="print-button no-print" onclick="window.print()">
+        🖨️ Print Builty
+    </button>
+    
+    <div class="header">
+        <h1>BUILTY / CONSIGNMENT NOTE</h1>
+        <h2>Fertilizer Inventory Management System</h2>
+    </div>
+    
+    <!-- Builty Details -->
+    <div class="section">
+        <div class="section-title">BUILTY INFORMATION</div>
+        <div class="info-grid">
+            <div class="info-row">
+                <div class="info-label">Builty Number:</div>
+                <div class="info-value"><strong>{{ builty.builty_number }}</strong></div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Date:</div>
+                <div class="info-value">{{ builty.date }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">LR Number:</div>
+                <div class="info-value">{{ builty.lr_number or 'N/A' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Rake Code:</div>
+                <div class="info-value">{{ builty.rake_code or 'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Transport Details -->
+    <div class="section">
+        <div class="section-title">TRANSPORT DETAILS</div>
+        <div class="info-grid">
+            <div class="info-row">
+                <div class="info-label">Truck Number:</div>
+                <div class="info-value"><strong>{{ builty.truck_number }}</strong></div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Driver Name:</div>
+                <div class="info-value">{{ builty.driver_name or 'N/A' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Driver Mobile:</div>
+                <div class="info-value">{{ builty.driver_mobile or 'N/A' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Owner Name:</div>
+                <div class="info-value">{{ builty.owner_name or 'N/A' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Owner Mobile:</div>
+                <div class="info-value">{{ builty.owner_mobile or 'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Location Details -->
+    <div class="section">
+        <div class="section-title">LOCATION DETAILS</div>
+        <div class="info-grid">
+            <div class="info-row">
+                <div class="info-label">Loading Point:</div>
+                <div class="info-value">{{ builty.loading_point }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Unloading Point:</div>
+                <div class="info-value">{{ builty.unloading_point }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Rake Point:</div>
+                <div class="info-value">{{ builty.rake_point_name or 'N/A' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Destination:</div>
+                <div class="info-value">{{ builty.account_name or builty.warehouse_name or 'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Goods Details -->
+    <div class="section">
+        <div class="section-title">GOODS DETAILS</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Description of Goods</th>
+                    <th>Number of Bags</th>
+                    <th>Kg per Bag</th>
+                    <th>Quantity (MT)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>{{ builty.goods_name }}</strong></td>
+                    <td style="text-align: center;">{{ builty.number_of_bags }}</td>
+                    <td style="text-align: center;">{{ "%.2f"|format(builty.kg_per_bag) if builty.kg_per_bag else 'N/A' }}</td>
+                    <td style="text-align: center;"><strong>{{ "%.2f"|format(builty.quantity_mt) }} MT</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Freight Details -->
+    <div class="section">
+        <div class="section-title">FREIGHT DETAILS</div>
+        <div class="amount-section">
+            <div class="amount-row">
+                <span>Rate per MT:</span>
+                <span>₹{{ "{:,.2f}".format(builty.rate_per_mt) if builty.rate_per_mt else '0.00' }}</span>
+            </div>
+            <div class="amount-row">
+                <span>Quantity:</span>
+                <span>{{ "%.2f"|format(builty.quantity_mt) }} MT</span>
+            </div>
+            <div class="amount-row total">
+                <span>Total Freight:</span>
+                <span>₹{{ "{:,.2f}".format(builty.total_freight) if builty.total_freight else '0.00' }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Signatures -->
+    <div class="signature-section">
+        <div class="signature-box">
+            <strong>Consignor's Signature</strong>
+        </div>
+        <div class="signature-box">
+            <strong>Driver's Signature</strong>
+        </div>
+        <div class="signature-box">
+            <strong>Consignee's Signature</strong>
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #666;">
+        <p>This is a computer-generated builty. Generated on {{ datetime.now().strftime('%d-%m-%Y %H:%M:%S') }}</p>
+    </div>
+    
+    <script>
+        // Auto-print on load (optional - can be removed if not desired)
+        // window.onload = function() { window.print(); }
+    </script>
+</body>
+</html>

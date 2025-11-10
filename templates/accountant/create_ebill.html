@@ -23,6 +23,7 @@
                         <option value="">Select Builty</option>
                         {% for builty in builties %}
                         <option value="{{ builty[0] }}" 
+                                data-builty-number="{{ builty[1] }}"
                                 data-truck="{{ builty[22] }}"
                                 data-goods="{{ builty[10] }}"
                                 data-quantity="{{ builty[12] }}"
@@ -31,7 +32,7 @@
                                 data-unloading="{{ builty[9] }}"
                                 data-freight="{{ builty[15] }}"
                                 data-lr="{{ builty[16] }}">
-                            LR: {{ builty[16] }} | Truck: {{ builty[22] }} | {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
+                            Builty: {{ builty[1] }} | LR: {{ builty[16] }} | Truck: {{ builty[22] }} | {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
                         </option>
                         {% endfor %}
                     </select>
@@ -44,12 +45,14 @@
                     <h6 class="card-title text-primary">Builty Details (Auto-filled)</h6>
                     <div class="row">
                         <div class="col-md-4">
+                            <p class="mb-1"><strong>Builty Number:</strong> <span id="display_builty">-</span></p>
                             <p class="mb-1"><strong>Truck Number:</strong> <span id="display_truck">-</span></p>
                             <p class="mb-1"><strong>Goods Name:</strong> <span id="display_goods">-</span></p>
                         </div>
                         <div class="col-md-4">
                             <p class="mb-1"><strong>Quantity:</strong> <span id="display_quantity">-</span> MT</p>
                             <p class="mb-1"><strong>Account:</strong> <span id="display_account">-</span></p>
+                            <p class="mb-1"><strong>Freight Amount:</strong> ₹<span id="display_freight">-</span></p>
                         </div>
                         <div class="col-md-4">
                             <p class="mb-1"><strong>Loading Point:</strong> <span id="display_loading">-</span></p>
@@ -65,24 +68,12 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="ebill_number" class="form-label">E-Bill Number <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="ebill_number" name="ebill_number" required placeholder="Auto-generated or Manual">
+                    <input type="text" class="form-control" id="ebill_number" name="ebill_number" required placeholder="e.g., EBILL-20251110-001">
                 </div>
                 
                 <div class="col-md-6 mb-3">
                     <label for="ebill_date" class="form-label">E-Bill Date <span class="text-danger">*</span></label>
                     <input type="date" class="form-control" id="ebill_date" name="ebill_date" required>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="amount" class="form-label">Amount (₹) <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" class="form-control" id="amount" name="amount" required placeholder="0.00">
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="tax_amount" class="form-label">Tax Amount (₹)</label>
-                    <input type="number" step="0.01" class="form-control" id="tax_amount" name="tax_amount" placeholder="0.00">
                 </div>
             </div>
             
@@ -132,18 +123,14 @@ document.getElementById('ebill_date').valueAsDate = new Date();
 document.getElementById('builty_id').addEventListener('change', function() {
     const selectedOption = this.options[this.selectedIndex];
     
+    document.getElementById('display_builty').textContent = selectedOption.dataset.builtyNumber || '-';
     document.getElementById('display_truck').textContent = selectedOption.dataset.truck || '-';
     document.getElementById('display_goods').textContent = selectedOption.dataset.goods || '-';
     document.getElementById('display_quantity').textContent = selectedOption.dataset.quantity || '-';
     document.getElementById('display_account').textContent = selectedOption.dataset.account || '-';
     document.getElementById('display_loading').textContent = selectedOption.dataset.loading || '-';
     document.getElementById('display_unloading').textContent = selectedOption.dataset.unloading || '-';
-    
-    // Auto-fill amount from freight details if available
-    const freight = selectedOption.dataset.freight;
-    if (freight && !isNaN(parseFloat(freight))) {
-        document.getElementById('amount').value = parseFloat(freight).toFixed(2);
-    }
+    document.getElementById('display_freight').textContent = selectedOption.dataset.freight || '-';
 });
 
 // Validate file size

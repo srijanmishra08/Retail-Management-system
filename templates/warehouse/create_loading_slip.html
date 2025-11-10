@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Create Loading Slip - Warehouse{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h4 class="mb-0"><i class="bi bi-receipt"></i> Create Loading Slip (Stock OUT - Step 1)</h4>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> <strong>Workflow:</strong> First create Loading Slip for truck loading, then create Builty for dispatch.
+        </div>
+        
+        <form method="POST" action="{{ url_for('warehouse_create_loading_slip') }}">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="warehouse_name" class="form-label">From Warehouse <span class="text-danger">*</span></label>
+                    <select class="form-select" id="warehouse_name" name="warehouse_name" required>
+                        <option value="">Select Warehouse</option>
+                        {% for warehouse in warehouses %}
+                        <option value="{{ warehouse[1] }}" 
+                                data-balance="{{ warehouse[1] }}">
+                            {{ warehouse[1] }} - {{ warehouse[2] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted" id="balance_info"></small>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="serial_number" class="form-label">Serial Number (S.No) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="serial_number" name="serial_number" required placeholder="Enter serial number">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="loading_point" class="form-label">Loading Point <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Warehouse name will auto-fill">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="destination" class="form-label">Destination <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="destination" name="destination" required placeholder="Enter destination">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="account" class="form-label">Dispatch To (Account/Warehouse) <span class="text-danger">*</span></label>
+                    <select class="form-select" id="account" name="account" required>
+                        <option value="">-- Select Destination --</option>
+                        <optgroup label="👥 Accounts (Dealers/Retailers)">
+                            {% for account in accounts %}
+                            <option value="{{ account[1] }}">{{ account[1] }} - {{ account[2] }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="🏢 Warehouses">
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - Warehouse</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                    <small class="text-muted">Stock can be sent to dealers/retailers OR other warehouses</small>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="wagon_number" class="form-label">Wagon/Container Number</label>
+                    <input type="text" class="form-control" id="wagon_number" name="wagon_number" placeholder="Optional">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="quantity_in_bags" class="form-label">Quantity in Bags <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="quantity_in_bags" name="quantity_in_bags" required placeholder="Enter quantity">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="quantity_in_mt" class="form-label">Quantity in MT <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="quantity_in_mt" name="quantity_in_mt" required placeholder="0.00">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="truck_number" class="form-label">Truck Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Enter truck number">
+                </div>
+            </div>
+            
+            <!-- Truck & Driver Details Section -->
+            <div class="alert alert-info mt-3">
+                <i class="bi bi-truck"></i> <strong>Truck & Driver Details</strong> (Will auto-fill in Builty)
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="truck_driver" class="form-label">Truck Driver Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_driver" name="truck_driver" required placeholder="Enter driver name">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="truck_owner" class="form-label">Truck Owner <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="truck_owner" name="truck_owner" required placeholder="Enter owner name">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="mobile_number_1" class="form-label">Mobile Number 1 <span class="text-danger">*</span></label>
+                    <input type="tel" class="form-control" id="mobile_number_1" name="mobile_number_1" required placeholder="Enter mobile number">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="mobile_number_2" class="form-label">Mobile Number 2</label>
+                    <input type="tel" class="form-control" id="mobile_number_2" name="mobile_number_2" placeholder="Optional">
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="goods_name" class="form-label">Goods Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="e.g., Urea, DAP">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="truck_details" class="form-label">Additional Truck/Transport Details</label>
+                    <textarea class="form-control" id="truck_details" name="truck_details" rows="2" placeholder="Any additional information"></textarea>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" name="action" value="save" class="btn btn-warning">
+                    <i class="bi bi-save"></i> Save Loading Slip
+                </button>
+                <button type="submit" name="action" value="print" class="btn btn-primary">
+                    <i class="bi bi-printer"></i> Save & Print
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-calculate MT from bags (assuming 50kg per bag)
+document.getElementById('quantity_in_bags').addEventListener('input', function() {
+    const bags = parseFloat(this.value) || 0;
+    const mt = (bags * 50) / 1000;
+    document.getElementById('quantity_in_mt').value = mt.toFixed(2);
+});
+
+// Auto-fill loading point when warehouse selected
+document.getElementById('warehouse_name').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const warehouseName = this.value;
+    
+    if (warehouseName) {
+        document.getElementById('loading_point').value = warehouseName;
+    } else {
+        document.getElementById('loading_point').value = '';
+    }
+});
+
+// Auto-open print window and reset form if print action was clicked
+{% if print_slip_id %}
+window.addEventListener('load', function() {
+    // Open print page in new window
+    const printWindow = window.open('{{ url_for("warehouse_print_loading_slip", slip_id=print_slip_id) }}', '_blank', 'width=800,height=600');
+    
+    // Reset form after a short delay
+    setTimeout(function() {
+        document.querySelector('form').reset();
+    }, 500);
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -140,17 +140,27 @@
                     
                     <div class="col-md-6 mb-3">
                         <label for="lr_number" class="form-label fw-bold">LR Number <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-lg" id="lr_number" name="lr_number" required placeholder="Enter LR Number">
+                        <input type="text" class="form-control form-control-lg" id="lr_number" name="lr_number" required placeholder="Auto-generated" readonly>
+                        <small class="text-muted">Automatically generated sequential LR number</small>
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="col-md-4 mb-3">
+                        <label for="rate_per_mt" class="form-label fw-bold">Rate per MT <span class="text-danger">*</span></label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control" id="rate_per_mt" name="rate_per_mt" required placeholder="Enter rate per MT">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
                         <label for="freight_details" class="form-label fw-bold">Total Freight Amount <span class="text-danger">*</span></label>
                         <div class="input-group input-group-lg">
                             <span class="input-group-text">₹</span>
-                            <input type="number" step="0.01" class="form-control" id="freight_details" name="freight_details" required placeholder="0.00">
+                            <input type="number" step="0.01" class="form-control" id="freight_details" name="freight_details" required placeholder="0.00" readonly>
                         </div>
+                        <small class="text-muted">Auto-calculated: Rate × Quantity</small>
                     </div>
                     
                     <div class="col-md-4 mb-3">
@@ -159,15 +169,6 @@
                             <span class="input-group-text">₹</span>
                             <input type="number" step="0.01" class="form-control" id="freight_advance" name="freight_advance" placeholder="0.00">
                         </div>
-                    </div>
-                    
-                    <div class="col-md-4 mb-3">
-                        <label for="rate_per_mt" class="form-label fw-bold">Rate per MT</label>
-                        <div class="input-group input-group-lg">
-                            <span class="input-group-text">₹</span>
-                            <input type="number" step="0.01" class="form-control" id="rate_per_mt" name="rate_per_mt" readonly placeholder="Auto-calculated">
-                        </div>
-                        <small class="text-muted">Auto-calculated from freight ÷ quantity</small>
                     </div>
                 </div>
 
@@ -199,9 +200,20 @@
 
 {% block extra_js %}
 <script>
-// Set today's date as default
+// Set today's date as default and fetch next LR number
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('builty_date').valueAsDate = new Date();
+    
+    // Fetch next LR number
+    fetch('/api/next-lr-number')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('lr_number').value = data.next_lr;
+            document.getElementById('lr_number').classList.add('bg-light');
+        })
+        .catch(error => {
+            console.error('Error fetching LR number:', error);
+        });
 });
 
 // AUTO-FILL FROM LOADING SLIP - Show/hide sections and populate data
@@ -249,13 +261,15 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
     }
 });
 
-// Auto-calculate rate per MT when freight is entered
-document.getElementById('freight_details').addEventListener('input', function() {
-    var freight = parseFloat(this.value) || 0;
-    var quantity = parseFloat(document.getElementById('quantity_wt_mt').value) || 1;
-    if (quantity > 0) {
-        var rate = (freight / quantity).toFixed(2);
-        document.getElementById('rate_per_mt').value = rate;
+// Auto-calculate total freight when rate per MT is entered
+document.getElementById('rate_per_mt').addEventListener('input', function() {
+    var rate = parseFloat(this.value) || 0;
+    var quantity = parseFloat(document.getElementById('quantity_wt_mt').value) || 0;
+    if (quantity > 0 && rate > 0) {
+        var totalFreight = (rate * quantity).toFixed(2);
+        document.getElementById('freight_details').value = totalFreight;
+    } else {
+        document.getElementById('freight_details').value = '0.00';
     }
 });
 </script>

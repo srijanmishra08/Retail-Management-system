@@ -87,6 +87,19 @@ class Database:
             )
         ''')
         
+        # Products table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_name TEXT UNIQUE NOT NULL,
+                product_code TEXT,
+                product_type TEXT DEFAULT 'Fertilizer',
+                unit TEXT DEFAULT 'MT',
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         # Warehouses table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS warehouses (
@@ -228,11 +241,25 @@ class Database:
         cursor.execute("SELECT COUNT(*) FROM accounts")
         if cursor.fetchone()[0] == 0:
             default_accounts = [
-                ('Payal Fertilizers', 'Company', '9876543210', 'Company Address'),
+                ('Payal Fertilizers', 'Payal', '9876543210', 'Company Address'),
                 ('Dealer 1', 'Dealer', '9876543211', 'Dealer Address'),
                 ('Retailer 1', 'Retailer', '9876543212', 'Retailer Address'),
             ]
             cursor.executemany('INSERT INTO accounts (account_name, account_type, contact, address) VALUES (?, ?, ?, ?)', default_accounts)
+        
+        # Insert default products if not exist
+        cursor.execute("SELECT COUNT(*) FROM products")
+        if cursor.fetchone()[0] == 0:
+            default_products = [
+                ('Urea', 'URE01', 'Fertilizer', 'MT', 'Nitrogen fertilizer'),
+                ('DAP', 'DAP01', 'Fertilizer', 'MT', 'Diammonium Phosphate'),
+                ('MOP', 'MOP01', 'Fertilizer', 'MT', 'Muriate of Potash'),
+                ('NPK', 'NPK01', 'Fertilizer', 'MT', 'NPK Complex fertilizer'),
+            ]
+            cursor.executemany('INSERT INTO products (product_name, product_code, product_type, unit, description) VALUES (?, ?, ?, ?, ?)', default_products)
+        
+        # Migrate old 'Company' account type to 'Payal'
+        cursor.execute("UPDATE accounts SET account_type = 'Payal' WHERE account_type = 'Company'")
         
         conn.commit()
         conn.close()
@@ -343,6 +370,43 @@ class Database:
             'remaining': total_quantity - dispatched_quantity
         }
     
+    def get_next_serial_number_for_rake(self, rake_code):
+        """Get the next serial number for a rake's loading slip"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Get the highest serial number for this rake
+        cursor.execute('''
+            SELECT COALESCE(MAX(slip_number), 0) + 1
+            FROM loading_slips
+            WHERE rake_code = ?
+        ''', (rake_code,))
+        next_serial = cursor.fetchone()[0]
+        
+        conn.close()
+        return next_serial
+    
+    def get_next_lr_number(self):
+        """Get the next LR number sequentially"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Get the highest LR number
+        cursor.execute('''
+            SELECT MAX(CAST(lr_number AS INTEGER))
+            FROM builty
+            WHERE lr_number IS NOT NULL AND lr_number != ''
+            AND lr_number GLOB '[0-9]*'
+        ''')
+        result = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        if result:
+            return str(int(result) + 1)
+        else:
+            return "1001"  # Starting LR number
+    
     # ========== Account Operations ==========
     
     def add_account(self, account_name, account_type, contact, address):
@@ -381,6 +445,45 @@ class Database:
         accounts = cursor.fetchall()
         conn.close()
         return accounts
+    
+    # ========== Product Operations ==========
+    
+    def add_product(self, product_name, product_code, product_type='Fertilizer', unit='MT', description=''):
+        """Add new product"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO products (product_name, product_code, product_type, unit, description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (product_name, product_code, product_type, unit, description))
+            product_id = cursor.lastrowid
+            conn.commit()
+            return product_id
+        except Exception as e:
+            print(f"Error adding product: {e}")
+            conn.rollback()
+            return None
+        finally:
+            conn.close()
+    
+    def get_all_products(self):
+        """Get all products"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM products ORDER BY product_name')
+        products = cursor.fetchall()
+        conn.close()
+        return products
+    
+    def get_product_by_name(self, product_name):
+        """Get product by name"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM products WHERE product_name = ?', (product_name,))
+        product = cursor.fetchone()
+        conn.close()
+        return product
     
     # ========== Warehouse Operations ==========
     
@@ -738,13 +841,19 @@ class Database:
             conn.close()
     
     def get_all_ebills(self):
-        """Get all e-bills"""
+        """Get all e-bills with complete builty details"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT e.*, b.builty_number, b.quantity_mt
+            SELECT e.ebill_id, e.ebill_number, e.amount, e.generated_date, 
+                   e.eway_bill_pdf, e.created_at,
+                   b.builty_number, b.goods_name, b.quantity_mt, b.lr_number,
+                   t.truck_number,
+                   COALESCE(a.account_name, 'N/A') as account_name
             FROM ebills e
             LEFT JOIN builty b ON e.builty_id = b.builty_id
+            LEFT JOIN trucks t ON b.truck_id = t.truck_id
+            LEFT JOIN accounts a ON b.account_id = a.account_id
             ORDER BY e.created_at DESC
         ''')
         ebills = cursor.fetchall()
@@ -824,8 +933,7 @@ class Database:
                 COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE 0 END), 0) as stock_in,
                 COALESCE(SUM(CASE WHEN ws.transaction_type = 'OUT' THEN ws.quantity_mt ELSE 0 END), 0) as stock_out
             FROM rakes r
-            LEFT JOIN loading_slips ls ON r.rake_code = ls.rake_code
-            LEFT JOIN builty b ON ls.builty_id = b.builty_id
+            LEFT JOIN builty b ON r.rake_code = b.rake_code
             LEFT JOIN warehouse_stock ws ON b.builty_id = ws.builty_id
             GROUP BY r.rake_code, r.company_name, r.date, r.rr_quantity
             ORDER BY r.date DESC

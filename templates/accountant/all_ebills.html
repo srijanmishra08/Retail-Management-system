@@ -68,83 +68,40 @@
                     {% if ebills %}
                         {% for ebill in ebills %}
                         <tr>
-                            <td><strong>{{ ebill[0] }}</strong></td>
-                            <td>{{ ebill[1] }}</td>
-                            <td>{{ ebill[2] }}</td>
+                            <td><strong>{{ ebill[1] }}</strong></td>
                             <td>{{ ebill[3] }}</td>
-                            <td>{{ ebill[4] }}</td>
-                            <td>{{ ebill[5] }}</td>
-                            <td class="text-end">{{ "%.2f"|format(ebill[6]) }}</td>
-                            <td class="text-end">₹{{ "%.2f"|format(ebill[7]) }}</td>
+                            <td>{{ ebill[9] if ebill[9] else 'N/A' }}</td>
+                            <td>{{ ebill[10] if ebill[10] else 'N/A' }}</td>
+                            <td>{{ ebill[11] }}</td>
+                            <td>{{ ebill[7] if ebill[7] else 'N/A' }}</td>
+                            <td class="text-end">{{ "%.2f"|format(ebill[8]) if ebill[8] else '0.00' }}</td>
+                            <td class="text-end">₹{{ "%.2f"|format(ebill[2]) }}</td>
                             <td>
-                                {% if ebill[8] %}
+                                {% if ebill[4] %}
                                 <span class="badge bg-success">
-                                    <i class="bi bi-check-circle"></i> {{ ebill[8] }}
+                                    <i class="bi bi-check-circle"></i> Uploaded
                                 </span>
-                                {% if ebill[9] %}
-                                <br><a href="{{ ebill[9] }}" target="_blank" class="btn btn-sm btn-info mt-1">
-                                    <i class="bi bi-file-pdf"></i> View PDF
+                                <br>
+                                <a href="{{ url_for('download_eway_bill', filename=ebill[4]) }}" 
+                                   class="btn btn-sm btn-info mt-1" 
+                                   target="_blank">
+                                    <i class="bi bi-file-pdf"></i> Download
                                 </a>
-                                {% endif %}
                                 {% else %}
                                 <span class="badge bg-warning">
-                                    <i class="bi bi-exclamation-triangle"></i> Pending
+                                    <i class="bi bi-exclamation-triangle"></i> Not Uploaded
                                 </span>
                                 {% endif %}
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-info" onclick="viewEbill({{ ebill[10] }})">
+                                    <button class="btn btn-info" title="View Details">
                                         <i class="bi bi-eye"></i>
                                     </button>
-                                    <button class="btn btn-primary" onclick="printEbill({{ ebill[10] }})">
-                                        <i class="bi bi-printer"></i>
-                                    </button>
-                                    {% if not ebill[8] %}
-                                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadEwayModal{{ ebill[10] }}">
-                                        <i class="bi bi-upload"></i>
-                                    </button>
-                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
-                        
-                        <!-- Upload Eway Bill Modal -->
-                        <div class="modal fade" id="uploadEwayModal{{ ebill[10] }}" tabindex="-1">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <form method="POST" action="{{ url_for('accountant_upload_eway', ebill_id=ebill[10]) }}" enctype="multipart/form-data">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Upload Eway Bill</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <div class="mb-3">
-                                                <label for="eway_number{{ ebill[10] }}" class="form-label">Eway Bill Number</label>
-                                                <input type="text" class="form-control" id="eway_number{{ ebill[10] }}" name="eway_bill_number" required>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="eway_pdf{{ ebill[10] }}" class="form-label">Upload PDF</label>
-                                                <input type="file" class="form-control" id="eway_pdf{{ ebill[10] }}" name="eway_bill_pdf" accept=".pdf" required>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button type="submit" class="btn btn-success">Upload</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
                         {% endfor %}
-                        
-                        <!-- Summary Row -->
-                        <tr class="table-primary fw-bold">
-                            <td colspan="6">TOTAL</td>
-                            <td class="text-end">{{ "%.2f"|format(ebills|sum(attribute='6')) }}</td>
-                            <td class="text-end">₹{{ "%.2f"|format(ebills|sum(attribute='7')) }}</td>
-                            <td colspan="2">-</td>
-                        </tr>
                     {% else %}
                         <tr>
                             <td colspan="10" class="text-center text-muted">No e-bills found</td>

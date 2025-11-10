@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading Slip #{{ slip[2] }}</title>
+    <style>
+        @media print {
+            .no-print {
+                display: none;
+            }
+            @page {
+                margin: 0.5cm;
+            }
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            font-size: 12pt;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24pt;
+            color: #333;
+        }
+        
+        .header h2 {
+            margin: 5px 0 0 0;
+            font-size: 18pt;
+            color: #666;
+        }
+        
+        .slip-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+        }
+        
+        .slip-info div {
+            flex: 1;
+        }
+        
+        .slip-info strong {
+            display: block;
+            color: #333;
+            font-size: 11pt;
+        }
+        
+        .slip-info span {
+            display: block;
+            font-size: 14pt;
+            font-weight: bold;
+            color: #000;
+        }
+        
+        .section {
+            margin-bottom: 15px;
+            border: 1px solid #000;
+            padding: 10px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 14pt;
+            background-color: #333;
+            color: white;
+            padding: 5px 10px;
+            margin: -10px -10px 10px -10px;
+        }
+        
+        .field-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        .field {
+            flex: 1;
+            padding-right: 15px;
+        }
+        
+        .field label {
+            display: block;
+            font-weight: bold;
+            font-size: 10pt;
+            color: #555;
+            margin-bottom: 3px;
+        }
+        
+        .field-value {
+            font-size: 12pt;
+            color: #000;
+            border-bottom: 1px solid #999;
+            padding: 3px 0;
+            min-height: 20px;
+        }
+        
+        .quantity-section {
+            background-color: #fffacd;
+            border: 2px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .quantity-row {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        
+        .quantity-item {
+            flex: 1;
+        }
+        
+        .quantity-item label {
+            display: block;
+            font-weight: bold;
+            font-size: 11pt;
+            margin-bottom: 5px;
+        }
+        
+        .quantity-item .value {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #d9534f;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            padding-top: 20px;
+            border-top: 1px solid #000;
+        }
+        
+        .signature {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 50px;
+            padding-top: 5px;
+            font-weight: bold;
+        }
+        
+        .print-button {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .print-button button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 14pt;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 0 10px;
+        }
+        
+        .print-button button:hover {
+            background-color: #0056b3;
+        }
+        
+        .close-button {
+            background-color: #6c757d !important;
+        }
+        
+        .close-button:hover {
+            background-color: #545b62 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print print-button">
+        <button onclick="window.print()">🖨️ Print Loading Slip</button>
+        <button class="close-button" onclick="closeWindow()">✕ Close</button>
+    </div>
+
+    <div class="header">
+        <h1>FERTILIZER INVENTORY MANAGEMENT SYSTEM</h1>
+        <h2>LOADING SLIP</h2>
+    </div>
+
+    <div class="slip-info">
+        <div>
+            <strong>Slip Number:</strong>
+            <span>#{{ slip[2] }}</span>
+        </div>
+        <div>
+            <strong>Rake Code:</strong>
+            <span>{{ slip[1] }}</span>
+        </div>
+        <div>
+            <strong>Date:</strong>
+            <span>{{ slip[13][:10] if slip[13] else 'N/A' }}</span>
+        </div>
+    </div>
+
+    <!-- Transport Details -->
+    <div class="section">
+        <div class="section-title">🚛 TRANSPORT DETAILS</div>
+        <div class="field-row">
+            <div class="field">
+                <label>Truck Number:</label>
+                <div class="field-value">{{ slip[14] if slip[14] else 'N/A' }}</div>
+            </div>
+            <div class="field">
+                <label>Wagon/Container Number:</label>
+                <div class="field-value">{{ slip[12] if slip[12] else 'N/A' }}</div>
+            </div>
+        </div>
+        <div class="field-row">
+            <div class="field">
+                <label>Driver Name:</label>
+                <div class="field-value">{{ slip[8] if slip[8] else 'N/A' }}</div>
+            </div>
+            <div class="field">
+                <label>Driver Mobile:</label>
+                <div class="field-value">{{ slip[10] if slip[10] else 'N/A' }}</div>
+            </div>
+        </div>
+        <div class="field-row">
+            <div class="field">
+                <label>Owner Name:</label>
+                <div class="field-value">{{ slip[9] if slip[9] else 'N/A' }}</div>
+            </div>
+            <div class="field">
+                <label>Owner Mobile:</label>
+                <div class="field-value">{{ slip[11] if slip[11] else 'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading & Destination Details -->
+    <div class="section">
+        <div class="section-title">📍 LOADING & DESTINATION</div>
+        <div class="field-row">
+            <div class="field">
+                <label>Loading Point:</label>
+                <div class="field-value">{{ slip[3] }}</div>
+            </div>
+            <div class="field">
+                <label>Unloading Point:</label>
+                <div class="field-value">{{ slip[4] }}</div>
+            </div>
+        </div>
+        <div class="field-row">
+            <div class="field">
+                <label>Destination ({{ slip[16] if slip[16] else 'Account' }}):</label>
+                <div class="field-value">{{ slip[15] if slip[15] else 'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Goods & Quantity Details -->
+    <div class="section">
+        <div class="section-title">📦 GOODS DETAILS</div>
+        <div class="field-row">
+            <div class="field">
+                <label>Goods Name:</label>
+                <div class="field-value">{{ slip[7] if slip[7] else 'N/A' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="quantity-section">
+        <div class="quantity-row">
+            <div class="quantity-item">
+                <label>QUANTITY (BAGS)</label>
+                <div class="value">{{ slip[5] }}</div>
+            </div>
+            <div class="quantity-item">
+                <label>QUANTITY (MT)</label>
+                <div class="value">{{ "%.2f"|format(slip[6]) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer with Signatures -->
+    <div class="footer">
+        <div class="signature">
+            <div class="signature-line">Authorized Signatory</div>
+            <div style="font-size: 10pt; color: #666; margin-top: 5px;">Loading Point</div>
+        </div>
+        <div class="signature">
+            <div class="signature-line">Driver Signature</div>
+            <div style="font-size: 10pt; color: #666; margin-top: 5px;">Received By</div>
+        </div>
+        <div class="signature">
+            <div class="signature-line">Receiver Signature</div>
+            <div style="font-size: 10pt; color: #666; margin-top: 5px;">Destination</div>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px; text-align: center; font-size: 9pt; color: #999;">
+        Generated on {{ slip[13] if slip[13] else 'N/A' }} | FIMS - Fertilizer Inventory Management System
+    </div>
+
+    <script>
+        // Auto-print when opened in a new window
+        window.addEventListener('load', function() {
+            // Optional: Uncomment to auto-print
+            // window.print();
+        });
+        
+        // Function to close window
+        function closeWindow() {
+            // Try to close the window
+            window.close();
+            
+            // If window.close() doesn't work (browser restrictions), go back
+            setTimeout(function() {
+                if (!window.closed) {
+                    window.history.back();
+                }
+            }, 100);
+        }
+    </script>
+</body>
+</html>

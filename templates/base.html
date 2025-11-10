@@ -119,6 +119,19 @@
                 <a class="nav-link {% if 'admin_manage_accounts' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_manage_accounts') }}">
                     <i class="bi bi-people"></i> Manage Accounts
                 </a>
+                <div class="px-3 py-2 text-white-50 small mt-2"><strong>VIEW ALL DATA</strong></div>
+                <a class="nav-link {% if 'admin_all_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_loading_slips') }}">
+                    <i class="bi bi-file-text"></i> All Loading Slips
+                </a>
+                <a class="nav-link {% if 'admin_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_builties') }}">
+                    <i class="bi bi-file-earmark-text"></i> All Builties
+                </a>
+                <a class="nav-link {% if 'admin_all_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_ebills') }}">
+                    <i class="bi bi-receipt"></i> All E-Bills
+                </a>
+                <a class="nav-link {% if 'admin_warehouse_transactions' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_warehouse_transactions') }}">
+                    <i class="bi bi-box-seam"></i> Warehouse Stock
+                </a>
             {% elif current_user.role == 'RakePoint' %}
                 <a class="nav-link {% if 'rakepoint_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_dashboard') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard
@@ -129,6 +142,12 @@
                 <a class="nav-link {% if 'rakepoint_create_builty' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_create_builty') }}">
                     <i class="bi bi-file-plus"></i> Create Builty
                 </a>
+                <a class="nav-link {% if 'rakepoint_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_loading_slips') }}">
+                    <i class="bi bi-list-ul"></i> View Loading Slips
+                </a>
+                <a class="nav-link {% if 'rakepoint_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_all_builties') }}">
+                    <i class="bi bi-file-earmark-text"></i> All Builties
+                </a>
             {% elif current_user.role == 'Warehouse' %}
                 <a class="nav-link {% if 'warehouse_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_dashboard') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard
@@ -136,8 +155,18 @@
                 <a class="nav-link {% if 'warehouse_stock_in' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_stock_in') }}">
                     <i class="bi bi-box-arrow-in-down"></i> Stock IN
                 </a>
-                <a class="nav-link {% if 'warehouse_stock_out' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_stock_out') }}">
-                    <i class="bi bi-box-arrow-up"></i> Stock OUT
+                <div class="px-3 py-2 text-white-50 small"><strong>Stock OUT (2 Steps)</strong></div>
+                <a class="nav-link {% if 'warehouse_create_loading_slip' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_create_loading_slip') }}">
+                    <i class="bi bi-receipt"></i> Create Loading Slip
+                </a>
+                <a class="nav-link {% if 'warehouse_create_builty' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_create_builty') }}">
+                    <i class="bi bi-file-earmark-plus"></i> Create Builty
+                </a>
+                <a class="nav-link {% if 'warehouse_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_loading_slips') }}">
+                    <i class="bi bi-list-ul"></i> View Loading Slips
+                </a>
+                <a class="nav-link {% if 'warehouse_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_all_builties') }}">
+                    <i class="bi bi-file-earmark-text"></i> All Builties
                 </a>
             {% elif current_user.role == 'Accountant' %}
                 <a class="nav-link {% if 'accountant_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_dashboard') }}">

@@ -92,16 +92,45 @@
     <div class="col-md-4">
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Quick Actions</h5>
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Quick Actions - Stock IN</h5>
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <a href="{{ url_for('warehouse_stock_in') }}" class="btn btn-success">
                         <i class="bi bi-arrow-down-circle"></i> Stock IN
                     </a>
-                    <a href="{{ url_for('warehouse_stock_out') }}" class="btn btn-danger">
-                        <i class="bi bi-arrow-up-circle"></i> Stock OUT
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-arrow-up-circle"></i> Stock OUT (2 Steps)</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info" style="font-size: 0.85rem;">
+                    <i class="bi bi-info-circle"></i> <strong>Workflow:</strong> Step 1: Create Loading Slip, Step 2: Create Builty
+                </div>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('warehouse_create_loading_slip') }}" class="btn btn-warning">
+                        <i class="bi bi-receipt"></i> 1. Create Loading Slip
                     </a>
+                    <a href="{{ url_for('warehouse_create_builty') }}" class="btn btn-danger">
+                        <i class="bi bi-file-earmark-plus"></i> 2. Create Builty
+                    </a>
+                    <a href="{{ url_for('warehouse_loading_slips') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-list-ul"></i> View Loading Slips
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-box-seam"></i> Reports</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
                     <a href="{{ url_for('warehouse_balance_all') }}" class="btn btn-primary">
                         <i class="bi bi-graph-up"></i> View Balance
                     </a>

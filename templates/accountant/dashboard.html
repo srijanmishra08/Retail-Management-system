@@ -65,21 +65,25 @@
                             {% if recent_ebills %}
                                 {% for ebill in recent_ebills %}
                                 <tr>
-                                    <td>{{ ebill[0] }}</td>
-                                    <td><strong>{{ ebill[1] }}</strong></td>
-                                    <td>{{ ebill[2] }}</td>
-                                    <td>₹{{ "%.2f"|format(ebill[3]) }}</td>
+                                    <td>{{ ebill[3][:10] if ebill[3] else 'N/A' }}</td>
+                                    <td><strong>{{ ebill[6] }}</strong></td>
+                                    <td>{{ ebill[11] }}</td>
+                                    <td>₹{{ "{:,.2f}".format(ebill[2] if ebill[2] else 0) }}</td>
                                     <td>
-                                        {% if ebill[5] %}
+                                        {% if ebill[4] %}
                                         <span class="badge bg-success">Uploaded</span>
                                         {% else %}
                                         <span class="badge bg-warning">Pending</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <button class="btn btn-sm btn-info" onclick="viewEbill({{ ebill[4] }})">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
+                                        {% if ebill[4] %}
+                                        <a href="{{ url_for('download_eway_bill', filename=ebill[4]) }}" class="btn btn-sm btn-success">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}

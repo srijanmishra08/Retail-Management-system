@@ -92,7 +92,25 @@ def admin_dashboard():
         return redirect(url_for('index'))
     
     stats = db.get_admin_dashboard_stats()
-    recent_rakes = db.get_all_rakes()[:5]
+    all_rakes = db.get_all_rakes()
+    
+    # Enrich recent rakes with dispatched and remaining quantities
+    recent_rakes = []
+    for rake in all_rakes[:5]:
+        rake_code = rake[1]
+        balance = db.get_rake_balance(rake_code)
+        recent_rakes.append({
+            'rake_code': rake[1],
+            'company_name': rake[2],
+            'company_code': rake[3],
+            'date': rake[4],
+            'rr_quantity': rake[5],
+            'product_name': rake[6],
+            'product_code': rake[7],
+            'rake_point_name': rake[8],
+            'dispatched': balance['dispatched'] if balance else 0,
+            'remaining': balance['remaining'] if balance else rake[5]
+        })
     
     return render_template('admin/dashboard.html', stats=stats, recent_rakes=recent_rakes)
 
@@ -122,7 +140,8 @@ def admin_add_rake():
         else:
             flash('Error adding rake. Rake code may already exist.', 'error')
     
-    return render_template('admin/add_rake.html')
+    products = db.get_all_products()
+    return render_template('admin/add_rake.html', products=products)
 
 @app.route('/admin/summary')
 @login_required
@@ -156,6 +175,186 @@ def admin_manage_accounts():
     
     accounts = db.get_all_accounts()
     return render_template('admin/manage_accounts.html', accounts=accounts)
+
+@app.route('/admin/add-product', methods=['POST'])
+@login_required
+def admin_add_product():
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    product_name = request.form.get('product_name')
+    product_code = request.form.get('product_code')
+    product_type = request.form.get('product_type', 'Fertilizer')
+    unit = request.form.get('unit', 'MT')
+    description = request.form.get('description', '')
+    
+    product_id = db.add_product(product_name, product_code, product_type, unit, description)
+    
+    if product_id:
+        flash(f'Product {product_name} added successfully!', 'success')
+    else:
+        flash('Error adding product. Product may already exist.', 'error')
+    
+    return redirect(url_for('admin_add_rake'))
+
+
+# ========== ADMIN Viewing Routes (All System Data) ==========
+
+@app.route('/admin/all-loading-slips')
+@login_required
+def admin_all_loading_slips():
+    """Admin view of all loading slips from all sources"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    loading_slips = db.get_all_loading_slips_with_status()
+    return render_template('admin/all_loading_slips.html', loading_slips=loading_slips)
+
+@app.route('/admin/all-builties')
+@login_required
+def admin_all_builties():
+    """Admin view of all builties"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    builties = db.get_all_builties()
+    return render_template('admin/all_builties.html', builties=builties)
+
+@app.route('/admin/all-ebills')
+@login_required
+def admin_all_ebills():
+    """Admin view of all e-bills"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    ebills = db.get_all_ebills()
+    return render_template('admin/all_ebills.html', ebills=ebills)
+
+@app.route('/admin/warehouse-transactions')
+@login_required
+def admin_warehouse_transactions():
+    """Admin view of all warehouse stock IN and OUT transactions"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get all warehouse transactions
+    transactions = db.execute_custom_query('''
+        SELECT ws.stock_id, ws.transaction_type, ws.quantity_mt, ws.date,
+               ws.notes, ws.created_at,
+               w.warehouse_name,
+               b.builty_number, b.goods_name,
+               COALESCE(a.account_name, 'N/A') as account_name
+        FROM warehouse_stock ws
+        LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+        LEFT JOIN builty b ON ws.builty_id = b.builty_id
+        LEFT JOIN accounts a ON ws.account_id = a.account_id
+        ORDER BY ws.created_at DESC
+    ''')
+    
+    # Ensure transactions is always a list
+    if transactions is None:
+        transactions = []
+    
+    return render_template('admin/warehouse_transactions.html', transactions=transactions)
+
+@app.route('/admin/download-eway-bill/<filename>')
+@login_required
+def admin_download_eway_bill(filename):
+    """Admin can also download eway bill PDFs"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('admin_all_ebills'))
+
+@app.route('/admin/print-loading-slip/<int:slip_id>')
+@login_required
+def admin_print_loading_slip(slip_id):
+    """Admin can print any loading slip"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get loading slip details
+    slip = db.execute_custom_query('''
+        SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name,
+               ls.destination, ls.quantity_bags, ls.quantity_mt, ls.goods_name,
+               ls.truck_driver, ls.truck_owner, ls.mobile_number_1, ls.mobile_number_2,
+               ls.wagon_number, ls.created_at, t.truck_number,
+               COALESCE(a.account_name, w.warehouse_name) as destination_name,
+               COALESCE(a.account_type, 'Warehouse') as destination_type
+        FROM loading_slips ls
+        LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+        LEFT JOIN accounts a ON ls.account_id = a.account_id
+        LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        WHERE ls.slip_id = ?
+    ''', (slip_id,))
+    
+    if not slip:
+        flash('Loading slip not found', 'error')
+        return redirect(url_for('admin_all_loading_slips'))
+    
+    return render_template('print_loading_slip.html', slip=slip[0])
+
+@app.route('/admin/print-builty/<int:builty_id>')
+@login_required
+def admin_print_builty(builty_id):
+    """Admin can print any builty"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get builty details with all related information
+    builty = db.get_builty_by_id(builty_id)
+    
+    if not builty:
+        flash('Builty not found', 'error')
+        return redirect(url_for('admin_all_builties'))
+    
+    # Convert to dict for easier template access
+    builty_dict = {
+        'builty_id': builty[0],
+        'builty_number': builty[1],
+        'rake_code': builty[2],
+        'date': builty[3],
+        'rake_point_name': builty[4],
+        'account_id': builty[5],
+        'warehouse_id': builty[6],
+        'truck_id': builty[7],
+        'loading_point': builty[8],
+        'unloading_point': builty[9],
+        'goods_name': builty[10],
+        'number_of_bags': builty[11],
+        'quantity_mt': builty[12],
+        'kg_per_bag': builty[13],
+        'rate_per_mt': builty[14],
+        'total_freight': builty[15],
+        'lr_number': builty[16],
+        'lr_index': builty[17],
+        'created_by_role': builty[18],
+        'created_at': builty[19],
+        'account_name': builty[20],
+        'warehouse_name': builty[21],
+        'truck_number': builty[22],
+        'driver_name': builty[23],
+        'driver_mobile': builty[24],
+        'owner_name': builty[25],
+        'owner_mobile': builty[26]
+    }
+    
+    return render_template('print_builty.html', builty=builty_dict)
 
 # ========== RAKE POINT Dashboard & Routes ==========
 
@@ -367,8 +566,14 @@ def rakepoint_create_loading_slip():
         if slip_id:
             flash(f'Loading slip #{serial_number} created successfully!', 'success')
             if request.form.get('action') == 'print':
-                # Redirect to print view (implement later)
-                return redirect(url_for('rakepoint_loading_slips'))
+                # Store slip_id in session to open print in new window
+                return render_template('rakepoint/create_loading_slip.html', 
+                                     rakes=db.get_all_rakes(),
+                                     accounts=db.get_all_accounts(),
+                                     warehouses=db.get_all_warehouses(),
+                                     trucks=db.get_all_trucks(),
+                                     builties=db.get_all_builties(),
+                                     print_slip_id=slip_id)
             return redirect(url_for('rakepoint_dashboard'))
         else:
             flash('Error creating loading slip', 'error')
@@ -399,6 +604,26 @@ def get_rake_balance_api(rake_code):
     else:
         return jsonify({'error': 'Rake not found'}), 404
 
+@app.route('/api/next-serial-number/<rake_code>')
+@login_required
+def get_next_serial_number_api(rake_code):
+    """API endpoint to get next serial number for rake"""
+    if current_user.role != 'RakePoint':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    next_serial = db.get_next_serial_number_for_rake(rake_code)
+    return jsonify({'next_serial': next_serial})
+
+@app.route('/api/next-lr-number')
+@login_required
+def get_next_lr_number_api():
+    """API endpoint to get next LR number"""
+    if current_user.role not in ['RakePoint', 'Warehouse']:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    next_lr = db.get_next_lr_number()
+    return jsonify({'next_lr': next_lr})
+
 @app.route('/rakepoint/loading-slips')
 @login_required
 def rakepoint_loading_slips():
@@ -409,6 +634,83 @@ def rakepoint_loading_slips():
     loading_slips = db.get_all_loading_slips_with_status()
     
     return render_template('rakepoint/loading_slips.html', loading_slips=loading_slips)
+
+@app.route('/rakepoint/print-loading-slip/<int:slip_id>')
+@login_required
+def rakepoint_print_loading_slip(slip_id):
+    """Print a specific loading slip"""
+    if current_user.role != 'RakePoint':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get loading slip details
+    slip = db.execute_custom_query('''
+        SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name,
+               ls.destination, ls.quantity_bags, ls.quantity_mt, ls.goods_name,
+               ls.truck_driver, ls.truck_owner, ls.mobile_number_1, ls.mobile_number_2,
+               ls.wagon_number, ls.created_at, t.truck_number,
+               COALESCE(a.account_name, w.warehouse_name) as destination_name,
+               COALESCE(a.account_type, 'Warehouse') as destination_type
+        FROM loading_slips ls
+        LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+        LEFT JOIN accounts a ON ls.account_id = a.account_id
+        LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        WHERE ls.slip_id = ?
+    ''', (slip_id,))
+    
+    if not slip:
+        flash('Loading slip not found', 'error')
+        return redirect(url_for('rakepoint_loading_slips'))
+    
+    return render_template('print_loading_slip.html', slip=slip[0])
+
+@app.route('/rakepoint/print-builty/<int:builty_id>')
+@login_required
+def rakepoint_print_builty(builty_id):
+    """RakePoint can print builty"""
+    if current_user.role != 'RakePoint':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get builty details with all related information
+    builty = db.get_builty_by_id(builty_id)
+    
+    if not builty:
+        flash('Builty not found', 'error')
+        return redirect(url_for('rakepoint_dashboard'))
+    
+    # Convert to dict for easier template access
+    builty_dict = {
+        'builty_id': builty[0],
+        'builty_number': builty[1],
+        'rake_code': builty[2],
+        'date': builty[3],
+        'rake_point_name': builty[4],
+        'account_id': builty[5],
+        'warehouse_id': builty[6],
+        'truck_id': builty[7],
+        'loading_point': builty[8],
+        'unloading_point': builty[9],
+        'goods_name': builty[10],
+        'number_of_bags': builty[11],
+        'quantity_mt': builty[12],
+        'kg_per_bag': builty[13],
+        'rate_per_mt': builty[14],
+        'total_freight': builty[15],
+        'lr_number': builty[16],
+        'lr_index': builty[17],
+        'created_by_role': builty[18],
+        'created_at': builty[19],
+        'account_name': builty[20],
+        'warehouse_name': builty[21],
+        'truck_number': builty[22],
+        'driver_name': builty[23],
+        'driver_mobile': builty[24],
+        'owner_name': builty[25],
+        'owner_mobile': builty[26]
+    }
+    
+    return render_template('print_builty.html', builty=builty_dict)
 
 @app.route('/rakepoint/loading-slips/<rake_code>')
 @login_required
@@ -421,6 +723,27 @@ def rakepoint_view_loading_slips(rake_code):
     slips = db.get_loading_slips_by_rake(rake_code)
     
     return render_template('rakepoint/loading_slips.html', rake=rake, loading_slips=slips)
+
+@app.route('/rakepoint/all-builties')
+@login_required
+def rakepoint_all_builties():
+    """View all builties created by rakepoint"""
+    if current_user.role != 'RakePoint':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get all builties created by rakepoint
+    builties = db.execute_custom_query('''
+        SELECT b.*, a.account_name, w.warehouse_name, t.truck_number
+        FROM builty b
+        LEFT JOIN accounts a ON b.account_id = a.account_id
+        LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
+        LEFT JOIN trucks t ON b.truck_id = t.truck_id
+        WHERE b.created_by_role = 'RakePoint'
+        ORDER BY b.created_at DESC
+    ''')
+    
+    return render_template('rakepoint/all_builties.html', builties=builties)
 
 # ========== WAREHOUSE Dashboard & Routes ==========
 
@@ -563,6 +886,365 @@ def warehouse_stock_in():
                          warehouses=warehouses,
                          builties=builties,
                          recent_stock_in=recent_stock_in)
+
+@app.route('/warehouse/create-loading-slip', methods=['GET', 'POST'])
+@login_required
+def warehouse_create_loading_slip():
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        warehouse_name = request.form.get('warehouse_name')
+        serial_number = int(request.form.get('serial_number'))
+        loading_point = request.form.get('loading_point')
+        destination = request.form.get('destination')
+        account = request.form.get('account')
+        quantity_in_bags = int(request.form.get('quantity_in_bags'))
+        quantity_in_mt = float(request.form.get('quantity_in_mt'))
+        truck_number = request.form.get('truck_number')
+        wagon_number = request.form.get('wagon_number', '')
+        goods_name = request.form.get('goods_name')
+        truck_driver = request.form.get('truck_driver')
+        truck_owner = request.form.get('truck_owner')
+        mobile_number_1 = request.form.get('mobile_number_1')
+        mobile_number_2 = request.form.get('mobile_number_2', '')
+        truck_details = request.form.get('truck_details', '')
+        
+        # Get warehouse ID
+        warehouse = db.execute_custom_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
+        if not warehouse:
+            flash('Invalid warehouse', 'error')
+            return redirect(url_for('warehouse_create_loading_slip'))
+        warehouse_id = warehouse[0][0]
+        
+        # Check if warehouse has enough stock
+        balance = db.get_warehouse_balance_stock(warehouse_id)
+        if balance['balance'] < quantity_in_mt:
+            flash(f'Error: Warehouse has only {balance["balance"]:.2f} MT available. Cannot dispatch {quantity_in_mt:.2f} MT', 'error')
+            return redirect(url_for('warehouse_create_loading_slip'))
+        
+        # Determine if dispatch is to account or another warehouse
+        accounts = db.get_all_accounts()
+        warehouses_list = db.get_all_warehouses()
+        account_id = None
+        destination_warehouse_id = None
+        
+        # Check if it's an account
+        for acc in accounts:
+            if acc[1] == account:
+                account_id = acc[0]
+                break
+        
+        # If not found in accounts, check warehouses
+        if account_id is None:
+            for wh in warehouses_list:
+                if wh[1] == account:
+                    destination_warehouse_id = wh[0]
+                    break
+        
+        # Check if truck exists, if not create it with driver/owner details
+        truck = db.get_truck_by_number(truck_number)
+        if not truck:
+            truck_id = db.add_truck(truck_number, truck_driver, mobile_number_1, truck_owner, mobile_number_2)
+        else:
+            truck_id = truck[0]
+        
+        # Get rake_code from most recent stock IN
+        rake_code_result = db.execute_custom_query('''
+            SELECT b.rake_code
+            FROM warehouse_stock ws
+            JOIN builty b ON ws.builty_id = b.builty_id
+            WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
+            ORDER BY ws.stock_id DESC
+            LIMIT 1
+        ''', (warehouse_id,))
+        rake_code = rake_code_result[0][0] if rake_code_result else 'WAREHOUSE'
+        
+        # Add loading slip
+        slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
+                                      account_id, destination_warehouse_id, quantity_in_bags, quantity_in_mt, 
+                                      truck_id, wagon_number, goods_name, truck_driver, truck_owner,
+                                      mobile_number_1, mobile_number_2, truck_details, None)
+        
+        if slip_id:
+            flash(f'Loading slip #{serial_number} created successfully!', 'success')
+            if request.form.get('action') == 'print':
+                # Return to form with print_slip_id to open print in new window
+                return render_template('warehouse/create_loading_slip.html',
+                                     warehouses=db.get_all_warehouses(),
+                                     accounts=db.get_all_accounts(),
+                                     trucks=db.get_all_trucks(),
+                                     print_slip_id=slip_id)
+            return redirect(url_for('warehouse_dashboard'))
+        else:
+            flash('Error creating loading slip', 'error')
+    
+    warehouses = db.get_all_warehouses()
+    accounts = db.get_all_accounts()
+    trucks = db.get_all_trucks()
+    
+    return render_template('warehouse/create_loading_slip.html',
+                         warehouses=warehouses,
+                         accounts=accounts,
+                         trucks=trucks)
+
+@app.route('/warehouse/loading-slips')
+@login_required
+def warehouse_loading_slips():
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get loading slips with warehouse origin
+    loading_slips = db.execute_custom_query('''
+        SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
+               ls.destination, 
+               COALESCE(a.account_name, w.warehouse_name) as destination_name,
+               ls.quantity_bags, ls.quantity_mt, t.truck_number,
+               ls.wagon_number, ls.builty_id, ls.created_at,
+               ls.goods_name, ls.truck_driver, ls.truck_owner,
+               ls.mobile_number_1, ls.mobile_number_2,
+               b.builty_number
+        FROM loading_slips ls
+        LEFT JOIN accounts a ON ls.account_id = a.account_id
+        LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+        LEFT JOIN builty b ON ls.builty_id = b.builty_id
+        WHERE ls.rake_code LIKE 'WAREHOUSE%' OR ls.rake_code IN (
+            SELECT DISTINCT b2.rake_code 
+            FROM warehouse_stock ws 
+            JOIN builty b2 ON ws.builty_id = b2.builty_id
+        )
+        ORDER BY ls.slip_id DESC
+    ''')
+    
+    return render_template('warehouse/loading_slips.html', loading_slips=loading_slips)
+
+@app.route('/warehouse/print-loading-slip/<int:slip_id>')
+@login_required
+def warehouse_print_loading_slip(slip_id):
+    """Print a specific loading slip"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get loading slip details
+    slip = db.execute_custom_query('''
+        SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name,
+               ls.destination, ls.quantity_bags, ls.quantity_mt, ls.goods_name,
+               ls.truck_driver, ls.truck_owner, ls.mobile_number_1, ls.mobile_number_2,
+               ls.wagon_number, ls.created_at, t.truck_number,
+               COALESCE(a.account_name, w.warehouse_name) as destination_name,
+               COALESCE(a.account_type, 'Warehouse') as destination_type
+        FROM loading_slips ls
+        LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+        LEFT JOIN accounts a ON ls.account_id = a.account_id
+        LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        WHERE ls.slip_id = ?
+    ''', (slip_id,))
+    
+    if not slip:
+        flash('Loading slip not found', 'error')
+        return redirect(url_for('warehouse_loading_slips'))
+    
+    return render_template('print_loading_slip.html', slip=slip[0])
+
+@app.route('/warehouse/print-builty/<int:builty_id>')
+@login_required
+def warehouse_print_builty(builty_id):
+    """Warehouse can print builty"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get builty details with all related information
+    builty = db.get_builty_by_id(builty_id)
+    
+    if not builty:
+        flash('Builty not found', 'error')
+        return redirect(url_for('warehouse_dashboard'))
+    
+    # Convert to dict for easier template access
+    builty_dict = {
+        'builty_id': builty[0],
+        'builty_number': builty[1],
+        'rake_code': builty[2],
+        'date': builty[3],
+        'rake_point_name': builty[4],
+        'account_id': builty[5],
+        'warehouse_id': builty[6],
+        'truck_id': builty[7],
+        'loading_point': builty[8],
+        'unloading_point': builty[9],
+        'goods_name': builty[10],
+        'number_of_bags': builty[11],
+        'quantity_mt': builty[12],
+        'kg_per_bag': builty[13],
+        'rate_per_mt': builty[14],
+        'total_freight': builty[15],
+        'lr_number': builty[16],
+        'lr_index': builty[17],
+        'created_by_role': builty[18],
+        'created_at': builty[19],
+        'account_name': builty[20],
+        'warehouse_name': builty[21],
+        'truck_number': builty[22],
+        'driver_name': builty[23],
+        'driver_mobile': builty[24],
+        'owner_name': builty[25],
+        'owner_mobile': builty[26]
+    }
+    
+    return render_template('print_builty.html', builty=builty_dict)
+
+@app.route('/warehouse/create-builty', methods=['GET', 'POST'])
+@login_required
+def warehouse_create_builty():
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        # Generate builty number
+        builty_number = f"WBLT-{datetime.now().strftime('%Y%m%d')}-{datetime.now().strftime('%H%M%S')}"
+        
+        loading_slip_id = request.form.get('loading_slip_id')
+        warehouse_name = request.form.get('warehouse_name')
+        date = request.form.get('date') or request.form.get('builty_date')
+        account_warehouse = request.form.get('account_warehouse')
+        truck_number = request.form.get('truck_number')
+        loading_point = request.form.get('loading_point')
+        unloading_point = request.form.get('unloading_point')
+        goods_name = request.form.get('goods_name')
+        number_of_bags = int(request.form.get('number_of_bags'))
+        quantity_wt_mt = float(request.form.get('quantity_wt_mt'))
+        freight_details = request.form.get('freight_details')
+        lr_number = request.form.get('lr_number')
+        
+        # Get data from loading slip if provided
+        if loading_slip_id:
+            loading_slip = db.execute_custom_query('''
+                SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name,
+                       ls.destination, ls.quantity_bags, ls.quantity_mt, ls.goods_name,
+                       ls.truck_id, ls.truck_driver, ls.truck_owner, 
+                       ls.mobile_number_1, ls.mobile_number_2,
+                       t.truck_number, t.driver_name, t.driver_mobile, 
+                       t.owner_name, t.owner_mobile,
+                       ls.account_id, ls.warehouse_id, ls.builty_id
+                FROM loading_slips ls
+                LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+                WHERE ls.slip_id = ?
+            ''', (loading_slip_id,))
+            
+            if loading_slip:
+                # Check if this loading slip already has a builty
+                if loading_slip[0][20]:  # builty_id is index 20
+                    flash('Error: This loading slip already has a builty created!', 'error')
+                    return redirect(url_for('warehouse_create_builty'))
+                slip = loading_slip[0]
+                # Use truck data from JOIN (if available) or from loading_slip fields
+                truck_number = slip[13] if slip[13] else truck_number  # t.truck_number
+                truck_driver = slip[14] if slip[14] else slip[9]  # t.driver_name or ls.truck_driver
+                mobile_number_1 = slip[15] if slip[15] else slip[11]  # t.driver_mobile or ls.mobile_number_1
+                truck_owner = slip[16] if slip[16] else slip[10]  # t.owner_name or ls.truck_owner
+                mobile_number_2 = slip[17] if slip[17] else slip[12]  # t.owner_mobile or ls.mobile_number_2
+                truck_id = slip[8]  # truck_id from loading_slips
+                
+                # Override form values with loading slip data
+                warehouse_name = warehouse_name  # Keep from form as user already selected
+                loading_point = slip[3]  # loading_point_name
+                goods_name = slip[7]  # goods_name
+                number_of_bags = slip[5]  # quantity_bags
+                quantity_wt_mt = slip[6]  # quantity_mt
+        else:
+            # Get truck details from form
+            truck_driver = request.form.get('truck_driver')
+            truck_owner = request.form.get('truck_owner')
+            mobile_number_1 = request.form.get('mobile_number_1')
+            mobile_number_2 = request.form.get('mobile_number_2', '')
+            
+            truck = db.get_truck_by_number(truck_number)
+            if not truck:
+                truck_id = db.add_truck(truck_number, truck_driver, mobile_number_1, truck_owner, mobile_number_2)
+            else:
+                truck_id = truck[0]
+        
+        # Get warehouse ID for stock OUT
+        warehouse = db.execute_custom_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
+        if not warehouse:
+            flash('Invalid warehouse', 'error')
+            return redirect(url_for('warehouse_create_builty'))
+        warehouse_id = warehouse[0][0]
+        
+        # Check warehouse balance
+        balance = db.get_warehouse_balance_stock(warehouse_id)
+        if balance['balance'] < quantity_wt_mt:
+            flash(f'Error: Warehouse has only {balance["balance"]:.2f} MT available. Cannot dispatch {quantity_wt_mt:.2f} MT', 'error')
+            return redirect(url_for('warehouse_create_builty'))
+        
+        # Determine destination (account or warehouse)
+        accounts = db.get_all_accounts()
+        account_id = None
+        destination_warehouse_id = None
+        
+        for account in accounts:
+            if account[1] == account_warehouse:
+                account_id = account[0]
+                break
+        
+        # Get rake code from most recent stock IN
+        rake_code_result = db.execute_custom_query('''
+            SELECT b.rake_code
+            FROM warehouse_stock ws
+            JOIN builty b ON ws.builty_id = b.builty_id
+            WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
+            ORDER BY ws.stock_id DESC
+            LIMIT 1
+        ''', (warehouse_id,))
+        rake_code = rake_code_result[0][0] if rake_code_result else 'WAREHOUSE'
+        
+        # Calculate freight fields
+        try:
+            total_freight = float(freight_details.replace('₹', '').replace(',', '').strip())
+        except:
+            total_freight = 0.0
+        kg_per_bag = (quantity_wt_mt * 1000) / number_of_bags if number_of_bags > 0 else 50
+        rate_per_mt = total_freight / quantity_wt_mt if quantity_wt_mt > 0 else 0
+        
+        # Create builty
+        builty_id = db.add_builty(builty_number, rake_code, date, warehouse_name, account_id, destination_warehouse_id,
+                                  truck_id, loading_point, unloading_point, goods_name, number_of_bags,
+                                  quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, lr_number,
+                                  0, 'Warehouse')
+        
+        if builty_id:
+            # Link loading slip to builty if provided
+            if loading_slip_id:
+                db.link_loading_slip_to_builty(int(loading_slip_id), builty_id)
+            
+            # Add stock OUT transaction
+            stock_id = db.add_warehouse_stock_out(warehouse_id, builty_id, quantity_wt_mt,
+                                                  account_id, date, '')
+            
+            if stock_id:
+                flash(f'Builty {builty_number} created and stock OUT recorded successfully!', 'success')
+                return redirect(url_for('warehouse_dashboard'))
+            else:
+                flash('Builty created but error recording stock OUT', 'warning')
+                return redirect(url_for('warehouse_dashboard'))
+        else:
+            flash('Error creating builty', 'error')
+    
+    # GET request
+    warehouses = db.get_all_warehouses()
+    accounts = db.get_all_accounts()
+    loading_slips = db.get_all_loading_slips()  # Only unlinked loading slips
+    
+    return render_template('warehouse/create_builty.html',
+                         warehouses=warehouses,
+                         accounts=accounts,
+                         loading_slips=loading_slips)
 
 @app.route('/warehouse/stock-out', methods=['GET', 'POST'])
 @login_required
@@ -727,6 +1409,27 @@ def warehouse_balance(warehouse_id):
                          balance=balance,
                          transactions=transactions)
 
+@app.route('/warehouse/all-builties')
+@login_required
+def warehouse_all_builties():
+    """View all builties created by warehouse"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get all builties created by warehouse
+    builties = db.execute_custom_query('''
+        SELECT b.*, a.account_name, w.warehouse_name, t.truck_number
+        FROM builty b
+        LEFT JOIN accounts a ON b.account_id = a.account_id
+        LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
+        LEFT JOIN trucks t ON b.truck_id = t.truck_id
+        WHERE b.created_by_role = 'Warehouse'
+        ORDER BY b.created_at DESC
+    ''')
+    
+    return render_template('warehouse/all_builties.html', builties=builties)
+
 # ========== ACCOUNTANT Dashboard & Routes ==========
 
 @app.route('/accountant/dashboard')
@@ -736,12 +1439,52 @@ def accountant_dashboard():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    ebills = db.get_all_ebills()[:10]
+    # Get all e-bills and recent ones
+    all_ebills = db.get_all_ebills()
+    recent_ebills = all_ebills[:10] if all_ebills else []
+    
+    # Get builties without e-bills
     pending_builties = db.get_builties_without_ebills()
     
+    # Calculate statistics
+    from datetime import datetime, date
+    
+    # Total e-bills count
+    ebill_count = len(all_ebills) if all_ebills else 0
+    
+    # E-bills with eway bill PDFs uploaded
+    eway_bill_count = sum(1 for ebill in all_ebills if ebill[4]) if all_ebills else 0
+    
+    # Total builties available
+    all_builties = db.get_all_builties()
+    builty_count = len(all_builties) if all_builties else 0
+    
+    # Today's e-bills
+    today = date.today().strftime('%Y-%m-%d')
+    today_ebill_count = sum(1 for ebill in all_ebills if ebill[3] and ebill[3].startswith(today)) if all_ebills else 0
+    
+    # Total accounts
+    all_accounts = db.get_all_accounts()
+    account_count = len(all_accounts) if all_accounts else 0
+    
+    # Pending uploads (e-bills without PDF)
+    pending_uploads = ebill_count - eway_bill_count
+    
+    # This month's e-bills
+    current_month = date.today().strftime('%Y-%m')
+    month_ebills = sum(1 for ebill in all_ebills if ebill[3] and ebill[3].startswith(current_month)) if all_ebills else 0
+    
     return render_template('accountant/dashboard.html', 
-                         ebills=ebills,
-                         pending_builties=pending_builties)
+                         ebills=all_ebills,
+                         recent_ebills=recent_ebills,
+                         pending_builties=pending_builties,
+                         ebill_count=ebill_count,
+                         eway_bill_count=eway_bill_count,
+                         builty_count=builty_count,
+                         today_ebill_count=today_ebill_count,
+                         account_count=account_count,
+                         pending_uploads=pending_uploads,
+                         month_ebills=month_ebills)
 
 @app.route('/accountant/create-ebill', methods=['GET', 'POST'])
 @login_required
@@ -754,15 +1497,34 @@ def accountant_create_ebill():
         builty_id = request.form.get('builty_id')
         ebill_number = request.form.get('ebill_number')
         amount = float(request.form.get('amount'))
-        generated_date = request.form.get('generated_date')
+        generated_date = request.form.get('ebill_date')  # Fixed: was 'generated_date'
         
-        ebill_id = db.add_ebill(builty_id, ebill_number, amount, generated_date)
+        # Handle file upload for eway bill PDF
+        eway_bill_pdf = None
+        if 'eway_bill_pdf' in request.files:
+            file = request.files['eway_bill_pdf']
+            if file and file.filename and file.filename.endswith('.pdf'):
+                # Create uploads directory if it doesn't exist
+                import os
+                upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                # Generate unique filename
+                from datetime import datetime
+                filename = f"{ebill_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                filepath = os.path.join(upload_folder, filename)
+                
+                # Save the file
+                file.save(filepath)
+                eway_bill_pdf = filename
+        
+        ebill_id = db.add_ebill(builty_id, ebill_number, amount, generated_date, eway_bill_pdf)
         
         if ebill_id:
             flash(f'E-Bill {ebill_number} created successfully!', 'success')
             return redirect(url_for('accountant_dashboard'))
         else:
-            flash('Error creating e-bill. E-Bill number may already exist.', 'error')
+            flash('Error creating e-bill. E-Bill number may already exist or date is missing.', 'error')
     
     builties = db.get_builties_without_ebills()
     
@@ -778,6 +1540,23 @@ def accountant_all_ebills():
     ebills = db.get_all_ebills()
     
     return render_template('accountant/all_ebills.html', ebills=ebills)
+
+@app.route('/accountant/download-eway-bill/<filename>')
+@login_required
+def download_eway_bill(filename):
+    """Download eway bill PDF"""
+    if current_user.role != 'Accountant':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('accountant_all_ebills'))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

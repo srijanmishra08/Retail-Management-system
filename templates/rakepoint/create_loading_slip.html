@@ -51,7 +51,8 @@
                 
                 <div class="col-md-6 mb-3">
                     <label for="serial_number" class="form-label">Serial Number (S.No) <span class="text-danger">*</span></label>
-                    <input type="number" class="form-control" id="serial_number" name="serial_number" required placeholder="Enter serial number">
+                    <input type="number" class="form-control" id="serial_number" name="serial_number" required placeholder="Auto-generated" readonly>
+                    <small class="text-muted">Automatically generated based on rake selection</small>
                 </div>
             </div>
             
@@ -214,6 +215,7 @@ document.getElementById('rake_code').addEventListener('change', function() {
     
     const goodsField = document.getElementById('goods_name');
     const loadingField = document.getElementById('loading_point');
+    const serialField = document.getElementById('serial_number');
     const balanceAlert = document.getElementById('rake-balance-alert');
     
     // Auto-fill fields
@@ -224,6 +226,19 @@ document.getElementById('rake_code').addEventListener('change', function() {
     if (rakePoint) {
         loadingField.value = rakePoint;
         loadingField.classList.add('bg-light', 'border-success');
+    }
+    
+    // Fetch next serial number
+    if (rakeCode) {
+        fetch(`/api/next-serial-number/${rakeCode}`)
+            .then(response => response.json())
+            .then(data => {
+                serialField.value = data.next_serial;
+                serialField.classList.add('bg-light', 'border-success');
+            })
+            .catch(error => {
+                console.error('Error fetching serial number:', error);
+            });
     }
     
     // Fetch and display rake balance
@@ -263,8 +278,10 @@ document.getElementById('rake_code').addEventListener('change', function() {
         // Clear fields and hide balance if "Select Rake" option is chosen
         goodsField.value = '';
         loadingField.value = '';
+        serialField.value = '';
         goodsField.classList.remove('bg-light', 'border-success');
         loadingField.classList.remove('bg-light', 'border-success');
+        serialField.classList.remove('bg-light', 'border-success');
         balanceAlert.style.display = 'none';
         currentRakeBalance = null;
     }
@@ -280,5 +297,21 @@ document.querySelector('form').addEventListener('submit', function(e) {
         return false;
     }
 });
+
+// Auto-open print window and reset form if print action was clicked
+{% if print_slip_id %}
+window.addEventListener('load', function() {
+    // Open print page in new window
+    const printWindow = window.open('{{ url_for("rakepoint_print_loading_slip", slip_id=print_slip_id) }}', '_blank', 'width=800,height=600');
+    
+    // Reset form after a short delay to ensure print window opens
+    setTimeout(function() {
+        document.querySelector('form').reset();
+        // Hide balance alert
+        document.getElementById('balance-alert').style.display = 'none';
+        currentRakeBalance = null;
+    }, 500);
+});
+{% endif %}
 </script>
 {% endblock %}

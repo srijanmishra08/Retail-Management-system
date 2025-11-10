@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}All Builties - Rake Point{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-file-earmark-text"></i> All Builties (Rake Point)</h2>
+        <div>
+            <input type="text" id="searchInput" class="form-control" placeholder="Search..." style="width: 300px;">
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped" id="builtiesTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Builty Number</th>
+                            <th>Date</th>
+                            <th>Rake Code</th>
+                            <th>LR Number</th>
+                            <th>Goods</th>
+                            <th>Bags</th>
+                            <th>Quantity (MT)</th>
+                            <th>Truck</th>
+                            <th>Destination</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for builty in builties %}
+                        <tr>
+                            <td><strong>{{ builty[1] }}</strong></td>
+                            <td>{{ builty[3][:10] if builty[3] else 'N/A' }}</td>
+                            <td>{{ builty[2] if builty[2] else 'N/A' }}</td>
+                            <td>{{ builty[16] if builty[16] else 'N/A' }}</td>
+                            <td>{{ builty[10] }}</td>
+                            <td>{{ builty[11] }}</td>
+                            <td>{{ "%.2f"|format(builty[12]) }} MT</td>
+                            <td>{{ builty[22] if builty[22] else 'N/A' }}</td>
+                            <td>{{ builty[20] if builty[20] else builty[21] if builty[21] else 'N/A' }}</td>
+                            <td>
+                                <a href="{{ url_for('rakepoint_print_builty', builty_id=builty[0]) }}" 
+                                   class="btn btn-sm btn-primary" 
+                                   target="_blank" 
+                                   title="Print Builty">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if not builties %}
+    <div class="alert alert-info mt-3">
+        <i class="bi bi-info-circle"></i> No builties found.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('keyup', function() {
+        const searchText = this.value.toLowerCase();
+        const table = document.getElementById('builtiesTable');
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchText) ? '' : 'none';
+        }
+    });
+</script>
+{% endblock %}

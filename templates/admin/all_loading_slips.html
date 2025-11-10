@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}All Loading Slips - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-file-text"></i> All Loading Slips</h2>
+        <div>
+            <input type="text" id="searchInput" class="form-control" placeholder="Search..." style="width: 300px;">
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped" id="loadingSlipsTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Slip ID</th>
+                            <th>Slip Number</th>
+                            <th>Rake Code</th>
+                            <th>Source</th>
+                            <th>Loading Point</th>
+                            <th>Destination</th>
+                            <th>Goods</th>
+                            <th>Bags</th>
+                            <th>MT</th>
+                            <th>Truck</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for slip in loading_slips %}
+                        <tr>
+                            <td>{{ slip[0] }}</td>
+                            <td><strong>{{ slip[2] }}</strong></td>
+                            <td>{{ slip[1] }}</td>
+                            <td>
+                                {% if slip[16] %}
+                                    <span class="badge bg-info">RakePoint</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Warehouse</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ slip[3] }}</td>
+                            <td>{{ slip[4] }}</td>
+                            <td>{{ slip[10] }}</td>
+                            <td>{{ slip[7] }}</td>
+                            <td>{{ slip[8] }}</td>
+                            <td>{{ slip[9] }}</td>
+                            <td>
+                                {% if slip[20] %}
+                                    <span class="badge bg-success">Builty Created</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ slip[19][:16] if slip[19] else 'N/A' }}</td>
+                            <td>
+                                <a href="{{ url_for('admin_print_loading_slip', slip_id=slip[0]) }}" 
+                                   class="btn btn-sm btn-primary" target="_blank">
+                                    <i class="bi bi-printer"></i> Print
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if not loading_slips %}
+    <div class="alert alert-info mt-3">
+        <i class="bi bi-info-circle"></i> No loading slips found in the system.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('keyup', function() {
+        const searchText = this.value.toLowerCase();
+        const table = document.getElementById('loadingSlipsTable');
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchText) ? '' : 'none';
+        }
+    });
+</script>
+{% endblock %}

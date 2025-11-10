@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Create Builty - Warehouse{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h4 class="mb-0"><i class="bi bi-file-earmark-plus"></i> Create Builty (Stock OUT - Step 2)</h4>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i> <strong>Important:</strong> Create a Loading Slip first (Step 1), then create Builty here (Step 2).
+        </div>
+        
+        <form method="POST" action="{{ url_for('warehouse_create_builty') }}">
+            <!-- Loading Slip Selection (Optional but Recommended) -->
+            <div class="card mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Step 1: Select Loading Slip (Recommended)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label for="loading_slip_id" class="form-label">Select Loading Slip <span class="text-danger">*</span></label>
+                            <select class="form-select" id="loading_slip_id" name="loading_slip_id">
+                                <option value="">-- Choose a Loading Slip from Step 1 --</option>
+                                {% for slip in loading_slips %}
+                                <option value="{{ slip[0] }}"
+                                        data-loading-point="{{ slip[3] }}"
+                                        data-destination="{{ slip[4] }}"
+                                        data-account="{{ slip[5] }}"
+                                        data-goods="{{ slip[10] }}"
+                                        data-bags="{{ slip[7] }}"
+                                        data-quantity="{{ slip[8] }}"
+                                        data-truck="{{ slip[9] }}">
+                                    Slip #{{ slip[2] }} - {{ slip[10] }} - {{ slip[7] }} Bags ({{ "%.2f"|format(slip[8]) }} MT) - Truck: {{ slip[9] }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Must select a loading slip created in Step 1. This will auto-fill all fields below.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Builty Details Card -->
+            <div class="card mb-4 border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Step 2: Builty Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="warehouse_name" class="form-label">From Warehouse <span class="text-danger">*</span></label>
+                            <select class="form-select" id="warehouse_name" name="warehouse_name" required>
+                                <option value="">Select Warehouse</option>
+                                {% for warehouse in warehouses %}
+                                <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - {{ warehouse[2] }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Auto-filled from your warehouse login</small>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="date" class="form-label">Builty Date <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="date" name="date" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="loading_point" class="form-label">Loading Point <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Warehouse name">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="unloading_point" class="form-label">Unloading Point <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="unloading_point" name="unloading_point" required placeholder="Destination">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="account_warehouse" class="form-label">Dispatch To <span class="text-danger">*</span></label>
+                            <select class="form-select" id="account_warehouse" name="account_warehouse" required>
+                                <option value="">-- Select --</option>
+                                <optgroup label="👥 Accounts">
+                                    {% for account in accounts %}
+                                    <option value="{{ account[1] }}">{{ account[1] }} - {{ account[2] }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                                <optgroup label="🏢 Warehouses">
+                                    {% for warehouse in warehouses %}
+                                    <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - Warehouse</option>
+                                    {% endfor %}
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="goods_name" class="form-label">Goods Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="e.g., Urea">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="number_of_bags" class="form-label">Number of Bags <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="number_of_bags" name="number_of_bags" required placeholder="0" readonly>
+                            <small class="text-muted">Auto-filled from loading slip</small>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="quantity_wt_mt" class="form-label">Quantity (MT) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" class="form-control" id="quantity_wt_mt" name="quantity_wt_mt" required placeholder="0.00" readonly>
+                            <small class="text-muted">Auto-filled from loading slip</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label for="truck_number" class="form-label">Truck Number <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Truck number" readonly>
+                            <small class="text-muted">Auto-filled from loading slip</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="freight_details" class="form-label">Freight Amount <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="freight_details" name="freight_details" required placeholder="e.g., 15000">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="lr_number" class="form-label">LR Number <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="lr_number" name="lr_number" required placeholder="Auto-generated" readonly>
+                            <small class="text-muted">Automatically generated sequential LR number</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-check-circle"></i> Create Builty & Record Stock OUT
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.getElementById('date').valueAsDate = new Date();
+
+// Fetch next LR number on page load
+fetch('/api/next-lr-number')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('lr_number').value = data.next_lr;
+        document.getElementById('lr_number').classList.add('bg-light');
+    })
+    .catch(error => {
+        console.error('Error fetching LR number:', error);
+    });
+
+// Make loading slip selection required since this is step 2
+document.getElementById('loading_slip_id').setAttribute('required', 'required');
+
+// Auto-fill from loading slip selection
+document.getElementById('loading_slip_id').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    
+    if (this.value) {
+        // Auto-fill from loading slip data
+        console.log('Loading slip data:', {
+            bags: selectedOption.dataset.bags,
+            quantity: selectedOption.dataset.quantity,
+            goods: selectedOption.dataset.goods
+        });
+        
+        document.getElementById('loading_point').value = selectedOption.dataset.loadingPoint || '';
+        document.getElementById('unloading_point').value = selectedOption.dataset.destination || '';
+        document.getElementById('goods_name').value = selectedOption.dataset.goods || '';
+        document.getElementById('number_of_bags').value = selectedOption.dataset.bags || '';
+        document.getElementById('quantity_wt_mt').value = selectedOption.dataset.quantity || '';
+        document.getElementById('truck_number').value = selectedOption.dataset.truck || '';
+        
+        // Try to select the account
+        const accountName = selectedOption.dataset.account;
+        const accountSelect = document.getElementById('account_warehouse');
+        for (let option of accountSelect.options) {
+            if (option.value === accountName) {
+                accountSelect.value = accountName;
+                break;
+            }
+        }
+        
+        // Enable form fields that were auto-filled
+        document.getElementById('number_of_bags').removeAttribute('readonly');
+        document.getElementById('quantity_wt_mt').removeAttribute('readonly');
+        document.getElementById('truck_number').removeAttribute('readonly');
+    } else {
+        // Clear and disable if no loading slip selected
+        document.getElementById('number_of_bags').value = '';
+        document.getElementById('quantity_wt_mt').value = '';
+        document.getElementById('truck_number').value = '';
+        document.getElementById('number_of_bags').setAttribute('readonly', 'readonly');
+        document.getElementById('quantity_wt_mt').setAttribute('readonly', 'readonly');
+        document.getElementById('truck_number').setAttribute('readonly', 'readonly');
+    }
+});
+
+// Auto-fill loading point when warehouse selected
+document.getElementById('warehouse_name').addEventListener('change', function() {
+    if (this.value && !document.getElementById('loading_point').value) {
+        document.getElementById('loading_point').value = this.value;
+    }
+});
+</script>
+{% endblock %}

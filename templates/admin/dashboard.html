@@ -12,7 +12,7 @@
 
 <!-- Statistics Cards -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-primary bg-opacity-10 text-primary">
@@ -26,7 +26,7 @@
         </div>
     </div>
     
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-success bg-opacity-10 text-success">
@@ -40,7 +40,7 @@
         </div>
     </div>
     
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-warning bg-opacity-10 text-warning">
@@ -53,16 +53,47 @@
             </div>
         </div>
     </div>
-    
-    <div class="col-md-3">
+</div>
+
+<!-- Warehouse Stock Summary -->
+<div class="row mb-4">
+    <div class="col-md-4">
         <div class="stat-card">
             <div class="d-flex align-items-center">
-                <div class="stat-icon bg-info bg-opacity-10 text-info">
-                    <i class="bi bi-currency-rupee"></i>
+                <div class="stat-icon bg-success bg-opacity-10 text-success">
+                    <i class="bi bi-arrow-down-circle"></i>
                 </div>
                 <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Total E-Bills</div>
-                    <h3 class="mb-0">₹{{ "%.2f"|format(stats.total_ebill_amount) }}</h3>
+                    <div class="text-muted small">Total Warehouse Stock IN</div>
+                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in) }} MT</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                    <i class="bi bi-arrow-up-circle"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Total Warehouse Stock OUT</div>
+                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_out) }} MT</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Net Warehouse Balance</div>
+                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in - stats.total_stock_out) }} MT</h3>
                 </div>
             </div>
         </div>
@@ -111,6 +142,62 @@
     </div>
 </div>
 
+<!-- System Data Access Section -->
+<h4 class="mb-3 mt-4"><i class="bi bi-database"></i> System Data Access</h4>
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="bi bi-file-text text-primary" style="font-size: 36px;"></i>
+                <h6 class="mt-2">Loading Slips</h6>
+                <p class="text-muted small mb-2">View all loading slips</p>
+                <a href="{{ url_for('admin_all_loading_slips') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> View All
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="bi bi-file-earmark-text text-success" style="font-size: 36px;"></i>
+                <h6 class="mt-2">Builties</h6>
+                <p class="text-muted small mb-2">View all builties</p>
+                <a href="{{ url_for('admin_all_builties') }}" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-eye"></i> View All
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <i class="bi bi-receipt text-warning" style="font-size: 36px;"></i>
+                <h6 class="mt-2">E-Bills</h6>
+                <p class="text-muted small mb-2">View & download eway bills</p>
+                <a href="{{ url_for('admin_all_ebills') }}" class="btn btn-sm btn-outline-warning">
+                    <i class="bi bi-eye"></i> View All
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <i class="bi bi-box-seam text-danger" style="font-size: 36px;"></i>
+                <h6 class="mt-2">Warehouse Stock</h6>
+                <p class="text-muted small mb-2">View all transactions</p>
+                <a href="{{ url_for('admin_warehouse_transactions') }}" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-eye"></i> View All
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Rakes -->
 <div class="card">
     <div class="card-header bg-white">
@@ -127,18 +214,30 @@
                         <th>Product</th>
                         <th>Date</th>
                         <th>RR Quantity</th>
+                        <th>Qty Dispatched</th>
+                        <th>Remaining</th>
+                        <th>Live Status</th>
                         <th>Rake Point</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for rake in recent_rakes %}
                     <tr>
-                        <td><strong>{{ rake[1] }}</strong></td>
-                        <td>{{ rake[2] }}</td>
-                        <td>{{ rake[6] }}</td>
-                        <td>{{ rake[4] }}</td>
-                        <td>{{ "%.2f"|format(rake[5]) }} MT</td>
-                        <td>{{ rake[8] }}</td>
+                        <td><strong>{{ rake.rake_code }}</strong></td>
+                        <td>{{ rake.company_name }}</td>
+                        <td>{{ rake.product_name }}</td>
+                        <td>{{ rake.date }}</td>
+                        <td>{{ "%.2f"|format(rake.rr_quantity) }} MT</td>
+                        <td class="text-primary"><strong>{{ "%.2f"|format(rake.dispatched) }} MT</strong></td>
+                        <td class="text-success"><strong>{{ "%.2f"|format(rake.remaining) }} MT</strong></td>
+                        <td>
+                            {% if rake.remaining > 0 %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Completed</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ rake.rake_point_name }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
