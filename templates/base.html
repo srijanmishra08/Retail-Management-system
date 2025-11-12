@@ -34,7 +34,7 @@
         
         .sidebar-header {
             flex-shrink: 0;
-            padding: 1.5rem 1rem;
+            padding: 1rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
@@ -42,7 +42,8 @@
             flex: 1;
             overflow-y: auto;
             overflow-x: hidden;
-            padding-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            padding-top: 0.5rem;
         }
         
         .sidebar-nav::-webkit-scrollbar {
@@ -64,23 +65,37 @@
         
         .sidebar-footer {
             flex-shrink: 0;
-            padding: 1rem;
+            padding: 0.75rem 1rem;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(0, 0, 0, 0.2);
         }
         
         .sidebar .nav-link {
             color: rgba(255, 255, 255, 0.8);
-            padding: 12px 20px;
+            padding: 10px 20px;
             border-radius: 8px;
-            margin: 4px 10px;
+            margin: 2px 10px;
             transition: all 0.3s;
+            font-size: 14px;
         }
         
         .sidebar .nav-link:hover,
         .sidebar .nav-link.active {
             background-color: rgba(255, 255, 255, 0.1);
             color: white;
+        }
+        
+        .sidebar .nav-link i {
+            width: 18px;
+            display: inline-block;
+        }
+        
+        .sidebar-section-header {
+            padding: 8px 20px 4px 20px;
+            margin-top: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
         }
         
         .main-content {
@@ -154,13 +169,13 @@
                 <a class="nav-link {% if 'admin_add_rake' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_add_rake') }}">
                     <i class="bi bi-plus-circle"></i> Add Rake
                 </a>
-                <a class="nav-link {% if 'admin_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_summary') }}">
-                    <i class="bi bi-table"></i> Summary
-                </a>
                 <a class="nav-link {% if 'admin_manage_accounts' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_manage_accounts') }}">
                     <i class="bi bi-people"></i> Manage Accounts
                 </a>
-                <div class="px-3 py-2 text-white-50 small mt-2"><strong>VIEW ALL DATA</strong></div>
+                <a class="nav-link {% if 'admin_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_summary') }}">
+                    <i class="bi bi-table"></i> Summary
+                </a>
+                <div class="sidebar-section-header text-white-50"><strong>VIEW ALL DATA</strong></div>
                 <a class="nav-link {% if 'admin_all_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_loading_slips') }}">
                     <i class="bi bi-file-text"></i> All Loading Slips
                 </a>
@@ -170,15 +185,15 @@
                 <a class="nav-link {% if 'admin_all_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_ebills') }}">
                     <i class="bi bi-receipt"></i> All E-Bills
                 </a>
+                <div class="sidebar-section-header text-white-50"><strong>STOCK MANAGEMENT</strong></div>
+                <a class="nav-link {% if 'admin_edit_warehouse_stock' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_edit_warehouse_stock') }}">
+                    <i class="bi bi-pencil-square"></i> Edit Stock Allocation
+                </a>
                 <a class="nav-link {% if 'admin_warehouse_transactions' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_warehouse_transactions') }}">
                     <i class="bi bi-box-seam"></i> Warehouse Stock
                 </a>
-                <div class="px-3 py-2 text-white-50 small mt-2"><strong>STOCK MANAGEMENT</strong></div>
                 <a class="nav-link {% if 'admin_warehouse_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_warehouse_summary') }}">
                     <i class="bi bi-bar-chart-fill"></i> Warehouse Summary
-                </a>
-                <a class="nav-link {% if 'admin_edit_warehouse_stock' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_edit_warehouse_stock') }}">
-                    <i class="bi bi-pencil-square"></i> Edit Stock Allocation
                 </a>
             {% elif current_user.role == 'RakePoint' %}
                 <a class="nav-link {% if 'rakepoint_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_dashboard') }}">

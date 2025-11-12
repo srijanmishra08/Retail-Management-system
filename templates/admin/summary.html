@@ -29,7 +29,12 @@
                     {% if summary %}
                         {% for item in summary %}
                         <tr>
-                            <td><strong>{{ item[0] }}</strong></td>
+                            <td>
+                                <a href="{{ url_for('admin_rake_details', rake_code=item[0]) }}" 
+                                   class="text-decoration-none fw-bold">
+                                    <i class="bi bi-box-arrow-up-right"></i> {{ item[0] }}
+                                </a>
+                            </td>
                             <td>{{ item[1] }}</td>
                             <td>{{ item[2] }}</td>
                             <td class="text-end">{{ "%.2f"|format(item[3]) }}</td>

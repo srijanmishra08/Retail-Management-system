@@ -141,7 +141,8 @@ def admin_add_rake():
             flash('Error adding rake. Rake code may already exist.', 'error')
     
     products = db.get_all_products()
-    return render_template('admin/add_rake.html', products=products)
+    companies = db.get_all_companies()
+    return render_template('admin/add_rake.html', products=products, companies=companies)
 
 @app.route('/admin/summary')
 @login_required
@@ -152,6 +153,79 @@ def admin_summary():
     
     summary = db.get_rake_summary()
     return render_template('admin/summary.html', summary=summary)
+
+@app.route('/admin/rake-details/<rake_code>')
+@login_required
+def admin_rake_details(rake_code):
+    """View detailed dispatch information for a specific rake"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    # Get rake basic info
+    rake_info = db.execute_custom_query('''
+        SELECT r.rake_code, r.company_name, r.product_name, r.date, 
+               r.rr_quantity, r.rake_point_name
+        FROM rakes r
+        WHERE r.rake_code = ?
+    ''', (rake_code,))
+    
+    if not rake_info:
+        flash('Rake not found', 'error')
+        return redirect(url_for('admin_summary'))
+    
+    # Get stock dispatched to accounts DIRECTLY FROM RAKE (not from warehouse)
+    account_dispatches = db.execute_custom_query('''
+        SELECT a.account_name, a.account_type, 
+               SUM(b.quantity_mt) as total_quantity,
+               COUNT(b.builty_id) as builty_count,
+               GROUP_CONCAT(b.builty_number || ' (' || b.quantity_mt || ' MT)', ', ') as builty_details
+        FROM builty b
+        JOIN accounts a ON b.account_id = a.account_id
+        WHERE b.rake_code = ? AND (b.created_by_role = 'RakePoint' OR b.created_by_role = 'Admin')
+        GROUP BY a.account_id, a.account_name, a.account_type
+        ORDER BY total_quantity DESC
+    ''', (rake_code,))
+    
+    # Get stock sent to warehouses DIRECTLY FROM RAKE (not from other warehouses)
+    warehouse_dispatches = db.execute_custom_query('''
+        SELECT w.warehouse_name, w.location,
+               SUM(b.quantity_mt) as total_quantity,
+               COUNT(b.builty_id) as builty_count,
+               GROUP_CONCAT(b.builty_number || ' (' || b.quantity_mt || ' MT)', ', ') as builty_details
+        FROM builty b
+        JOIN warehouses w ON b.warehouse_id = w.warehouse_id
+        WHERE b.rake_code = ? AND (b.created_by_role = 'RakePoint' OR b.created_by_role = 'Admin')
+        GROUP BY w.warehouse_id, w.warehouse_name, w.location
+        ORDER BY total_quantity DESC
+    ''', (rake_code,))
+    
+    # Get warehouse stock IN for this rake
+    warehouse_stock_in = db.execute_custom_query('''
+        SELECT w.warehouse_name, ws.date,
+               SUM(ws.quantity_mt) as quantity,
+               COUNT(ws.stock_id) as entry_count
+        FROM warehouse_stock ws
+        JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+        JOIN builty b ON ws.builty_id = b.builty_id
+        WHERE b.rake_code = ? AND ws.transaction_type = 'IN'
+        GROUP BY w.warehouse_id, w.warehouse_name, ws.date
+        ORDER BY ws.date DESC
+    ''', (rake_code,))
+    
+    # Calculate totals
+    total_to_accounts = sum(row[2] for row in account_dispatches) if account_dispatches else 0
+    total_to_warehouses = sum(row[2] for row in warehouse_dispatches) if warehouse_dispatches else 0
+    total_warehouse_in = sum(row[2] for row in warehouse_stock_in) if warehouse_stock_in else 0
+    
+    return render_template('admin/rake_details.html',
+                         rake_info=rake_info[0],
+                         account_dispatches=account_dispatches,
+                         warehouse_dispatches=warehouse_dispatches,
+                         warehouse_stock_in=warehouse_stock_in,
+                         total_to_accounts=total_to_accounts,
+                         total_to_warehouses=total_to_warehouses,
+                         total_warehouse_in=total_warehouse_in)
 
 @app.route('/admin/manage-accounts', methods=['GET', 'POST'])
 @login_required
@@ -421,6 +495,7 @@ def admin_print_builty(builty_id):
         return redirect(url_for('admin_all_builties'))
     
     # Convert to dict for easier template access
+    # builty columns: 0-21 are from builty table, 22+ are joined
     builty_dict = {
         'builty_id': builty[0],
         'builty_number': builty[1],
@@ -438,17 +513,19 @@ def admin_print_builty(builty_id):
         'kg_per_bag': builty[13],
         'rate_per_mt': builty[14],
         'total_freight': builty[15],
-        'lr_number': builty[16],
-        'lr_index': builty[17],
-        'created_by_role': builty[18],
-        'created_at': builty[19],
-        'account_name': builty[20],
-        'warehouse_name': builty[21],
-        'truck_number': builty[22],
-        'driver_name': builty[23],
-        'driver_mobile': builty[24],
-        'owner_name': builty[25],
-        'owner_mobile': builty[26]
+        'advance': builty[16],
+        'to_pay': builty[17],
+        'lr_number': builty[18],
+        'lr_index': builty[19],
+        'created_by_role': builty[20],
+        'created_at': builty[21],
+        'account_name': builty[22],
+        'warehouse_name': builty[23],
+        'truck_number': builty[24],
+        'driver_name': builty[25],
+        'driver_mobile': builty[26],
+        'owner_name': builty[27],
+        'owner_mobile': builty[28]
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -735,6 +812,71 @@ def get_next_warehouse_serial_api(warehouse_id):
     next_serial = db.get_next_warehouse_stock_serial(warehouse_id)
     return jsonify({'serial_number': next_serial})
 
+@app.route('/api/builty-details/<int:builty_id>')
+@login_required
+def get_builty_details_api(builty_id):
+    """API endpoint to get builty details for auto-filling warehouse stock in form"""
+    if current_user.role not in ['Warehouse', 'Admin']:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    builty = db.get_builty_by_id(builty_id)
+    
+    if not builty:
+        return jsonify({'error': 'Builty not found'}), 404
+    
+    # Get rake details to find company and product info
+    rake = db.execute_custom_query('''
+        SELECT r.company_name, r.product_name, r.rake_point_name
+        FROM rakes r
+        WHERE r.rake_code = ?
+    ''', (builty[2],))
+    
+    company_name = rake[0][0] if rake else None
+    product_name = rake[0][1] if rake else builty[10]  # fallback to goods_name
+    
+    # Find company_id by company_name
+    company_id = None
+    if company_name:
+        company = db.execute_custom_query('SELECT company_id FROM companies WHERE company_name = ?', (company_name,))
+        if company:
+            company_id = company[0][0]
+    
+    # Find product_id by product_name
+    product_id = None
+    if product_name:
+        product = db.execute_custom_query('SELECT product_id FROM products WHERE product_name = ?', (product_name,))
+        if product:
+            product_id = product[0][0]
+    
+    return jsonify({
+        'builty_number': builty[1],
+        'goods_name': builty[10],
+        'quantity_mt': float(builty[12]),
+        'company_id': company_id,
+        'product_id': product_id,
+        'account_id': builty[5],
+        'warehouse_id': builty[6]
+    })
+
+@app.route('/api/next-loading-slip-serial/<warehouse_name>')
+@login_required
+def get_next_loading_slip_serial_api(warehouse_name):
+    """API endpoint to get next loading slip serial number for warehouse"""
+    if current_user.role not in ['Warehouse', 'Admin']:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    # Get the maximum serial number for this warehouse
+    result = db.execute_custom_query('''
+        SELECT MAX(CAST(slip_number AS INTEGER)) 
+        FROM loading_slips 
+        WHERE loading_point_name = ?
+    ''', (warehouse_name,))
+    
+    max_serial = result[0][0] if result and result[0][0] else 0
+    next_serial = max_serial + 1
+    
+    return jsonify({'serial_number': next_serial})
+
 @app.route('/rakepoint/loading-slips')
 @login_required
 def rakepoint_loading_slips():
@@ -791,6 +933,7 @@ def rakepoint_print_builty(builty_id):
         return redirect(url_for('rakepoint_dashboard'))
     
     # Convert to dict for easier template access
+    # builty columns: 0-21 are from builty table, 22+ are joined
     builty_dict = {
         'builty_id': builty[0],
         'builty_number': builty[1],
@@ -808,17 +951,19 @@ def rakepoint_print_builty(builty_id):
         'kg_per_bag': builty[13],
         'rate_per_mt': builty[14],
         'total_freight': builty[15],
-        'lr_number': builty[16],
-        'lr_index': builty[17],
-        'created_by_role': builty[18],
-        'created_at': builty[19],
-        'account_name': builty[20],
-        'warehouse_name': builty[21],
-        'truck_number': builty[22],
-        'driver_name': builty[23],
-        'driver_mobile': builty[24],
-        'owner_name': builty[25],
-        'owner_mobile': builty[26]
+        'advance': builty[16],
+        'to_pay': builty[17],
+        'lr_number': builty[18],
+        'lr_index': builty[19],
+        'created_by_role': builty[20],
+        'created_at': builty[21],
+        'account_name': builty[22],
+        'warehouse_name': builty[23],
+        'truck_number': builty[24],
+        'driver_name': builty[25],
+        'driver_mobile': builty[26],
+        'owner_name': builty[27],
+        'owner_mobile': builty[28]
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -938,6 +1083,50 @@ def warehouse_stock_in():
         # Convert builty_id and truck_id to integers if present
         if builty_id:
             builty_id = int(builty_id)
+            
+            # Check if this builty has already been used for stock IN
+            existing_stock = db.execute_custom_query('''
+                SELECT stock_id, w.warehouse_name, ws.date, ws.quantity_mt
+                FROM warehouse_stock ws
+                JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+                WHERE ws.builty_id = ? AND ws.transaction_type = 'IN'
+            ''', (builty_id,))
+            
+            if existing_stock:
+                warehouse_name = existing_stock[0][1]
+                stock_date = existing_stock[0][2]
+                stock_quantity = existing_stock[0][3]
+                flash(f'Error: This builty has already been recorded for Stock IN at {warehouse_name} on {stock_date} ({stock_quantity:.2f} MT). Cannot record duplicate stock IN for the same builty.', 'error')
+                # Re-render form with all the data
+                warehouses = db.get_all_warehouses()
+                builties = db.get_all_builties()
+                trucks = db.get_all_trucks()
+                companies = db.get_all_companies()
+                products = db.get_all_products()
+                employees = db.get_all_employees()
+                accounts = db.get_all_accounts()
+                recent_stock_in = db.execute_custom_query('''
+                    SELECT ws.date, COALESCE(b.builty_number, 'Direct Truck') as builty_number, 
+                           w.warehouse_name, COALESCE(a.account_name, 'N/A') as account_name,
+                           ws.quantity_mt, COALESCE(e.employee_name, 'N/A') as employee_name
+                    FROM warehouse_stock ws
+                    JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+                    LEFT JOIN builty b ON ws.builty_id = b.builty_id
+                    LEFT JOIN accounts a ON ws.account_id = a.account_id
+                    LEFT JOIN employees e ON ws.employee_id = e.employee_id
+                    WHERE ws.transaction_type = 'IN'
+                    ORDER BY ws.date DESC, ws.stock_id DESC
+                    LIMIT 10
+                ''')
+                return render_template('warehouse/stock_in.html', 
+                                     warehouses=warehouses,
+                                     builties=builties,
+                                     trucks=trucks,
+                                     companies=companies,
+                                     products=products,
+                                     employees=employees,
+                                     accounts=accounts,
+                                     recent_stock_in=recent_stock_in)
         if truck_id:
             truck_id = int(truck_id)
         
@@ -963,7 +1152,14 @@ def warehouse_stock_in():
             flash('Error recording stock IN', 'error')
     
     warehouses = db.get_all_warehouses()
-    builties = db.get_all_builties()
+    # Get only builties that haven't been used for stock IN yet
+    builties = db.execute_custom_query('''
+        SELECT b.*
+        FROM builty b
+        LEFT JOIN warehouse_stock ws ON b.builty_id = ws.builty_id AND ws.transaction_type = 'IN'
+        WHERE ws.stock_id IS NULL
+        ORDER BY b.builty_id DESC
+    ''')
     trucks = db.get_all_trucks()
     companies = db.get_all_companies()
     products = db.get_all_products()
@@ -972,13 +1168,13 @@ def warehouse_stock_in():
     
     # Get recent stock IN entries for display
     recent_stock_in = db.execute_custom_query('''
-        SELECT ws.stock_id, ws.date, w.warehouse_name, COALESCE(c.company_name, 'N/A') as company_name, 
-               COALESCE(p.product_name, 'N/A') as product_name,
+        SELECT ws.date, COALESCE(b.builty_number, 'Direct Truck') as builty_number, 
+               w.warehouse_name, COALESCE(a.account_name, 'N/A') as account_name,
                ws.quantity_mt, COALESCE(e.employee_name, 'N/A') as employee_name
         FROM warehouse_stock ws
         JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
-        LEFT JOIN companies c ON ws.company_id = c.company_id
-        LEFT JOIN products p ON ws.product_id = p.product_id
+        LEFT JOIN builty b ON ws.builty_id = b.builty_id
+        LEFT JOIN accounts a ON ws.account_id = a.account_id
         LEFT JOIN employees e ON ws.employee_id = e.employee_id
         WHERE ws.transaction_type = 'IN'
         ORDER BY ws.date DESC, ws.stock_id DESC
@@ -1104,7 +1300,8 @@ def warehouse_loading_slips():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    # Get loading slips with warehouse origin
+    # Get all loading slips (warehouse creates loading slips for stock OUT)
+    # No need to filter - warehouse sees all loading slips they can access
     loading_slips = db.execute_custom_query('''
         SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
                ls.destination, 
@@ -1119,11 +1316,7 @@ def warehouse_loading_slips():
         LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
         LEFT JOIN trucks t ON ls.truck_id = t.truck_id
         LEFT JOIN builty b ON ls.builty_id = b.builty_id
-        WHERE ls.rake_code LIKE 'WAREHOUSE%' OR ls.rake_code IN (
-            SELECT DISTINCT b2.rake_code 
-            FROM warehouse_stock ws 
-            JOIN builty b2 ON ws.builty_id = b2.builty_id
-        )
+        WHERE ls.loading_point_name IN (SELECT warehouse_name FROM warehouses)
         ORDER BY ls.slip_id DESC
     ''')
     
@@ -1174,6 +1367,7 @@ def warehouse_print_builty(builty_id):
         return redirect(url_for('warehouse_dashboard'))
     
     # Convert to dict for easier template access
+    # builty columns: 0-21 are from builty table, 22+ are joined
     builty_dict = {
         'builty_id': builty[0],
         'builty_number': builty[1],
@@ -1191,17 +1385,19 @@ def warehouse_print_builty(builty_id):
         'kg_per_bag': builty[13],
         'rate_per_mt': builty[14],
         'total_freight': builty[15],
-        'lr_number': builty[16],
-        'lr_index': builty[17],
-        'created_by_role': builty[18],
-        'created_at': builty[19],
-        'account_name': builty[20],
-        'warehouse_name': builty[21],
-        'truck_number': builty[22],
-        'driver_name': builty[23],
-        'driver_mobile': builty[24],
-        'owner_name': builty[25],
-        'owner_mobile': builty[26]
+        'advance': builty[16],
+        'to_pay': builty[17],
+        'lr_number': builty[18],
+        'lr_index': builty[19],
+        'created_by_role': builty[20],
+        'created_at': builty[21],
+        'account_name': builty[22],
+        'warehouse_name': builty[23],
+        'truck_number': builty[24],
+        'driver_name': builty[25],
+        'driver_mobile': builty[26],
+        'owner_name': builty[27],
+        'owner_mobile': builty[28]
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -1525,14 +1721,15 @@ def warehouse_all_builties():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    # Get all builties created by warehouse
+    # Get all builties created by warehouse role OR warehouse-specific builties
+    # Warehouse builties have builty numbers starting with "WBLT-" or created_by_role='Warehouse'
     builties = db.execute_custom_query('''
         SELECT b.*, a.account_name, w.warehouse_name, t.truck_number
         FROM builty b
         LEFT JOIN accounts a ON b.account_id = a.account_id
         LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
         LEFT JOIN trucks t ON b.truck_id = t.truck_id
-        WHERE b.created_by_role = 'Warehouse'
+        WHERE b.created_by_role = 'Warehouse' OR b.builty_number LIKE 'WBLT-%'
         ORDER BY b.created_at DESC
     ''')
     

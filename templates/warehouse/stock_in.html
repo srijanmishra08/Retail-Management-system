@@ -189,7 +189,7 @@
                             <td><strong>{{ stock[1] }}</strong></td>
                             <td>{{ stock[2] }}</td>
                             <td>{{ stock[3] }}</td>
-                            <td class="text-end text-success">{{ "%.2f"|format(stock[4]) }}</td>
+                            <td class="text-end text-success">{{ "%.2f"|format(stock[4]|float) }}</td>
                             <td>{{ stock[5] }}</td>
                         </tr>
                         {% endfor %}
@@ -224,6 +224,59 @@ document.getElementById('warehouse_name').addEventListener('change', async funct
     }
 });
 
+// Auto-fill form when builty is selected (for rake source only)
+document.getElementById('builty_number').addEventListener('change', async function() {
+    const builtyId = this.value;
+    
+    if (builtyId) {
+        try {
+            const response = await fetch(`/api/builty-details/${builtyId}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                console.error('Error:', data.error);
+                return;
+            }
+            
+            // Auto-fill company if found
+            if (data.company_id) {
+                document.getElementById('company_id').value = data.company_id;
+            }
+            
+            // Auto-fill product if found
+            if (data.product_id) {
+                document.getElementById('product_id').value = data.product_id;
+            }
+            
+            // Auto-fill quantity
+            if (data.quantity_mt) {
+                document.getElementById('unloaded_quantity').value = data.quantity_mt.toFixed(2);
+            }
+            
+            // Auto-fill account if present
+            if (data.account_id) {
+                document.getElementById('account_id').value = data.account_id;
+            }
+            
+            // Auto-fill warehouse if present and if not already selected
+            if (data.warehouse_id && !document.getElementById('warehouse_name').value) {
+                document.getElementById('warehouse_name').value = data.warehouse_id;
+                // Trigger serial number generation
+                document.getElementById('warehouse_name').dispatchEvent(new Event('change'));
+            }
+            
+        } catch (error) {
+            console.error('Error fetching builty details:', error);
+        }
+    } else {
+        // Clear auto-filled fields when builty is deselected
+        document.getElementById('company_id').value = '';
+        document.getElementById('product_id').value = '';
+        document.getElementById('unloaded_quantity').value = '';
+        document.getElementById('account_id').value = '';
+    }
+});
+
 // Toggle between rake and truck source
 document.querySelectorAll('input[name="source_type"]').forEach(radio => {
     radio.addEventListener('change', function() {
@@ -237,6 +290,13 @@ document.querySelectorAll('input[name="source_type"]').forEach(radio => {
             document.getElementById('truck_section').style.display = 'block';
             document.getElementById('builty_number').setAttribute('disabled', 'disabled');
             document.getElementById('truck_number').removeAttribute('disabled');
+            
+            // Clear builty auto-filled data when switching to truck mode
+            document.getElementById('builty_number').value = '';
+            document.getElementById('company_id').value = '';
+            document.getElementById('product_id').value = '';
+            document.getElementById('unloaded_quantity').value = '';
+            document.getElementById('account_id').value = '';
         }
     });
 });

@@ -30,12 +30,20 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="company_name" class="form-label">Company Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="company_name" name="company_name" required placeholder="e.g., ABC Fertilizers Ltd">
+                    <select class="form-select" id="company_name" name="company_name" required>
+                        <option value="">Select Company</option>
+                        {% for company in companies %}
+                        <option value="{{ company[1] }}" data-code="{{ company[2] }}">{{ company[1] }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="window.location.href='{{ url_for('admin_manage_accounts') }}'">
+                        <i class="bi bi-plus-circle"></i> Add New Company
+                    </button>
                 </div>
                 
                 <div class="col-md-6 mb-3">
                     <label for="company_code" class="form-label">Company Code</label>
-                    <input type="text" class="form-control" id="company_code" name="company_code" placeholder="e.g., ABC01">
+                    <input type="text" class="form-control" id="company_code" name="company_code" placeholder="e.g., ABC01" readonly>
                 </div>
             </div>
             
@@ -153,6 +161,13 @@
 <script>
 // Set today's date as default
 document.getElementById('date').valueAsDate = new Date();
+
+// Auto-fill company code when company is selected
+document.getElementById('company_name').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const companyCode = selectedOption.getAttribute('data-code');
+    document.getElementById('company_code').value = companyCode || '';
+});
 
 // Auto-fill product code when product is selected
 document.getElementById('product_name').addEventListener('change', function() {

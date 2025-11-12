@@ -35,14 +35,14 @@
                         <tr>
                             <td><strong>{{ builty[1] }}</strong></td>
                             <td>{{ builty[3][:10] if builty[3] else 'N/A' }}</td>
-                            <td>{{ builty[16] if builty[16] else 'N/A' }}</td>
+                            <td>{{ builty[18] if builty[18] else 'N/A' }}</td>
                             <td>{{ builty[10] }}</td>
                             <td>{{ builty[11] }}</td>
                             <td>{{ builty[12] }} MT</td>
                             <td>₹{{ "{:,.2f}".format(builty[14] if builty[14] else 0) }}</td>
                             <td>₹{{ "{:,.2f}".format(builty[15] if builty[15] else 0) }}</td>
-                            <td>{{ builty[22] if builty[22] else 'N/A' }}</td>
-                            <td>{{ builty[20] if builty[20] else builty[21] if builty[21] else 'N/A' }}</td>
+                            <td>{{ builty[24] if builty[24] else 'N/A' }}</td>
+                            <td>{{ builty[22] if builty[22] else builty[23] if builty[23] else 'N/A' }}</td>
                             <td>
                                 <a href="{{ url_for('warehouse_print_builty', builty_id=builty[0]) }}" 
                                    class="btn btn-sm btn-primary" 
