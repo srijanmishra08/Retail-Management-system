@@ -309,6 +309,56 @@ def admin_warehouse_transactions():
     
     return render_template('admin/warehouse_transactions.html', transactions=transactions)
 
+@app.route('/admin/warehouse-summary')
+@login_required
+def admin_warehouse_summary():
+    """Admin view of warehouse stock summary with company, product filtering"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    summary = db.get_warehouse_stock_summary()
+    
+    return render_template('admin/warehouse_summary.html', summary=summary)
+
+@app.route('/admin/edit-warehouse-stock', methods=['GET', 'POST'])
+@login_required
+def admin_edit_warehouse_stock():
+    """Admin can edit warehouse stock allocations"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        stock_id = int(request.form.get('stock_id'))
+        quantity_mt = float(request.form.get('quantity_mt'))
+        account_type = request.form.get('account_type')
+        dealer_name = request.form.get('dealer_name')
+        remark = request.form.get('remark')
+        
+        success = db.update_warehouse_stock_allocation(stock_id, quantity_mt, account_type, dealer_name, remark)
+        
+        if success:
+            flash('Warehouse stock allocation updated successfully!', 'success')
+        else:
+            flash('Error updating warehouse stock allocation', 'error')
+        
+        return redirect(url_for('admin_edit_warehouse_stock'))
+    
+    # Get all warehouse stock entries
+    stock_entries = db.execute_custom_query('''
+        SELECT ws.stock_id, ws.serial_number, w.warehouse_name, c.company_name, p.product_name,
+               ws.quantity_mt, ws.account_type, ws.dealer_name, ws.remark, ws.date
+        FROM warehouse_stock ws
+        LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+        LEFT JOIN companies c ON ws.company_id = c.company_id
+        LEFT JOIN products p ON ws.product_id = p.product_id
+        WHERE ws.transaction_type = 'IN'
+        ORDER BY ws.date DESC
+    ''')
+    
+    return render_template('admin/edit_warehouse_stock.html', stock_entries=stock_entries)
+
 @app.route('/admin/download-eway-bill/<filename>')
 @login_required
 def admin_download_eway_bill(filename):
