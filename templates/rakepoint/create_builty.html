@@ -154,21 +154,30 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-4 mb-3">
-                        <label for="freight_details" class="form-label fw-bold">Total Freight Amount <span class="text-danger">*</span></label>
+                    <div class="col-md-3 mb-3">
+                        <label for="freight_details" class="form-label fw-bold">Total Freight <span class="text-danger">*</span></label>
                         <div class="input-group input-group-lg">
                             <span class="input-group-text">₹</span>
                             <input type="number" step="0.01" class="form-control" id="freight_details" name="freight_details" required placeholder="0.00" readonly>
                         </div>
-                        <small class="text-muted">Auto-calculated: Rate × Quantity</small>
+                        <small class="text-muted">Rate × Quantity</small>
                     </div>
                     
-                    <div class="col-md-4 mb-3">
-                        <label for="freight_advance" class="form-label fw-bold">Freight Advance</label>
+                    <div class="col-md-3 mb-3">
+                        <label for="freight_advance" class="form-label fw-bold">Advance</label>
                         <div class="input-group input-group-lg">
                             <span class="input-group-text">₹</span>
-                            <input type="number" step="0.01" class="form-control" id="freight_advance" name="freight_advance" placeholder="0.00">
+                            <input type="number" step="0.01" class="form-control" id="freight_advance" name="freight_advance" placeholder="0.00" value="0">
                         </div>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label for="to_pay" class="form-label fw-bold">To Pay</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="0.01" class="form-control bg-warning bg-opacity-25" id="to_pay" name="to_pay" placeholder="0.00" readonly>
+                        </div>
+                        <small class="text-muted">Total - Advance</small>
                     </div>
                 </div>
 
@@ -268,9 +277,23 @@ document.getElementById('rate_per_mt').addEventListener('input', function() {
     if (quantity > 0 && rate > 0) {
         var totalFreight = (rate * quantity).toFixed(2);
         document.getElementById('freight_details').value = totalFreight;
+        calculateToPay();
     } else {
         document.getElementById('freight_details').value = '0.00';
+        calculateToPay();
     }
 });
+
+// Auto-calculate To Pay when advance is entered
+document.getElementById('freight_advance').addEventListener('input', function() {
+    calculateToPay();
+});
+
+function calculateToPay() {
+    var totalFreight = parseFloat(document.getElementById('freight_details').value) || 0;
+    var advance = parseFloat(document.getElementById('freight_advance').value) || 0;
+    var toPay = (totalFreight - advance).toFixed(2);
+    document.getElementById('to_pay').value = toPay;
+}
 </script>
 {% endblock %}

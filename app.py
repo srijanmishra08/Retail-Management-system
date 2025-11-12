@@ -174,7 +174,52 @@ def admin_manage_accounts():
             flash('Error adding account', 'error')
     
     accounts = db.get_all_accounts()
-    return render_template('admin/manage_accounts.html', accounts=accounts)
+    companies = db.get_all_companies()
+    employees = db.get_all_employees()
+    return render_template('admin/manage_accounts.html', accounts=accounts, companies=companies, employees=employees)
+
+@app.route('/admin/add-company', methods=['POST'])
+@login_required
+def admin_add_company():
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    company_name = request.form.get('company_name')
+    company_code = request.form.get('company_code', '')
+    contact_person = request.form.get('contact_person', '')
+    mobile = request.form.get('mobile', '')
+    address = request.form.get('address', '')
+    
+    company_id = db.add_company(company_name, company_code, contact_person, mobile, address)
+    
+    if company_id:
+        flash(f'Company {company_name} added successfully!', 'success')
+    else:
+        flash('Error adding company. Company may already exist.', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
+
+@app.route('/admin/add-employee', methods=['POST'])
+@login_required
+def admin_add_employee():
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    employee_name = request.form.get('employee_name')
+    employee_code = request.form.get('employee_code', '')
+    mobile = request.form.get('mobile', '')
+    designation = request.form.get('designation', '')
+    
+    employee_id = db.add_employee(employee_name, employee_code, mobile, designation)
+    
+    if employee_id:
+        flash(f'Employee {employee_name} added successfully!', 'success')
+    else:
+        flash('Error adding employee.', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
 
 @app.route('/admin/add-product', methods=['POST'])
 @login_required
@@ -187,9 +232,11 @@ def admin_add_product():
     product_code = request.form.get('product_code')
     product_type = request.form.get('product_type', 'Fertilizer')
     unit = request.form.get('unit', 'MT')
+    unit_per_bag = float(request.form.get('unit_per_bag', 50.0))
+    unit_type = request.form.get('unit_type', 'kg')
     description = request.form.get('description', '')
     
-    product_id = db.add_product(product_name, product_code, product_type, unit, description)
+    product_id = db.add_product(product_name, product_code, product_type, unit, unit_per_bag, unit_type, description)
     
     if product_id:
         flash(f'Product {product_name} added successfully!', 'success')
@@ -468,13 +515,17 @@ def rakepoint_create_builty():
         except:
             total_freight = 0.0
         
+        # Parse freight details and advance
+        freight_advance = float(request.form.get('freight_advance', 0))
+        to_pay = float(request.form.get('to_pay', 0))
+        
         # Calculate kg per bag (assuming 50kg per bag as default)
         kg_per_bag = (quantity_wt_mt * 1000) / number_of_bags if number_of_bags > 0 else 50
         rate_per_mt = total_freight / quantity_wt_mt if quantity_wt_mt > 0 else 0
         
         builty_id = db.add_builty(builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
                                   truck_id, loading_point, unloading_point, goods_name, number_of_bags,
-                                  quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, lr_number,
+                                  quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, freight_advance, to_pay, lr_number,
                                   0, 'RakePoint')
         
         if builty_id:
@@ -623,6 +674,16 @@ def get_next_lr_number_api():
     
     next_lr = db.get_next_lr_number()
     return jsonify({'next_lr': next_lr})
+
+@app.route('/api/next-warehouse-serial/<int:warehouse_id>')
+@login_required
+def get_next_warehouse_serial_api(warehouse_id):
+    """API endpoint to get next warehouse stock serial number"""
+    if current_user.role not in ['Warehouse', 'Admin']:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    next_serial = db.get_next_warehouse_stock_serial(warehouse_id)
+    return jsonify({'serial_number': next_serial})
 
 @app.route('/rakepoint/loading-slips')
 @login_required
@@ -811,72 +872,64 @@ def warehouse_stock_in():
         return redirect(url_for('index'))
     
     if request.method == 'POST':
-        builty_number = request.form.get('builty_number')
-        unloaded_quantity = float(request.form.get('unloaded_quantity'))
-        unloader_employee = request.form.get('unloader_employee')
-        warehouse_name = request.form.get('warehouse_name')
-        account_name = request.form.get('account_name')
+        serial_number = request.form.get('serial_number')
+        warehouse_id = int(request.form.get('warehouse_name'))
+        source_type = request.form.get('source_type', 'rake')
+        builty_id = request.form.get('builty_number') if source_type == 'rake' else None
+        truck_id = request.form.get('truck_number') if source_type == 'truck' else None
+        company_id = int(request.form.get('company_id'))
+        product_id = int(request.form.get('product_id'))
+        quantity = float(request.form.get('unloaded_quantity'))
+        employee_id = int(request.form.get('employee_id'))
+        account_id = int(request.form.get('account_id'))
         stock_in_date = request.form.get('stock_in_date')
         remarks = request.form.get('remarks', '')
         
-        # Get IDs from names/numbers
-        builty = db.execute_custom_query('SELECT builty_id, account_id, rake_code, quantity_mt FROM builty WHERE builty_number = ?', (builty_number,))
-        warehouse = db.execute_custom_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
+        # Convert builty_id and truck_id to integers if present
+        if builty_id:
+            builty_id = int(builty_id)
+        if truck_id:
+            truck_id = int(truck_id)
         
-        if builty and warehouse:
-            builty_id = builty[0][0]
-            account_id = builty[0][1]
-            rake_code = builty[0][2]
-            builty_quantity = builty[0][3]
-            warehouse_id = warehouse[0][0]
-            
-            # CRITICAL CHECK: Verify this builty hasn't been fully stocked IN already
-            existing_stock_in = db.execute_custom_query('''
-                SELECT COALESCE(SUM(quantity_mt), 0)
-                FROM warehouse_stock
-                WHERE builty_id = ? AND transaction_type = 'IN'
-            ''', (builty_id,))
-            
-            total_already_in = existing_stock_in[0][0] if existing_stock_in else 0
-            
-            # Check if trying to add more than builty quantity
-            if total_already_in + unloaded_quantity > builty_quantity:
-                remaining = builty_quantity - total_already_in
-                if remaining <= 0:
-                    flash(f'Error: Builty {builty_number} already fully stocked IN ({builty_quantity} MT). Cannot add more stock!', 'error')
-                else:
-                    flash(f'Error: Builty {builty_number} has only {remaining:.2f} MT remaining (Total: {builty_quantity} MT, Already IN: {total_already_in:.2f} MT)', 'error')
-                return redirect(url_for('warehouse_stock_in'))
-            
-            stock_id = db.add_warehouse_stock_in(warehouse_id, builty_id, unloaded_quantity,
-                                                 unloader_employee, account_id, stock_in_date, remarks)
-            
-            if stock_id:
-                remaining_after = builty_quantity - (total_already_in + unloaded_quantity)
-                if remaining_after > 0:
-                    flash(f'Stock IN recorded successfully! Remaining from this builty: {remaining_after:.2f} MT', 'success')
-                else:
-                    flash(f'Stock IN recorded successfully! Builty {builty_number} now fully stocked IN.', 'success')
-                return redirect(url_for('warehouse_dashboard'))
-            else:
-                flash('Error recording stock IN', 'error')
+        stock_id = db.add_warehouse_stock_in(
+            warehouse_id=warehouse_id,
+            builty_id=builty_id,
+            quantity_mt=quantity,
+            employee_id=employee_id,
+            account_id=account_id,
+            date=stock_in_date,
+            notes=remarks,
+            company_id=company_id,
+            product_id=product_id,
+            source_type=source_type,
+            truck_id=truck_id,
+            serial_number=int(serial_number) if serial_number else None
+        )
+        
+        if stock_id:
+            flash(f'Stock IN recorded successfully! Serial No: {serial_number}', 'success')
+            return redirect(url_for('warehouse_dashboard'))
         else:
-            flash('Invalid builty or warehouse', 'error')
+            flash('Error recording stock IN', 'error')
     
     warehouses = db.get_all_warehouses()
-    
-    # SECURITY: Only show builties destined for warehouses (not dealers/retailers)
-    # This prevents warehouse staff from processing stock meant for accounts
-    builties = db.get_warehouse_builties()
+    builties = db.get_all_builties()
+    trucks = db.get_all_trucks()
+    companies = db.get_all_companies()
+    products = db.get_all_products()
+    employees = db.get_all_employees()
+    accounts = db.get_all_accounts()
     
     # Get recent stock IN entries for display
     recent_stock_in = db.execute_custom_query('''
-        SELECT ws.date, b.builty_number, w.warehouse_name, COALESCE(a.account_name, 'N/A') as account_name, 
-               ws.quantity_mt, ws.unloader_employee
+        SELECT ws.stock_id, ws.date, w.warehouse_name, COALESCE(c.company_name, 'N/A') as company_name, 
+               COALESCE(p.product_name, 'N/A') as product_name,
+               ws.quantity_mt, COALESCE(e.employee_name, 'N/A') as employee_name
         FROM warehouse_stock ws
-        JOIN builty b ON ws.builty_id = b.builty_id
         JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
-        LEFT JOIN accounts a ON ws.account_id = a.account_id
+        LEFT JOIN companies c ON ws.company_id = c.company_id
+        LEFT JOIN products p ON ws.product_id = p.product_id
+        LEFT JOIN employees e ON ws.employee_id = e.employee_id
         WHERE ws.transaction_type = 'IN'
         ORDER BY ws.date DESC, ws.stock_id DESC
         LIMIT 10
@@ -885,6 +938,11 @@ def warehouse_stock_in():
     return render_template('warehouse/stock_in.html', 
                          warehouses=warehouses,
                          builties=builties,
+                         trucks=trucks,
+                         companies=companies,
+                         products=products,
+                         employees=employees,
+                         accounts=accounts,
                          recent_stock_in=recent_stock_in)
 
 @app.route('/warehouse/create-loading-slip', methods=['GET', 'POST'])

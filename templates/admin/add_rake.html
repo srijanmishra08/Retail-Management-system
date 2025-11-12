@@ -119,6 +119,21 @@
                         </div>
                     </div>
                     
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="unit_per_bag" class="form-label">Unit per Bag <span class="text-danger">*</span></label>
+                            <input type="number" step="0.01" class="form-control" id="unit_per_bag" name="unit_per_bag" value="50.0" required placeholder="e.g., 50">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="unit_type" class="form-label">Unit Type <span class="text-danger">*</span></label>
+                            <select class="form-select" id="unit_type" name="unit_type" required>
+                                <option value="kg">kg (Kilogram)</option>
+                                <option value="lt">lt (Liter)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
                     <div class="mb-3">
                         <label for="product_description" class="form-label">Description</label>
                         <textarea class="form-control" id="product_description" name="description" rows="2" placeholder="Product description..."></textarea>

@@ -266,20 +266,26 @@
     <!-- Freight Details -->
     <div class="section">
         <div class="section-title">FREIGHT DETAILS</div>
-        <div class="amount-section">
-            <div class="amount-row">
-                <span>Rate per MT:</span>
-                <span>₹{{ "{:,.2f}".format(builty.rate_per_mt) if builty.rate_per_mt else '0.00' }}</span>
-            </div>
-            <div class="amount-row">
-                <span>Quantity:</span>
-                <span>{{ "%.2f"|format(builty.quantity_mt) }} MT</span>
-            </div>
-            <div class="amount-row total">
-                <span>Total Freight:</span>
-                <span>₹{{ "{:,.2f}".format(builty.total_freight) if builty.total_freight else '0.00' }}</span>
-            </div>
-        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rate per MT (₹)</th>
+                    <th>Quantity (MT)</th>
+                    <th>Total Freight (₹)</th>
+                    <th>Advance (₹)</th>
+                    <th>To Pay (₹)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{{ "{:,.2f}".format(builty.rate_per_mt) if builty.rate_per_mt else '0.00' }}</td>
+                    <td>{{ "%.2f"|format(builty.quantity_mt) }}</td>
+                    <td>{{ "{:,.2f}".format(builty.total_freight) if builty.total_freight else '0.00' }}</td>
+                    <td>{{ "{:,.2f}".format(builty.advance) if builty.advance else '0.00' }}</td>
+                    <td><strong>{{ "{:,.2f}".format(builty.to_pay) if builty.to_pay else '0.00' }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
     </div>
     
     <!-- Signatures -->

@@ -15,64 +15,139 @@
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('warehouse_stock_in') }}">
+            <!-- Serial Number (Auto-generated, readonly) -->
             <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="builty_number" class="form-label">Builty Number <span class="text-danger">*</span></label>
-                    <select class="form-select" id="builty_number" name="builty_number" required>
-                        <option value="">Select Builty</option>
-                        {% for builty in builties %}
-                        <option value="{{ builty[1] }}" 
-                                data-goods="{{ builty[10] }}" 
-                                data-quantity="{{ builty[12] }}"
-                                data-account="{{ builty[20] }}"
-                                data-warehouse="{{ builty[21] }}">
-                            {{ builty[1] }} - {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <small class="text-muted">Warehouse will auto-fill from builty destination</small>
+                <div class="col-md-4 mb-3">
+                    <label for="serial_number" class="form-label">Serial No. <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control bg-light" id="serial_number" name="serial_number" readonly placeholder="Auto-generated">
                 </div>
                 
-                <div class="col-md-6 mb-3">
-                    <label for="unloaded_quantity" class="form-label">Unloaded Quantity (MT) <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" class="form-control" id="unloaded_quantity" name="unloaded_quantity" required placeholder="0.00">
-                    <small class="text-muted" id="builty_quantity_hint"></small>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="unloader_employee" class="form-label">Unloader Employee <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="unloader_employee" name="unloader_employee" required placeholder="Enter employee name">
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label for="warehouse_name" class="form-label">Warehouse Name <span class="text-danger">*</span></label>
-                    <select class="form-select" id="warehouse_name" name="warehouse_name" required>
-                        <option value="">Select Warehouse</option>
-                        {% for warehouse in warehouses %}
-                        <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - {{ warehouse[2] }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="account_name" class="form-label">Account Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="account_name" name="account_name" required placeholder="Auto-filled from builty" readonly>
-                </div>
-                
-                <div class="col-md-6 mb-3">
+                <div class="col-md-4 mb-3">
                     <label for="stock_in_date" class="form-label">Stock IN Date <span class="text-danger">*</span></label>
                     <input type="date" class="form-control" id="stock_in_date" name="stock_in_date" required>
                 </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label for="warehouse_name" class="form-label">Warehouse <span class="text-danger">*</span></label>
+                    <select class="form-select" id="warehouse_name" name="warehouse_name" required>
+                        <option value="">Select Warehouse</option>
+                        {% for warehouse in warehouses %}
+                        <option value="{{ warehouse[0] }}">{{ warehouse[1] }} - {{ warehouse[2] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <!-- Source Type Selection -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label class="form-label">Source Type <span class="text-danger">*</span></label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="source_type" id="source_rake" value="rake" checked>
+                        <label class="btn btn-outline-primary" for="source_rake">
+                            <i class="bi bi-train-freight-front"></i> From Rake (Builty)
+                        </label>
+                        
+                        <input type="radio" class="btn-check" name="source_type" id="source_truck" value="truck">
+                        <label class="btn btn-outline-success" for="source_truck">
+                            <i class="bi bi-truck"></i> From Truck (Direct)
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Rake/Builty Section -->
+            <div id="rake_section">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="builty_number" class="form-label">Builty Number</label>
+                        <select class="form-select" id="builty_number" name="builty_number">
+                            <option value="">Select Builty</option>
+                            {% for builty in builties %}
+                            <option value="{{ builty[0] }}" 
+                                    data-goods="{{ builty[10] }}" 
+                                    data-quantity="{{ builty[12] }}">
+                                {{ builty[1] }} - {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Truck Section (Hidden by default) -->
+            <div id="truck_section" style="display:none;">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="truck_number" class="form-label">Truck Number</label>
+                        <select class="form-select" id="truck_number" name="truck_number">
+                            <option value="">Select Truck</option>
+                            {% for truck in trucks %}
+                            <option value="{{ truck[0] }}">{{ truck[1] }} - {{ truck[2] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <!-- Product and Company Details -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="company_id" class="form-label">Company <span class="text-danger">*</span></label>
+                    <select class="form-select" id="company_id" name="company_id" required>
+                        <option value="">Select Company</option>
+                        {% for company in companies %}
+                        <option value="{{ company[0] }}">{{ company[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="product_id" class="form-label">Product <span class="text-danger">*</span></label>
+                    <select class="form-select" id="product_id" name="product_id" required>
+                        <option value="">Select Product</option>
+                        {% for product in products %}
+                        <option value="{{ product[0] }}">{{ product[1] }} ({{ product[3] }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             
             <div class="row">
-                <div class="col-md-12 mb-3">
+                <div class="col-md-6 mb-3">
+                    <label for="unloaded_quantity" class="form-label">Quantity (MT) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="unloaded_quantity" name="unloaded_quantity" required placeholder="0.00">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="employee_id" class="form-label">Employee <span class="text-danger">*</span></label>
+                    <select class="form-select" id="employee_id" name="employee_id" required>
+                        <option value="">Select Employee</option>
+                        {% for employee in employees %}
+                        <option value="{{ employee[0] }}">{{ employee[1] }} - {{ employee[4] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="account_id" class="form-label">Account Name <span class="text-danger">*</span></label>
+                    <select class="form-select" id="account_id" name="account_id" required>
+                        <option value="">Select Account</option>
+                        {% for account in accounts %}
+                        <option value="{{ account[0] }}">{{ account[1] }} ({{ account[2] }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
                     <label for="remarks" class="form-label">Remarks</label>
-                    <textarea class="form-control" id="remarks" name="remarks" rows="2" placeholder="Additional notes (optional)"></textarea>
+                    <input type="text" class="form-control" id="remarks" name="remarks" placeholder="Additional notes (optional)">
                 </div>
             </div>
             
@@ -135,40 +210,35 @@
 // Set today's date as default
 document.getElementById('stock_in_date').valueAsDate = new Date();
 
-// Auto-fill account name and warehouse from selected builty
-document.getElementById('builty_number').addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    const accountName = selectedOption.dataset.account;
-    const quantity = selectedOption.dataset.quantity;
-    const warehouseName = selectedOption.dataset.warehouse;
-    
-    // Auto-fill account name
-    document.getElementById('account_name').value = accountName || '';
-    
-    // Auto-fill warehouse if specified in builty
-    const warehouseSelect = document.getElementById('warehouse_name');
-    if (warehouseName && warehouseName !== 'None') {
-        // Find and select the matching warehouse option
-        for (let option of warehouseSelect.options) {
-            if (option.value === warehouseName) {
-                warehouseSelect.value = warehouseName;
-                // Highlight the field to show it was auto-filled
-                warehouseSelect.classList.add('border-success', 'border-2');
-                break;
-            }
+// Auto-generate serial number when warehouse is selected
+document.getElementById('warehouse_name').addEventListener('change', async function() {
+    const warehouseId = this.value;
+    if (warehouseId) {
+        try {
+            const response = await fetch(`/api/next-warehouse-serial/${warehouseId}`);
+            const data = await response.json();
+            document.getElementById('serial_number').value = data.serial_number;
+        } catch (error) {
+            console.error('Error fetching serial number:', error);
         }
-    } else {
-        // Reset if no warehouse in builty
-        warehouseSelect.value = '';
-        warehouseSelect.classList.remove('border-success', 'border-2');
     }
-    
-    // Show quantity hint
-    if (quantity) {
-        document.getElementById('builty_quantity_hint').textContent = 'Builty quantity: ' + quantity + ' MT';
-    } else {
-        document.getElementById('builty_quantity_hint').textContent = '';
-    }
+});
+
+// Toggle between rake and truck source
+document.querySelectorAll('input[name="source_type"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.value === 'rake') {
+            document.getElementById('rake_section').style.display = 'block';
+            document.getElementById('truck_section').style.display = 'none';
+            document.getElementById('builty_number').removeAttribute('disabled');
+            document.getElementById('truck_number').setAttribute('disabled', 'disabled');
+        } else {
+            document.getElementById('rake_section').style.display = 'none';
+            document.getElementById('truck_section').style.display = 'block';
+            document.getElementById('builty_number').setAttribute('disabled', 'disabled');
+            document.getElementById('truck_number').removeAttribute('disabled');
+        }
+    });
 });
 </script>
 {% endblock %}

@@ -95,7 +95,34 @@ class Database:
                 product_code TEXT,
                 product_type TEXT DEFAULT 'Fertilizer',
                 unit TEXT DEFAULT 'MT',
+                unit_per_bag REAL DEFAULT 50.0,
+                unit_type TEXT DEFAULT 'kg',
                 description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Companies table (Product suppliers)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS companies (
+                company_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_name TEXT UNIQUE NOT NULL,
+                company_code TEXT,
+                contact_person TEXT,
+                mobile TEXT,
+                address TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Employees table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS employees (
+                employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_name TEXT NOT NULL,
+                employee_code TEXT,
+                mobile TEXT,
+                designation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -143,6 +170,8 @@ class Database:
                 kg_per_bag REAL,
                 rate_per_mt REAL,
                 total_freight REAL,
+                advance REAL DEFAULT 0,
+                to_pay REAL DEFAULT 0,
                 lr_number TEXT,
                 lr_index INTEGER,
                 created_by_role TEXT,
@@ -187,18 +216,30 @@ class Database:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS warehouse_stock (
                 stock_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                serial_number INTEGER,
                 warehouse_id INTEGER NOT NULL,
                 builty_id INTEGER,
+                company_id INTEGER,
+                product_id INTEGER,
                 transaction_type TEXT NOT NULL,
                 quantity_mt REAL NOT NULL,
-                unloader_employee TEXT,
+                employee_id INTEGER,
                 account_id INTEGER,
+                account_type TEXT,
+                dealer_name TEXT,
+                source_type TEXT DEFAULT 'rake',
+                truck_id INTEGER,
                 date DATE NOT NULL,
                 notes TEXT,
+                remark TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
                 FOREIGN KEY (builty_id) REFERENCES builty(builty_id),
-                FOREIGN KEY (account_id) REFERENCES accounts(account_id)
+                FOREIGN KEY (company_id) REFERENCES companies(company_id),
+                FOREIGN KEY (product_id) REFERENCES products(product_id),
+                FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+                FOREIGN KEY (account_id) REFERENCES accounts(account_id),
+                FOREIGN KEY (truck_id) REFERENCES trucks(truck_id)
             )
         ''')
         
@@ -251,12 +292,12 @@ class Database:
         cursor.execute("SELECT COUNT(*) FROM products")
         if cursor.fetchone()[0] == 0:
             default_products = [
-                ('Urea', 'URE01', 'Fertilizer', 'MT', 'Nitrogen fertilizer'),
-                ('DAP', 'DAP01', 'Fertilizer', 'MT', 'Diammonium Phosphate'),
-                ('MOP', 'MOP01', 'Fertilizer', 'MT', 'Muriate of Potash'),
-                ('NPK', 'NPK01', 'Fertilizer', 'MT', 'NPK Complex fertilizer'),
+                ('Urea', 'URE01', 'Fertilizer', 'MT', 50.0, 'kg', 'Nitrogen fertilizer'),
+                ('DAP', 'DAP01', 'Fertilizer', 'MT', 50.0, 'kg', 'Diammonium Phosphate'),
+                ('MOP', 'MOP01', 'Fertilizer', 'MT', 50.0, 'kg', 'Muriate of Potash'),
+                ('NPK', 'NPK01', 'Fertilizer', 'MT', 50.0, 'kg', 'NPK Complex fertilizer'),
             ]
-            cursor.executemany('INSERT INTO products (product_name, product_code, product_type, unit, description) VALUES (?, ?, ?, ?, ?)', default_products)
+            cursor.executemany('INSERT INTO products (product_name, product_code, product_type, unit, unit_per_bag, unit_type, description) VALUES (?, ?, ?, ?, ?, ?, ?)', default_products)
         
         # Migrate old 'Company' account type to 'Payal'
         cursor.execute("UPDATE accounts SET account_type = 'Payal' WHERE account_type = 'Company'")
@@ -407,6 +448,25 @@ class Database:
         else:
             return "1001"  # Starting LR number
     
+    def get_next_warehouse_stock_serial(self, warehouse_id):
+        """Get the next serial number for warehouse stock"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT MAX(serial_number)
+            FROM warehouse_stock
+            WHERE warehouse_id = ?
+        ''', (warehouse_id,))
+        result = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        if result:
+            return int(result) + 1
+        else:
+            return 1  # Starting serial number
+    
     # ========== Account Operations ==========
     
     def add_account(self, account_name, account_type, contact, address):
@@ -448,15 +508,15 @@ class Database:
     
     # ========== Product Operations ==========
     
-    def add_product(self, product_name, product_code, product_type='Fertilizer', unit='MT', description=''):
+    def add_product(self, product_name, product_code, product_type='Fertilizer', unit='MT', unit_per_bag=50.0, unit_type='kg', description=''):
         """Add new product"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO products (product_name, product_code, product_type, unit, description)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (product_name, product_code, product_type, unit, description))
+                INSERT INTO products (product_name, product_code, product_type, unit, unit_per_bag, unit_type, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (product_name, product_code, product_type, unit, unit_per_bag, unit_type, description))
             product_id = cursor.lastrowid
             conn.commit()
             return product_id
@@ -484,6 +544,84 @@ class Database:
         product = cursor.fetchone()
         conn.close()
         return product
+    
+    # ========== Company Operations ==========
+    
+    def add_company(self, company_name, company_code='', contact_person='', mobile='', address=''):
+        """Add new company"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO companies (company_name, company_code, contact_person, mobile, address)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (company_name, company_code, contact_person, mobile, address))
+            company_id = cursor.lastrowid
+            conn.commit()
+            return company_id
+        except Exception as e:
+            print(f"Error adding company: {e}")
+            conn.rollback()
+            return None
+        finally:
+            conn.close()
+    
+    def get_all_companies(self):
+        """Get all companies"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM companies ORDER BY company_name')
+        companies = cursor.fetchall()
+        conn.close()
+        return companies
+    
+    def get_company_by_id(self, company_id):
+        """Get company by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM companies WHERE company_id = ?', (company_id,))
+        company = cursor.fetchone()
+        conn.close()
+        return company
+    
+    # ========== Employee Operations ==========
+    
+    def add_employee(self, employee_name, employee_code='', mobile='', designation=''):
+        """Add new employee"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO employees (employee_name, employee_code, mobile, designation)
+                VALUES (?, ?, ?, ?)
+            ''', (employee_name, employee_code, mobile, designation))
+            employee_id = cursor.lastrowid
+            conn.commit()
+            return employee_id
+        except Exception as e:
+            print(f"Error adding employee: {e}")
+            conn.rollback()
+            return None
+        finally:
+            conn.close()
+    
+    def get_all_employees(self):
+        """Get all employees"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM employees ORDER BY employee_name')
+        employees = cursor.fetchall()
+        conn.close()
+        return employees
+    
+    def get_employee_by_id(self, employee_id):
+        """Get employee by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM employees WHERE employee_id = ?', (employee_id,))
+        employee = cursor.fetchone()
+        conn.close()
+        return employee
     
     # ========== Warehouse Operations ==========
     
@@ -548,8 +686,8 @@ class Database:
     
     def add_builty(self, builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
                    truck_id, loading_point, unloading_point, goods_name, number_of_bags,
-                   quantity_mt, kg_per_bag, rate_per_mt, total_freight, lr_number, 
-                   lr_index, created_by_role):
+                   quantity_mt, kg_per_bag, rate_per_mt, total_freight, advance=0, to_pay=0, lr_number='', 
+                   lr_index=0, created_by_role=''):
         """Add new builty"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -557,12 +695,12 @@ class Database:
             cursor.execute('''
                 INSERT INTO builty (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
                                    truck_id, loading_point, unloading_point, goods_name, number_of_bags,
-                                   quantity_mt, kg_per_bag, rate_per_mt, total_freight, lr_number,
+                                   quantity_mt, kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number,
                                    lr_index, created_by_role)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id, truck_id,
                   loading_point, unloading_point, goods_name, number_of_bags, quantity_mt,
-                  kg_per_bag, rate_per_mt, total_freight, lr_number, lr_index, created_by_role))
+                  kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number, lr_index, created_by_role))
             
             builty_id = cursor.lastrowid
             conn.commit()
@@ -737,17 +875,24 @@ class Database:
     
     # ========== Warehouse Stock Operations ==========
     
-    def add_warehouse_stock_in(self, warehouse_id, builty_id, quantity_mt, 
-                               unloader_employee, account_id, date, notes=''):
+    def add_warehouse_stock_in(self, warehouse_id, builty_id, quantity_mt, employee_id=None,
+                               account_id=None, date=None, notes='', company_id=None, product_id=None,
+                               source_type='rake', truck_id=None, serial_number=None):
         """Add stock in to warehouse"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
+            # Auto-generate serial number if not provided
+            if serial_number is None:
+                serial_number = self.get_next_warehouse_stock_serial(warehouse_id)
+            
             cursor.execute('''
-                INSERT INTO warehouse_stock (warehouse_id, builty_id, transaction_type, 
-                                            quantity_mt, unloader_employee, account_id, date, notes)
-                VALUES (?, ?, 'IN', ?, ?, ?, ?, ?)
-            ''', (warehouse_id, builty_id, quantity_mt, unloader_employee, account_id, date, notes))
+                INSERT INTO warehouse_stock (serial_number, warehouse_id, builty_id, transaction_type, 
+                                            quantity_mt, employee_id, account_id, date, notes,
+                                            company_id, product_id, source_type, truck_id)
+                VALUES (?, ?, ?, 'IN', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (serial_number, warehouse_id, builty_id, quantity_mt, employee_id, account_id, date, notes,
+                  company_id, product_id, source_type, truck_id))
             
             stock_id = cursor.lastrowid
             conn.commit()
@@ -780,6 +925,51 @@ class Database:
             return None
         finally:
             conn.close()
+    
+    def update_warehouse_stock_allocation(self, stock_id, quantity_mt, account_type, dealer_name, remark):
+        """Update warehouse stock allocation details"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE warehouse_stock
+                SET quantity_mt = ?, account_type = ?, dealer_name = ?, remark = ?
+                WHERE stock_id = ?
+            ''', (quantity_mt, account_type, dealer_name, remark, stock_id))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error updating warehouse stock allocation: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    
+    def get_warehouse_stock_summary(self):
+        """Get warehouse stock summary with company, product, quantity, and warehouse"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 
+                c.company_name,
+                p.product_name,
+                SUM(ws.quantity_mt) as total_quantity,
+                w.warehouse_name,
+                c.company_id,
+                p.product_id,
+                w.warehouse_id
+            FROM warehouse_stock ws
+            LEFT JOIN companies c ON ws.company_id = c.company_id
+            LEFT JOIN products p ON ws.product_id = p.product_id
+            LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+            WHERE ws.transaction_type = 'IN'
+            GROUP BY c.company_id, p.product_id, w.warehouse_id
+            ORDER BY c.company_name, p.product_name, w.warehouse_name
+        ''')
+        summary = cursor.fetchall()
+        conn.close()
+        return summary
     
     def get_warehouse_balance_stock(self, warehouse_id):
         """Get balance stock for warehouse"""
