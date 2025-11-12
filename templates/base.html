@@ -22,10 +22,51 @@
         
         .sidebar {
             min-height: 100vh;
+            height: 100vh;
             background: linear-gradient(180deg, #1e40af 0%, #1e3a8a 100%);
             color: white;
             position: fixed;
             width: 250px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-header {
+            flex-shrink: 0;
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-bottom: 1rem;
+        }
+        
+        .sidebar-nav::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .sidebar-nav::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .sidebar-nav::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
         }
         
         .sidebar .nav-link {
@@ -100,12 +141,12 @@
     {% if current_user.is_authenticated %}
     <!-- Sidebar -->
     <div class="sidebar">
-        <div class="p-4">
+        <div class="sidebar-header">
             <h4 class="mb-0"><i class="bi bi-building"></i> FIMS</h4>
             <small>Fertilizer Inventory Management</small>
         </div>
         
-        <nav class="nav flex-column mt-4">
+        <nav class="sidebar-nav nav flex-column mt-2">
             {% if current_user.role == 'Admin' %}
                 <a class="nav-link {% if 'admin_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard
@@ -188,10 +229,10 @@
             {% endif %}
         </nav>
         
-        <div class="p-4 mt-auto" style="position: absolute; bottom: 0; width: 100%;">
+        <div class="sidebar-footer">
             <div class="d-flex align-items-center mb-3">
                 <div class="flex-shrink-0">
-                    <div class="bg-white rounded-circle p-2">
+                    <div class="bg-white rounded-circle p-2" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
                         <i class="bi bi-person-fill text-primary"></i>
                     </div>
                 </div>
