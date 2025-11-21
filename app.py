@@ -1279,6 +1279,7 @@ def warehouse_create_loading_slip():
                                      warehouses=db.get_all_warehouses(),
                                      accounts=db.get_all_accounts(),
                                      trucks=db.get_all_trucks(),
+                                     products=db.get_all_products(),
                                      print_slip_id=slip_id)
             return redirect(url_for('warehouse_dashboard'))
         else:
@@ -1287,11 +1288,13 @@ def warehouse_create_loading_slip():
     warehouses = db.get_all_warehouses()
     accounts = db.get_all_accounts()
     trucks = db.get_all_trucks()
+    products = db.get_all_products()
     
     return render_template('warehouse/create_loading_slip.html',
                          warehouses=warehouses,
                          accounts=accounts,
-                         trucks=trucks)
+                         trucks=trucks,
+                         products=products)
 
 @app.route('/warehouse/loading-slips')
 @login_required
@@ -1862,6 +1865,24 @@ def download_eway_bill(filename):
     else:
         flash('File not found', 'error')
         return redirect(url_for('accountant_all_ebills'))
+
+@app.route('/admin/download-database-backup')
+@login_required
+def download_database():
+    """Admin-only endpoint to download database backup"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    db_path = os.path.join(os.path.dirname(__file__), 'fims.db')
+    if os.path.exists(db_path):
+        # Create backup filename with timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        return send_file(db_path, as_attachment=True, download_name=f'fims_backup_{timestamp}.db')
+    else:
+        flash('Database file not found', 'error')
+        return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

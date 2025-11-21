@@ -172,11 +172,12 @@
 {% block extra_js %}
 <script>
 let currentRakeBalance = null;
+let currentUnitPerBag = 50; // Default value, will be updated when rake is selected
 
-// Auto-calculate MT from bags (assuming 50kg per bag)
+// Auto-calculate MT from bags using product's unit_per_bag
 document.getElementById('quantity_in_bags').addEventListener('input', function() {
     const bags = parseFloat(this.value) || 0;
-    const mt = (bags * 50) / 1000;
+    const mt = (bags * currentUnitPerBag) / 1000;
     document.getElementById('quantity_in_mt').value = mt.toFixed(2);
     
     // Validate against rake remaining quantity
@@ -248,6 +249,7 @@ document.getElementById('rake_code').addEventListener('change', function() {
             .then(data => {
                 if (!data.error) {
                     currentRakeBalance = data;
+                    currentUnitPerBag = data.unit_per_bag || 50; // Update unit per bag from product
                     
                     // Update balance display
                     document.getElementById('rake-total').textContent = data.total.toFixed(2);
@@ -284,6 +286,7 @@ document.getElementById('rake_code').addEventListener('change', function() {
         serialField.classList.remove('bg-light', 'border-success');
         balanceAlert.style.display = 'none';
         currentRakeBalance = null;
+        currentUnitPerBag = 50; // Reset to default
     }
 });
 

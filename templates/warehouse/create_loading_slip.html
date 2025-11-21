@@ -123,8 +123,14 @@
                 </div>
                 
                 <div class="col-md-4 mb-3">
-                    <label for="goods_name" class="form-label">Goods Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="e.g., Urea, DAP">
+                    <label for="goods_name" class="form-label">Product <span class="text-danger">*</span></label>
+                    <select class="form-select" id="goods_name" name="goods_name" required>
+                        <option value="">Select Product</option>
+                        {% for product in products %}
+                        <option value="{{ product[1] }}" data-unit-per-bag="{{ product[5] }}">{{ product[1] }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Select product to auto-calculate MT from bags</small>
                 </div>
             </div>
             
@@ -153,10 +159,26 @@
 
 {% block extra_js %}
 <script>
-// Auto-calculate MT from bags (assuming 50kg per bag)
+let currentUnitPerBag = 50; // Default value
+
+// Update unit per bag when product is selected
+document.getElementById('goods_name').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const unitPerBag = parseFloat(selectedOption.getAttribute('data-unit-per-bag')) || 50;
+    currentUnitPerBag = unitPerBag;
+    
+    // Recalculate MT if bags already entered
+    const bags = parseFloat(document.getElementById('quantity_in_bags').value) || 0;
+    if (bags > 0) {
+        const mt = (bags * currentUnitPerBag) / 1000;
+        document.getElementById('quantity_in_mt').value = mt.toFixed(2);
+    }
+});
+
+// Auto-calculate MT from bags using selected product's unit_per_bag
 document.getElementById('quantity_in_bags').addEventListener('input', function() {
     const bags = parseFloat(this.value) || 0;
-    const mt = (bags * 50) / 1000;
+    const mt = (bags * currentUnitPerBag) / 1000;
     document.getElementById('quantity_in_mt').value = mt.toFixed(2);
 });
 

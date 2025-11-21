@@ -386,14 +386,20 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Get total rake quantity
-        cursor.execute('SELECT rr_quantity FROM rakes WHERE rake_code = ?', (rake_code,))
+        # Get total rake quantity and product details
+        cursor.execute('''
+            SELECT r.rr_quantity, p.unit_per_bag 
+            FROM rakes r
+            LEFT JOIN products p ON r.product_name = p.product_name
+            WHERE r.rake_code = ?
+        ''', (rake_code,))
         rake_result = cursor.fetchone()
         if not rake_result:
             conn.close()
             return None
         
         total_quantity = rake_result[0]
+        unit_per_bag = rake_result[1] if rake_result[1] else 50.0  # Default to 50 if not found
         
         # Get total dispatched via loading slips
         cursor.execute('''
@@ -408,7 +414,8 @@ class Database:
         return {
             'total': total_quantity,
             'dispatched': dispatched_quantity,
-            'remaining': total_quantity - dispatched_quantity
+            'remaining': total_quantity - dispatched_quantity,
+            'unit_per_bag': unit_per_bag
         }
     
     def get_next_serial_number_for_rake(self, rake_code):
