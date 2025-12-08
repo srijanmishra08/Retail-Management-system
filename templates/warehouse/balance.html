@@ -1,141 +1,400 @@
 {% extends "base.html" %}
 
-{% block title %}Balance Stock - FIMS{% endblock %}
+{% block title %}Stock Balance - FIMS{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-graph-up"></i> Stock Balance Report</h2>
-    <button class="btn btn-success" onclick="window.print()">
-        <i class="bi bi-printer"></i> Print Report
-    </button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success" onclick="exportToExcel()">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+        <button class="btn btn-primary" onclick="window.print()">
+            <i class="bi bi-printer"></i> Print Report
+        </button>
+    </div>
 </div>
 
-<!-- Summary Cards -->
+<!-- Filters Section -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('warehouse_balance_all') }}" id="filterForm">
+            <div class="row align-items-end">
+                <!-- Warehouse Dropdown -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold"><i class="bi bi-building"></i> Warehouse</label>
+                    <select name="warehouse" class="form-select" onchange="document.getElementById('filterForm').submit()">
+                        <option value="all" {% if selected_warehouse == 'all' %}selected{% endif %}>All Warehouses</option>
+                        {% for wh in warehouses %}
+                        <option value="{{ wh[0] }}" {% if selected_warehouse|string == wh[0]|string %}selected{% endif %}>{{ wh[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Timeline Filter -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold"><i class="bi bi-calendar3"></i> Timeline</label>
+                    <select name="date_filter" class="form-select" id="dateFilterSelect" onchange="toggleCustomDate()">
+                        <option value="all" {% if date_filter == 'all' %}selected{% endif %}>All Time</option>
+                        <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Today</option>
+                        <option value="week" {% if date_filter == 'week' %}selected{% endif %}>Last 7 Days</option>
+                        <option value="month" {% if date_filter == 'month' %}selected{% endif %}>Last 30 Days</option>
+                        <option value="custom" {% if date_filter == 'custom' %}selected{% endif %}>Custom Range</option>
+                    </select>
+                </div>
+                
+                <!-- Custom Date Range -->
+                <div class="col-md-2 custom-date-fields" style="{% if date_filter != 'custom' %}display: none;{% endif %}">
+                    <label class="form-label">From</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                </div>
+                <div class="col-md-2 custom-date-fields" style="{% if date_filter != 'custom' %}display: none;{% endif %}">
+                    <label class="form-label">To</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                </div>
+                
+                <!-- Filter Button -->
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel"></i> Apply Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Current Filter Display -->
+<div class="mb-3">
+    <span class="badge bg-info fs-6">
+        <i class="bi bi-building"></i> {{ selected_warehouse_name }}
+    </span>
+    <span class="badge bg-secondary fs-6 ms-2">
+        <i class="bi bi-calendar"></i>
+        {% if date_filter == 'all' %}All Time
+        {% elif date_filter == 'today' %}Today
+        {% elif date_filter == 'week' %}Last 7 Days
+        {% elif date_filter == 'month' %}Last 30 Days
+        {% elif date_filter == 'custom' %}{{ start_date }} to {{ end_date }}
+        {% endif %}
+    </span>
+</div>
+
+<!-- Summary Cards (Stock IN, Stock OUT, Balance) -->
 <div class="row mb-4">
     <div class="col-md-4">
-        <div class="card bg-success text-white">
-            <div class="card-body text-center">
-                <h3><i class="bi bi-arrow-down-circle"></i></h3>
-                <h2>{{ "%.2f"|format(total_stock_in or 0) }}</h2>
-                <p class="mb-0">Total Stock IN (MT)</p>
+        <div class="card bg-success text-white h-100">
+            <div class="card-body text-center py-4">
+                <h3><i class="bi bi-arrow-down-circle-fill"></i></h3>
+                <h1 class="display-4 fw-bold">{{ "%.2f"|format(total_stock_in or 0) }}</h1>
+                <p class="mb-0 fs-5">Total Stock IN (MT)</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card bg-danger text-white">
-            <div class="card-body text-center">
-                <h3><i class="bi bi-arrow-up-circle"></i></h3>
-                <h2>{{ "%.2f"|format(total_stock_out or 0) }}</h2>
-                <p class="mb-0">Total Stock OUT (MT)</p>
+        <div class="card bg-danger text-white h-100">
+            <div class="card-body text-center py-4">
+                <h3><i class="bi bi-arrow-up-circle-fill"></i></h3>
+                <h1 class="display-4 fw-bold">{{ "%.2f"|format(total_stock_out or 0) }}</h1>
+                <p class="mb-0 fs-5">Total Stock OUT (MT)</p>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body text-center">
-                <h3><i class="bi bi-box-seam"></i></h3>
-                <h2>{{ "%.2f"|format((total_stock_in or 0) - (total_stock_out or 0)) }}</h2>
-                <p class="mb-0">Balance Stock (MT)</p>
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body text-center py-4">
+                <h3><i class="bi bi-box-seam-fill"></i></h3>
+                <h1 class="display-4 fw-bold">{{ "%.2f"|format(total_balance or 0) }}</h1>
+                <p class="mb-0 fs-5">Balance Stock (MT)</p>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Stock Balance by Warehouse -->
-<div class="card mb-4">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-building"></i> Stock Balance by Warehouse</h5>
+<!-- Stock Balance by Warehouse Table with Account Details -->
+<div class="row">
+    <div class="col-md-7">
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-building"></i> Stock Balance by Warehouse</h5>
+                <span class="badge bg-light text-dark">{{ warehouse_balances|length }} Warehouse(s)</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0" id="warehouseTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Warehouse Name</th>
+                                <th>Location</th>
+                                <th class="text-end">Stock IN</th>
+                                <th class="text-end">Stock OUT</th>
+                                <th class="text-end">Balance</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if warehouse_balances %}
+                                {% for balance in warehouse_balances %}
+                                <tr class="warehouse-row" data-warehouse-id="{{ balance[0] }}" style="cursor: pointer;">
+                                    <td>{{ loop.index }}</td>
+                                    <td><strong>{{ balance[1] }}</strong></td>
+                                    <td>{{ balance[2] }}</td>
+                                    <td class="text-end">
+                                        <span class="text-success fw-bold">{{ "%.2f"|format(balance[3]) }}</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="text-danger fw-bold">{{ "%.2f"|format(balance[4]) }}</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <strong>{{ "%.2f"|format(balance[3] - balance[4]) }}</strong>
+                                    </td>
+                                    <td class="text-center">
+                                        {% set bal = balance[3] - balance[4] %}
+                                        {% if bal > 100 %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> High</span>
+                                        {% elif bal > 50 %}
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Medium</span>
+                                        {% elif bal > 0 %}
+                                        <span class="badge bg-info"><i class="bi bi-info-circle"></i> Low</span>
+                                        {% else %}
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Empty</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                
+                                <!-- Total Row -->
+                                <tr class="table-primary fw-bold fs-5">
+                                    <td colspan="3">TOTAL</td>
+                                    <td class="text-end text-success">{{ "%.2f"|format(total_stock_in or 0) }}</td>
+                                    <td class="text-end text-danger">{{ "%.2f"|format(total_stock_out or 0) }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(total_balance or 0) }}</td>
+                                    <td>-</td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-1"></i>
+                                        <p>No stock data available for the selected filters</p>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover table-striped">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Warehouse Name</th>
-                        <th>Location</th>
-                        <th>Stock IN (MT)</th>
-                        <th>Stock OUT (MT)</th>
-                        <th>Balance (MT)</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if warehouse_balances %}
-                        {% for balance in warehouse_balances %}
-                        <tr>
-                            <td><strong>{{ balance[0] }}</strong></td>
-                            <td>{{ balance[1] }}</td>
-                            <td class="text-end text-success">{{ "%.2f"|format(balance[2]) }}</td>
-                            <td class="text-end text-danger">{{ "%.2f"|format(balance[3]) }}</td>
-                            <td class="text-end"><strong>{{ "%.2f"|format(balance[2] - balance[3]) }}</strong></td>
-                            <td>
-                                {% set bal = balance[2] - balance[3] %}
-                                {% if bal > 100 %}
-                                <span class="badge bg-success">High Stock</span>
-                                {% elif bal > 50 %}
-                                <span class="badge bg-warning">Medium Stock</span>
-                                {% elif bal > 0 %}
-                                <span class="badge bg-info">Low Stock</span>
-                                {% else %}
-                                <span class="badge bg-danger">Empty</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                        
-                        <!-- Total Row -->
-                        <tr class="table-primary fw-bold">
-                            <td colspan="2">TOTAL</td>
-                            <td class="text-end">{{ "%.2f"|format(total_stock_in or 0) }}</td>
-                            <td class="text-end">{{ "%.2f"|format(total_stock_out or 0) }}</td>
-                            <td class="text-end">{{ "%.2f"|format((total_stock_in or 0) - (total_stock_out or 0)) }}</td>
-                            <td>-</td>
-                        </tr>
-                    {% else %}
-                        <tr>
-                            <td colspan="6" class="text-center text-muted">No stock data available</td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
+    
+    <!-- Account Stock Panel (Shows when warehouse is clicked) -->
+    <div class="col-md-5">
+        <div class="card mb-4" id="accountStockPanel">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-people"></i> <span id="accountPanelTitle">Account Stock Details</span></h5>
+            </div>
+            <div class="card-body" id="accountStockContent">
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-hand-index-thumb fs-1"></i>
+                    <p class="mt-2">Click on a warehouse row to see which accounts' stock is stored there</p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Stock Balance by Account -->
+<!-- Recent Transactions -->
+{% if recent_transactions %}
 <div class="card">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="bi bi-people"></i> Stock Balance by Account</h5>
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Transactions</h5>
+        <span class="badge bg-light text-dark">Last 20</span>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th>Account Name</th>
-                        <th>Stock IN (MT)</th>
-                        <th>Stock OUT (MT)</th>
-                        <th>Balance (MT)</th>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Warehouse</th>
+                        <th>Builty/Reference</th>
+                        <th class="text-end">Quantity (MT)</th>
+                        <th>Notes</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if account_balances %}
-                        {% for balance in account_balances %}
-                        <tr>
-                            <td><strong>{{ balance[0] }}</strong></td>
-                            <td class="text-end text-success">{{ "%.2f"|format(balance[1]) }}</td>
-                            <td class="text-end text-danger">{{ "%.2f"|format(balance[2]) }}</td>
-                            <td class="text-end"><strong>{{ "%.2f"|format(balance[1] - balance[2]) }}</strong></td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="4" class="text-center text-muted">No account data available</td>
-                        </tr>
-                    {% endif %}
+                    {% for txn in recent_transactions %}
+                    <tr>
+                        <td>{{ txn[0] }}</td>
+                        <td>
+                            {% if txn[1] == 'IN' %}
+                            <span class="badge bg-success"><i class="bi bi-arrow-down"></i> IN</span>
+                            {% else %}
+                            <span class="badge bg-danger"><i class="bi bi-arrow-up"></i> OUT</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ txn[3] }}</td>
+                        <td>{{ txn[4] }}</td>
+                        <td class="text-end fw-bold">{{ "%.2f"|format(txn[2]) }}</td>
+                        <td>{{ txn[5] or '-' }}</td>
+                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+{% endif %}
+
+<script>
+function toggleCustomDate() {
+    const select = document.getElementById('dateFilterSelect');
+    const customFields = document.querySelectorAll('.custom-date-fields');
+    
+    if (select.value === 'custom') {
+        customFields.forEach(field => field.style.display = 'block');
+    } else {
+        customFields.forEach(field => field.style.display = 'none');
+        // Auto-submit for non-custom selections
+        document.getElementById('filterForm').submit();
+    }
+}
+
+// Load account stock when warehouse row is clicked
+document.querySelectorAll('.warehouse-row').forEach(row => {
+    row.addEventListener('click', function() {
+        const warehouseId = this.dataset.warehouseId;
+        const warehouseName = this.querySelector('td:nth-child(2) strong').textContent;
+        loadAccountStock(warehouseId, warehouseName);
+        
+        // Highlight selected row
+        document.querySelectorAll('.warehouse-row').forEach(r => r.classList.remove('table-active'));
+        this.classList.add('table-active');
+    });
+});
+
+function loadAccountStock(warehouseId, warehouseName) {
+    document.getElementById('accountPanelTitle').textContent = `Accounts in ${warehouseName}`;
+    document.getElementById('accountStockContent').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading account details...</p>
+        </div>
+    `;
+    
+    fetch(`/api/warehouse-account-stock/${warehouseId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.length === 0) {
+                document.getElementById('accountStockContent').innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2">No account stock data for this warehouse</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Account Name</th>
+                                <th>Type</th>
+                                <th class="text-end">Stock (MT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            let totalStock = 0;
+            data.forEach(account => {
+                totalStock += account.total_stock;
+                html += `
+                    <tr>
+                        <td><strong>${account.account_name}</strong></td>
+                        <td><span class="badge bg-secondary">${account.account_type}</span></td>
+                        <td class="text-end fw-bold text-success">${account.total_stock.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                        <tfoot class="table-primary">
+                            <tr class="fw-bold">
+                                <td colspan="2">Total</td>
+                                <td class="text-end">${totalStock.toFixed(2)} MT</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            `;
+            
+            document.getElementById('accountStockContent').innerHTML = html;
+        })
+        .catch(error => {
+            document.getElementById('accountStockContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> Error loading account data
+                </div>
+            `;
+        });
+}
+
+function exportToExcel() {
+    // Get table data
+    const table = document.getElementById('warehouseTable');
+    const rows = table.querySelectorAll('tr');
+    
+    let csv = [];
+    
+    // Add header info
+    csv.push(['Stock Balance Report']);
+    csv.push(['Warehouse: {{ selected_warehouse_name }}']);
+    csv.push(['Generated: ' + new Date().toLocaleString()]);
+    csv.push(['']);
+    
+    // Add table rows
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('th, td');
+        const rowData = [];
+        cols.forEach(col => {
+            let text = col.innerText.replace(/"/g, '""');
+            rowData.push('"' + text + '"');
+        });
+        csv.push(rowData.join(','));
+    });
+    
+    // Download
+    const csvContent = csv.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'stock_balance_report_' + new Date().toISOString().split('T')[0] + '.csv';
+    link.click();
+}
+</script>
+
+<style>
+@media print {
+    .card-header, .btn, form, .badge {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    form, #accountStockPanel {
+        display: none !important;
+    }
+}
+.warehouse-row:hover {
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+.warehouse-row.table-active {
+    background-color: rgba(0, 123, 255, 0.2) !important;
+}
+</style>
 {% endblock %}

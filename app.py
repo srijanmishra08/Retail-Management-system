@@ -94,11 +94,17 @@ def admin_dashboard():
     stats = db.get_admin_dashboard_stats()
     all_rakes = db.get_all_rakes()
     
+    # Get total shortage from closed rakes
+    total_shortage = db.get_total_shortage()
+    
     # Enrich recent rakes with dispatched and remaining quantities
     recent_rakes = []
     for rake in all_rakes[:5]:
         rake_code = rake[1]
         balance = db.get_rake_balance(rake_code)
+        # Check if rake is closed (index 10 is is_closed after migration)
+        is_closed = rake[10] if len(rake) > 10 else 0
+        shortage = rake[12] if len(rake) > 12 else 0  # Index 12 is shortage after migration
         recent_rakes.append({
             'rake_code': rake[1],
             'company_name': rake[2],
@@ -109,10 +115,12 @@ def admin_dashboard():
             'product_code': rake[7],
             'rake_point_name': rake[8],
             'dispatched': balance['dispatched'] if balance else 0,
-            'remaining': balance['remaining'] if balance else rake[5]
+            'remaining': balance['remaining'] if balance else rake[5],
+            'is_closed': is_closed,
+            'shortage': shortage
         })
     
-    return render_template('admin/dashboard.html', stats=stats, recent_rakes=recent_rakes)
+    return render_template('admin/dashboard.html', stats=stats, recent_rakes=recent_rakes, total_shortage=total_shortage)
 
 @app.route('/admin/add-rake', methods=['GET', 'POST'])
 @login_required
@@ -144,6 +152,22 @@ def admin_add_rake():
     companies = db.get_all_companies()
     return render_template('admin/add_rake.html', products=products, companies=companies)
 
+@app.route('/admin/close-rake/<rake_code>', methods=['POST'])
+@login_required
+def admin_close_rake(rake_code):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    success, result = db.close_rake(rake_code)
+    
+    if success:
+        flash(f'Rake {rake_code} closed successfully! Shortage: {result:.2f} MT', 'success')
+    else:
+        flash(f'Error closing rake: {result}', 'error')
+    
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/summary')
 @login_required
 def admin_summary():
@@ -151,8 +175,78 @@ def admin_summary():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    summary = db.get_rake_summary()
-    return render_template('admin/summary.html', summary=summary)
+    view_type = request.args.get('view', 'rakes')  # rakes, total, per_account
+    
+    # Get total shortage from closed rakes
+    total_shortage = db.get_total_shortage()
+    
+    # Get all rakes with enriched data (like dashboard)
+    all_rakes = db.get_all_rakes()
+    rakes_with_balance = []
+    for rake in all_rakes:
+        rake_code = rake[1]
+        balance = db.get_rake_balance(rake_code)
+        # Check if rake is closed (index 10 is is_closed after migration)
+        is_closed = rake[10] if len(rake) > 10 else 0
+        shortage = rake[12] if len(rake) > 12 else 0  # Index 12 is shortage after migration
+        rakes_with_balance.append({
+            'rake_code': rake[1],
+            'company_name': rake[2],
+            'company_code': rake[3],
+            'date': rake[4],
+            'rr_quantity': rake[5],
+            'product_name': rake[6],
+            'product_code': rake[7],
+            'rake_point_name': rake[8],
+            'dispatched': balance['dispatched'] if balance else 0,
+            'remaining': balance['remaining'] if balance else rake[5],
+            'is_closed': is_closed,
+            'shortage': shortage
+        })
+    
+    # Get total summary (all accounts with dispatch quantities)
+    total_account_summary = db.execute_custom_query('''
+        SELECT a.account_name, a.account_type, 
+               SUM(b.quantity_mt) as total_quantity,
+               COUNT(DISTINCT b.rake_code) as rake_count,
+               COUNT(b.builty_id) as builty_count
+        FROM builty b
+        JOIN accounts a ON b.account_id = a.account_id
+        GROUP BY a.account_id, a.account_name, a.account_type
+        ORDER BY total_quantity DESC
+    ''')
+    
+    # Get CGMF dispatch summary
+    cgmf_summary = db.execute_custom_query('''
+        SELECT c.society_name, c.district, c.destination,
+               SUM(b.quantity_mt) as total_quantity,
+               COUNT(DISTINCT b.rake_code) as rake_count,
+               COUNT(b.builty_id) as builty_count
+        FROM builty b
+        JOIN cgmf c ON b.cgmf_id = c.cgmf_id
+        GROUP BY c.cgmf_id, c.society_name, c.district
+        ORDER BY total_quantity DESC
+    ''')
+    
+    # Get warehouse dispatch summary
+    warehouse_summary = db.execute_custom_query('''
+        SELECT w.warehouse_name, w.location,
+               SUM(b.quantity_mt) as total_quantity,
+               COUNT(DISTINCT b.rake_code) as rake_count,
+               COUNT(b.builty_id) as builty_count
+        FROM builty b
+        JOIN warehouses w ON b.warehouse_id = w.warehouse_id
+        GROUP BY w.warehouse_id, w.warehouse_name
+        ORDER BY total_quantity DESC
+    ''')
+    
+    return render_template('admin/summary.html', 
+                         rakes=rakes_with_balance,
+                         view_type=view_type,
+                         total_account_summary=total_account_summary,
+                         cgmf_summary=cgmf_summary,
+                         warehouse_summary=warehouse_summary,
+                         total_shortage=total_shortage)
 
 @app.route('/admin/rake-details/<rake_code>')
 @login_required
@@ -174,58 +268,58 @@ def admin_rake_details(rake_code):
         flash('Rake not found', 'error')
         return redirect(url_for('admin_summary'))
     
-    # Get stock dispatched to accounts DIRECTLY FROM RAKE (not from warehouse)
+    # Get stock dispatched to accounts FROM LOADING SLIPS (the actual dispatch record)
     account_dispatches = db.execute_custom_query('''
         SELECT a.account_name, a.account_type, 
-               SUM(b.quantity_mt) as total_quantity,
-               COUNT(b.builty_id) as builty_count,
-               GROUP_CONCAT(b.builty_number || ' (' || b.quantity_mt || ' MT)', ', ') as builty_details
-        FROM builty b
-        JOIN accounts a ON b.account_id = a.account_id
-        WHERE b.rake_code = ? AND (b.created_by_role = 'RakePoint' OR b.created_by_role = 'Admin')
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(ls.slip_id) as slip_count,
+               GROUP_CONCAT('Slip#' || ls.slip_number || ' (' || ls.quantity_mt || ' MT)', ', ') as slip_details
+        FROM loading_slips ls
+        JOIN accounts a ON ls.account_id = a.account_id
+        WHERE ls.rake_code = ?
         GROUP BY a.account_id, a.account_name, a.account_type
         ORDER BY total_quantity DESC
     ''', (rake_code,))
     
-    # Get stock sent to warehouses DIRECTLY FROM RAKE (not from other warehouses)
+    # Get stock sent to warehouses FROM LOADING SLIPS
     warehouse_dispatches = db.execute_custom_query('''
         SELECT w.warehouse_name, w.location,
-               SUM(b.quantity_mt) as total_quantity,
-               COUNT(b.builty_id) as builty_count,
-               GROUP_CONCAT(b.builty_number || ' (' || b.quantity_mt || ' MT)', ', ') as builty_details
-        FROM builty b
-        JOIN warehouses w ON b.warehouse_id = w.warehouse_id
-        WHERE b.rake_code = ? AND (b.created_by_role = 'RakePoint' OR b.created_by_role = 'Admin')
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(ls.slip_id) as slip_count,
+               GROUP_CONCAT('Slip#' || ls.slip_number || ' (' || ls.quantity_mt || ' MT)', ', ') as slip_details
+        FROM loading_slips ls
+        JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        WHERE ls.rake_code = ?
         GROUP BY w.warehouse_id, w.warehouse_name, w.location
         ORDER BY total_quantity DESC
     ''', (rake_code,))
     
-    # Get warehouse stock IN for this rake
-    warehouse_stock_in = db.execute_custom_query('''
-        SELECT w.warehouse_name, ws.date,
-               SUM(ws.quantity_mt) as quantity,
-               COUNT(ws.stock_id) as entry_count
-        FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
-        JOIN builty b ON ws.builty_id = b.builty_id
-        WHERE b.rake_code = ? AND ws.transaction_type = 'IN'
-        GROUP BY w.warehouse_id, w.warehouse_name, ws.date
-        ORDER BY ws.date DESC
+    # Get CGMF dispatches FROM LOADING SLIPS
+    cgmf_dispatches = db.execute_custom_query('''
+        SELECT c.society_name, c.district, c.destination,
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(ls.slip_id) as slip_count,
+               GROUP_CONCAT('Slip#' || ls.slip_number || ' (' || ls.quantity_mt || ' MT)', ', ') as slip_details
+        FROM loading_slips ls
+        JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
+        WHERE ls.rake_code = ?
+        GROUP BY c.cgmf_id, c.society_name, c.district
+        ORDER BY total_quantity DESC
     ''', (rake_code,))
     
     # Calculate totals
     total_to_accounts = sum(row[2] for row in account_dispatches) if account_dispatches else 0
     total_to_warehouses = sum(row[2] for row in warehouse_dispatches) if warehouse_dispatches else 0
-    total_warehouse_in = sum(row[2] for row in warehouse_stock_in) if warehouse_stock_in else 0
+    total_to_cgmf = sum(row[3] for row in cgmf_dispatches) if cgmf_dispatches else 0
     
     return render_template('admin/rake_details.html',
                          rake_info=rake_info[0],
                          account_dispatches=account_dispatches,
                          warehouse_dispatches=warehouse_dispatches,
-                         warehouse_stock_in=warehouse_stock_in,
+                         cgmf_dispatches=cgmf_dispatches,
                          total_to_accounts=total_to_accounts,
                          total_to_warehouses=total_to_warehouses,
-                         total_warehouse_in=total_warehouse_in)
+                         total_to_cgmf=total_to_cgmf)
 
 @app.route('/admin/manage-accounts', methods=['GET', 'POST'])
 @login_required
@@ -250,7 +344,8 @@ def admin_manage_accounts():
     accounts = db.get_all_accounts()
     companies = db.get_all_companies()
     employees = db.get_all_employees()
-    return render_template('admin/manage_accounts.html', accounts=accounts, companies=companies, employees=employees)
+    cgmf_list = db.get_all_cgmf()
+    return render_template('admin/manage_accounts.html', accounts=accounts, companies=companies, employees=employees, cgmf_list=cgmf_list)
 
 @app.route('/admin/add-company', methods=['POST'])
 @login_required
@@ -292,6 +387,27 @@ def admin_add_employee():
         flash(f'Employee {employee_name} added successfully!', 'success')
     else:
         flash('Error adding employee.', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
+
+@app.route('/admin/add-cgmf', methods=['POST'])
+@login_required
+def admin_add_cgmf():
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    district = request.form.get('district')
+    destination = request.form.get('destination')
+    society_name = request.form.get('society_name')
+    contact = request.form.get('contact', '')
+    
+    cgmf_id = db.add_cgmf(district, destination, society_name, contact)
+    
+    if cgmf_id:
+        flash(f'CGMF Society "{society_name}" added successfully!', 'success')
+    else:
+        flash('Error adding CGMF society.', 'error')
     
     return redirect(url_for('admin_manage_accounts'))
 
@@ -386,14 +502,155 @@ def admin_warehouse_transactions():
 @app.route('/admin/warehouse-summary')
 @login_required
 def admin_warehouse_summary():
-    """Admin view of warehouse stock summary with company, product filtering"""
+    """Admin view of warehouse stock summary - same as warehouse balance page"""
     if current_user.role != 'Admin':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    summary = db.get_warehouse_stock_summary()
+    # Get filter parameters
+    selected_warehouse = request.args.get('warehouse', 'all')
+    date_filter = request.args.get('date_filter', 'all')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
     
-    return render_template('admin/warehouse_summary.html', summary=summary)
+    # Get all warehouses for dropdown
+    warehouses = db.get_all_warehouses()
+    
+    # Build date condition
+    date_condition = ""
+    date_params = []
+    
+    from datetime import datetime, timedelta
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    if date_filter == 'today':
+        date_condition = " AND DATE(ws.date) = ?"
+        date_params = [today]
+    elif date_filter == 'week':
+        week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        date_condition = " AND DATE(ws.date) >= ?"
+        date_params = [week_ago]
+    elif date_filter == 'month':
+        month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        date_condition = " AND DATE(ws.date) >= ?"
+        date_params = [month_ago]
+    elif date_filter == 'custom' and start_date and end_date:
+        date_condition = " AND DATE(ws.date) >= ? AND DATE(ws.date) <= ?"
+        date_params = [start_date, end_date]
+    
+    # Get overall stock statistics
+    warehouse_balances = []
+    
+    # Build warehouse condition
+    if selected_warehouse != 'all':
+        try:
+            selected_warehouse_id = int(selected_warehouse)
+            warehouse_filter = [w for w in warehouses if w[0] == selected_warehouse_id]
+            warehouses_to_process = warehouse_filter
+        except:
+            warehouses_to_process = warehouses
+    else:
+        warehouses_to_process = warehouses
+    
+    for warehouse in warehouses_to_process:
+        # Get filtered balance
+        if date_condition:
+            result = db.execute_custom_query(f'''
+                SELECT 
+                    COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) as stock_in,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) as stock_out
+                FROM warehouse_stock ws
+                WHERE warehouse_id = ? {date_condition}
+            ''', [warehouse[0]] + date_params)
+            if result:
+                stock_in = result[0][0] or 0
+                stock_out = result[0][1] or 0
+            else:
+                stock_in, stock_out = 0, 0
+        else:
+            balance = db.get_warehouse_balance_stock(warehouse[0])
+            stock_in = balance.get('stock_in', 0)
+            stock_out = balance.get('stock_out', 0)
+        
+        warehouse_balances.append([
+            warehouse[0],  # warehouse_id
+            warehouse[1],  # warehouse_name
+            warehouse[2],  # location
+            stock_in,
+            stock_out
+        ])
+    
+    # Calculate totals
+    total_stock_in = sum(w[3] for w in warehouse_balances)
+    total_stock_out = sum(w[4] for w in warehouse_balances)
+    total_balance = total_stock_in - total_stock_out
+    
+    # Get recent transactions for the filtered scope
+    if selected_warehouse != 'all':
+        wh_cond = "ws.warehouse_id = ?"
+        wh_params = [int(selected_warehouse)]
+    else:
+        wh_cond = "1=1"
+        wh_params = []
+    
+    recent_transactions = db.execute_custom_query(f'''
+        SELECT ws.date, ws.transaction_type, ws.quantity_mt, w.warehouse_name,
+               COALESCE(b.builty_number, 'Direct Entry') as builty_number,
+               ws.notes
+        FROM warehouse_stock ws
+        JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+        LEFT JOIN builty b ON ws.builty_id = b.builty_id
+        WHERE {wh_cond} {date_condition}
+        ORDER BY ws.date DESC, ws.created_at DESC
+        LIMIT 20
+    ''', wh_params + date_params)
+    
+    # Get selected warehouse name for display
+    selected_warehouse_name = "All Warehouses"
+    if selected_warehouse != 'all':
+        for wh in warehouses:
+            if wh[0] == int(selected_warehouse):
+                selected_warehouse_name = wh[1]
+                break
+    
+    return render_template('admin/warehouse_summary.html',
+                         warehouse_balances=warehouse_balances,
+                         total_stock_in=total_stock_in,
+                         total_stock_out=total_stock_out,
+                         total_balance=total_balance,
+                         warehouses=warehouses,
+                         selected_warehouse=selected_warehouse,
+                         selected_warehouse_name=selected_warehouse_name,
+                         date_filter=date_filter,
+                         start_date=start_date,
+                         end_date=end_date,
+                         recent_transactions=recent_transactions)
+
+@app.route('/api/warehouse-account-stock/<int:warehouse_id>')
+@login_required
+def api_warehouse_account_stock(warehouse_id):
+    """API to get account-wise stock breakdown for a warehouse"""
+    # Get stock IN grouped by account
+    account_stock = db.execute_custom_query('''
+        SELECT a.account_id, a.account_name, a.account_type,
+               SUM(ws.quantity_mt) as total_stock
+        FROM warehouse_stock ws
+        JOIN accounts a ON ws.account_id = a.account_id
+        WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
+        GROUP BY a.account_id, a.account_name, a.account_type
+        ORDER BY total_stock DESC
+    ''', (warehouse_id,))
+    
+    result = []
+    for row in account_stock:
+        result.append({
+            'account_id': row[0],
+            'account_name': row[1],
+            'account_type': row[2],
+            'total_stock': row[3]
+        })
+    
+    return jsonify(result)
 
 @app.route('/admin/edit-warehouse-stock', methods=['GET', 'POST'])
 @login_required
@@ -495,7 +752,7 @@ def admin_print_builty(builty_id):
         return redirect(url_for('admin_all_builties'))
     
     # Convert to dict for easier template access
-    # builty columns: 0-21 are from builty table, 22+ are joined
+    # Explicit column order from get_builty_by_id query
     builty_dict = {
         'builty_id': builty[0],
         'builty_number': builty[1],
@@ -504,28 +761,29 @@ def admin_print_builty(builty_id):
         'rake_point_name': builty[4],
         'account_id': builty[5],
         'warehouse_id': builty[6],
-        'truck_id': builty[7],
-        'loading_point': builty[8],
-        'unloading_point': builty[9],
-        'goods_name': builty[10],
-        'number_of_bags': builty[11],
-        'quantity_mt': builty[12],
-        'kg_per_bag': builty[13],
-        'rate_per_mt': builty[14],
-        'total_freight': builty[15],
-        'advance': builty[16],
-        'to_pay': builty[17],
-        'lr_number': builty[18],
-        'lr_index': builty[19],
-        'created_by_role': builty[20],
-        'created_at': builty[21],
-        'account_name': builty[22],
-        'warehouse_name': builty[23],
-        'truck_number': builty[24],
-        'driver_name': builty[25],
-        'driver_mobile': builty[26],
-        'owner_name': builty[27],
-        'owner_mobile': builty[28]
+        'cgmf_id': builty[7],
+        'truck_id': builty[8],
+        'loading_point': builty[9],
+        'unloading_point': builty[10],
+        'goods_name': builty[11],
+        'number_of_bags': builty[12],
+        'quantity_mt': builty[13],
+        'kg_per_bag': builty[14],
+        'rate_per_mt': builty[15],
+        'total_freight': builty[16],
+        'advance': builty[17],
+        'to_pay': builty[18],
+        'lr_number': builty[19],
+        'lr_index': builty[20],
+        'created_by_role': builty[21],
+        'created_at': builty[22],
+        'account_name': builty[23],
+        'warehouse_name': builty[24],
+        'truck_number': builty[25],
+        'driver_name': builty[26],
+        'driver_mobile': builty[27],
+        'owner_name': builty[28],
+        'owner_mobile': builty[29]
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -611,23 +869,29 @@ def rakepoint_create_builty():
         freight_details = request.form.get('freight_details')  # Field 14
         lr_number = request.form.get('lr_number')  # Field 15
         
-        # Determine if account_warehouse is account or warehouse
+        # Determine if account_warehouse is account, warehouse, or CGMF
         account_id = None
         warehouse_id = None
-        # Simple check - you may want to improve this
-        accounts = db.get_all_accounts()
-        warehouses = db.get_all_warehouses()
+        cgmf_id = None
         
-        for account in accounts:
-            if account[1] == account_warehouse:
-                account_id = account[0]
-                break
-        
-        if account_id is None:
-            for warehouse in warehouses:
-                if warehouse[1] == account_warehouse:
-                    warehouse_id = warehouse[0]
+        # Check if it's a CGMF account
+        if account_warehouse and account_warehouse.startswith('CGMF:'):
+            cgmf_id = int(account_warehouse.split(':')[1])
+        else:
+            # Simple check for account or warehouse
+            accounts = db.get_all_accounts()
+            warehouses = db.get_all_warehouses()
+            
+            for account in accounts:
+                if account[1] == account_warehouse:
+                    account_id = account[0]
                     break
+            
+            if account_id is None:
+                for warehouse in warehouses:
+                    if warehouse[1] == account_warehouse:
+                        warehouse_id = warehouse[0]
+                        break
         
         # Check if truck exists, if not create it
         truck = db.get_truck_by_number(truck_number)
@@ -653,7 +917,7 @@ def rakepoint_create_builty():
         builty_id = db.add_builty(builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
                                   truck_id, loading_point, unloading_point, goods_name, number_of_bags,
                                   quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, freight_advance, to_pay, lr_number,
-                                  0, 'RakePoint')
+                                  0, 'RakePoint', cgmf_id)
         
         if builty_id:
             # Link the loading slip to this builty
@@ -669,12 +933,14 @@ def rakepoint_create_builty():
     warehouses = db.get_all_warehouses()
     rakes = db.get_all_rakes()  # NEW: Get all rakes for selection
     loading_slips = db.get_all_loading_slips()  # NEW: Get all loading slips for auto-fill
+    cgmf_list = db.get_all_cgmf()
     
     return render_template('rakepoint/create_builty.html', 
                          accounts=accounts, 
                          warehouses=warehouses,
                          rakes=rakes,
-                         loading_slips=loading_slips)
+                         loading_slips=loading_slips,
+                         cgmf_list=cgmf_list)
 
 @app.route('/rakepoint/create-loading-slip', methods=['GET', 'POST'])
 @login_required
@@ -699,6 +965,7 @@ def rakepoint_create_loading_slip():
         mobile_number_1 = request.form.get('mobile_number_1')
         mobile_number_2 = request.form.get('mobile_number_2', '')
         truck_details = request.form.get('truck_details', '')
+        sub_head = request.form.get('sub_head', '')  # Sub head for Payal accounts
         
         # CRITICAL: Check rake quantity balance before creating loading slip
         rake_balance = db.get_rake_balance(rake_code)
@@ -710,24 +977,30 @@ def rakepoint_create_loading_slip():
             flash(f'Error: Insufficient rake quantity! Remaining: {rake_balance["remaining"]:.2f} MT, Requested: {quantity_in_mt:.2f} MT', 'error')
             return redirect(url_for('rakepoint_create_loading_slip'))
         
-        # Determine if dispatch is to account or warehouse
+        # Determine if dispatch is to account, warehouse, or CGMF
         accounts = db.get_all_accounts()
         warehouses = db.get_all_warehouses()
+        cgmf_list = db.get_all_cgmf()
         account_id = None
         warehouse_id = None
+        cgmf_id = None
         
-        # Check if it's an account
-        for acc in accounts:
-            if acc[1] == account:
-                account_id = acc[0]
-                break
-        
-        # If not found in accounts, check warehouses
-        if account_id is None:
-            for wh in warehouses:
-                if wh[1] == account:
-                    warehouse_id = wh[0]
+        # Check if it's a CGMF (format: CGMF:<id>)
+        if account and account.startswith('CGMF:'):
+            cgmf_id = int(account.split(':')[1])
+        else:
+            # Check if it's an account
+            for acc in accounts:
+                if acc[1] == account:
+                    account_id = acc[0]
                     break
+            
+            # If not found in accounts, check warehouses
+            if account_id is None:
+                for wh in warehouses:
+                    if wh[1] == account:
+                        warehouse_id = wh[0]
+                        break
         
         # Check if truck exists, if not create it with driver/owner details
         truck = db.get_truck_by_number(truck_number)
@@ -739,7 +1012,7 @@ def rakepoint_create_loading_slip():
         slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
                                       account_id, warehouse_id, quantity_in_bags, quantity_in_mt, truck_id, 
                                       wagon_number, goods_name, truck_driver, truck_owner,
-                                      mobile_number_1, mobile_number_2, truck_details, None)
+                                      mobile_number_1, mobile_number_2, truck_details, None, cgmf_id, sub_head)
         
         if slip_id:
             flash(f'Loading slip #{serial_number} created successfully!', 'success')
@@ -749,6 +1022,7 @@ def rakepoint_create_loading_slip():
                                      rakes=db.get_all_rakes(),
                                      accounts=db.get_all_accounts(),
                                      warehouses=db.get_all_warehouses(),
+                                     cgmf_list=db.get_all_cgmf(),
                                      trucks=db.get_all_trucks(),
                                      builties=db.get_all_builties(),
                                      print_slip_id=slip_id)
@@ -759,6 +1033,7 @@ def rakepoint_create_loading_slip():
     rakes = db.get_all_rakes()
     accounts = db.get_all_accounts()
     warehouses = db.get_all_warehouses()
+    cgmf_list = db.get_all_cgmf()
     trucks = db.get_all_trucks()
     builties = db.get_all_builties()
     
@@ -766,6 +1041,7 @@ def rakepoint_create_loading_slip():
                          rakes=rakes,
                          accounts=accounts,
                          warehouses=warehouses,
+                         cgmf_list=cgmf_list,
                          trucks=trucks,
                          builties=builties)
 
@@ -877,6 +1153,62 @@ def get_next_loading_slip_serial_api(warehouse_name):
     
     return jsonify({'serial_number': next_serial})
 
+@app.route('/api/account-dispatches/<account_name>')
+@login_required
+def get_account_dispatches(account_name):
+    """API endpoint to get all dispatches for a specific account"""
+    if current_user.role != 'Admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    dispatches = db.execute_custom_query('''
+        SELECT b.rake_code, b.builty_number, b.date, b.quantity_mt, b.goods_name
+        FROM builty b
+        JOIN accounts a ON b.account_id = a.account_id
+        WHERE a.account_name = ?
+        ORDER BY b.date DESC, b.builty_id DESC
+    ''', (account_name,))
+    
+    result = []
+    if dispatches:
+        for d in dispatches:
+            result.append({
+                'rake_code': d[0] or 'N/A',
+                'builty_number': d[1],
+                'date': d[2],
+                'quantity_mt': d[3],
+                'goods_name': d[4] or 'N/A'
+            })
+    
+    return jsonify(result)
+
+@app.route('/api/cgmf-dispatches/<society_name>')
+@login_required
+def get_cgmf_dispatches(society_name):
+    """API endpoint to get all dispatches for a specific CGMF society"""
+    if current_user.role != 'Admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    dispatches = db.execute_custom_query('''
+        SELECT b.rake_code, b.builty_number, b.date, b.quantity_mt, b.goods_name
+        FROM builty b
+        JOIN cgmf c ON b.cgmf_id = c.cgmf_id
+        WHERE c.society_name = ?
+        ORDER BY b.date DESC, b.builty_id DESC
+    ''', (society_name,))
+    
+    result = []
+    if dispatches:
+        for d in dispatches:
+            result.append({
+                'rake_code': d[0] or 'N/A',
+                'builty_number': d[1],
+                'date': d[2],
+                'quantity_mt': d[3],
+                'goods_name': d[4] or 'N/A'
+            })
+    
+    return jsonify(result)
+
 @app.route('/rakepoint/loading-slips')
 @login_required
 def rakepoint_loading_slips():
@@ -933,7 +1265,7 @@ def rakepoint_print_builty(builty_id):
         return redirect(url_for('rakepoint_dashboard'))
     
     # Convert to dict for easier template access
-    # builty columns: 0-21 are from builty table, 22+ are joined
+    # Explicit column order from get_builty_by_id query
     builty_dict = {
         'builty_id': builty[0],
         'builty_number': builty[1],
@@ -942,28 +1274,29 @@ def rakepoint_print_builty(builty_id):
         'rake_point_name': builty[4],
         'account_id': builty[5],
         'warehouse_id': builty[6],
-        'truck_id': builty[7],
-        'loading_point': builty[8],
-        'unloading_point': builty[9],
-        'goods_name': builty[10],
-        'number_of_bags': builty[11],
-        'quantity_mt': builty[12],
-        'kg_per_bag': builty[13],
-        'rate_per_mt': builty[14],
-        'total_freight': builty[15],
-        'advance': builty[16],
-        'to_pay': builty[17],
-        'lr_number': builty[18],
-        'lr_index': builty[19],
-        'created_by_role': builty[20],
-        'created_at': builty[21],
-        'account_name': builty[22],
-        'warehouse_name': builty[23],
-        'truck_number': builty[24],
-        'driver_name': builty[25],
-        'driver_mobile': builty[26],
-        'owner_name': builty[27],
-        'owner_mobile': builty[28]
+        'cgmf_id': builty[7],
+        'truck_id': builty[8],
+        'loading_point': builty[9],
+        'unloading_point': builty[10],
+        'goods_name': builty[11],
+        'number_of_bags': builty[12],
+        'quantity_mt': builty[13],
+        'kg_per_bag': builty[14],
+        'rate_per_mt': builty[15],
+        'total_freight': builty[16],
+        'advance': builty[17],
+        'to_pay': builty[18],
+        'lr_number': builty[19],
+        'lr_index': builty[20],
+        'created_by_role': builty[21],
+        'created_at': builty[22],
+        'account_name': builty[23],
+        'warehouse_name': builty[24],
+        'truck_number': builty[25],
+        'driver_name': builty[26],
+        'driver_mobile': builty[27],
+        'owner_name': builty[28],
+        'owner_mobile': builty[29]
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -1076,9 +1409,20 @@ def warehouse_stock_in():
         product_id = int(request.form.get('product_id'))
         quantity = float(request.form.get('unloaded_quantity'))
         employee_id = int(request.form.get('employee_id'))
-        account_id = int(request.form.get('account_id'))
+        
+        # Handle account_id which may be a regular account or CGMF
+        account_id_raw = request.form.get('account_id')
+        account_id = None
+        cgmf_id = None
+        
+        if account_id_raw.startswith('CGMF:'):
+            cgmf_id = int(account_id_raw.replace('CGMF:', ''))
+        else:
+            account_id = int(account_id_raw)
+        
         stock_in_date = request.form.get('stock_in_date')
         remarks = request.form.get('remarks', '')
+        sub_head = request.form.get('sub_head', '')  # Sub head for Payal accounts
         
         # Convert builty_id and truck_id to integers if present
         if builty_id:
@@ -1099,12 +1443,21 @@ def warehouse_stock_in():
                 flash(f'Error: This builty has already been recorded for Stock IN at {warehouse_name} on {stock_date} ({stock_quantity:.2f} MT). Cannot record duplicate stock IN for the same builty.', 'error')
                 # Re-render form with all the data
                 warehouses = db.get_all_warehouses()
-                builties = db.get_all_builties()
+                # Only show builties that were sent to warehouses (have warehouse_id) and not yet used for stock IN
+                builties = db.execute_custom_query('''
+                    SELECT b.*, w.warehouse_name
+                    FROM builty b
+                    JOIN warehouses w ON b.warehouse_id = w.warehouse_id
+                    LEFT JOIN warehouse_stock ws ON b.builty_id = ws.builty_id AND ws.transaction_type = 'IN'
+                    WHERE b.warehouse_id IS NOT NULL AND ws.stock_id IS NULL
+                    ORDER BY b.builty_id DESC
+                ''')
                 trucks = db.get_all_trucks()
                 companies = db.get_all_companies()
                 products = db.get_all_products()
                 employees = db.get_all_employees()
                 accounts = db.get_all_accounts()
+                cgmf_list = db.get_all_cgmf()
                 recent_stock_in = db.execute_custom_query('''
                     SELECT ws.date, COALESCE(b.builty_number, 'Direct Truck') as builty_number, 
                            w.warehouse_name, COALESCE(a.account_name, 'N/A') as account_name,
@@ -1126,6 +1479,7 @@ def warehouse_stock_in():
                                      products=products,
                                      employees=employees,
                                      accounts=accounts,
+                                     cgmf_list=cgmf_list,
                                      recent_stock_in=recent_stock_in)
         if truck_id:
             truck_id = int(truck_id)
@@ -1136,13 +1490,15 @@ def warehouse_stock_in():
             quantity_mt=quantity,
             employee_id=employee_id,
             account_id=account_id,
+            cgmf_id=cgmf_id,
             date=stock_in_date,
             notes=remarks,
             company_id=company_id,
             product_id=product_id,
             source_type=source_type,
             truck_id=truck_id,
-            serial_number=int(serial_number) if serial_number else None
+            serial_number=int(serial_number) if serial_number else None,
+            sub_head=sub_head
         )
         
         if stock_id:
@@ -1152,12 +1508,13 @@ def warehouse_stock_in():
             flash('Error recording stock IN', 'error')
     
     warehouses = db.get_all_warehouses()
-    # Get only builties that haven't been used for stock IN yet
+    # Get only builties that were sent to warehouses (have warehouse_id) and haven't been used for stock IN yet
     builties = db.execute_custom_query('''
-        SELECT b.*
+        SELECT b.*, w.warehouse_name as dest_warehouse_name
         FROM builty b
+        JOIN warehouses w ON b.warehouse_id = w.warehouse_id
         LEFT JOIN warehouse_stock ws ON b.builty_id = ws.builty_id AND ws.transaction_type = 'IN'
-        WHERE ws.stock_id IS NULL
+        WHERE b.warehouse_id IS NOT NULL AND ws.stock_id IS NULL
         ORDER BY b.builty_id DESC
     ''')
     trucks = db.get_all_trucks()
@@ -1165,6 +1522,7 @@ def warehouse_stock_in():
     products = db.get_all_products()
     employees = db.get_all_employees()
     accounts = db.get_all_accounts()
+    cgmf_list = db.get_all_cgmf()
     
     # Get recent stock IN entries for display
     recent_stock_in = db.execute_custom_query('''
@@ -1189,6 +1547,7 @@ def warehouse_stock_in():
                          products=products,
                          employees=employees,
                          accounts=accounts,
+                         cgmf_list=cgmf_list,
                          recent_stock_in=recent_stock_in)
 
 @app.route('/warehouse/create-loading-slip', methods=['GET', 'POST'])
@@ -1228,24 +1587,30 @@ def warehouse_create_loading_slip():
             flash(f'Error: Warehouse has only {balance["balance"]:.2f} MT available. Cannot dispatch {quantity_in_mt:.2f} MT', 'error')
             return redirect(url_for('warehouse_create_loading_slip'))
         
-        # Determine if dispatch is to account or another warehouse
+        # Determine if dispatch is to account, warehouse, or CGMF
         accounts = db.get_all_accounts()
         warehouses_list = db.get_all_warehouses()
+        cgmf_list = db.get_all_cgmf()
         account_id = None
         destination_warehouse_id = None
+        cgmf_id = None
         
-        # Check if it's an account
-        for acc in accounts:
-            if acc[1] == account:
-                account_id = acc[0]
-                break
-        
-        # If not found in accounts, check warehouses
-        if account_id is None:
-            for wh in warehouses_list:
-                if wh[1] == account:
-                    destination_warehouse_id = wh[0]
+        # Check if it's a CGMF (format: CGMF_<id>)
+        if account and account.startswith('CGMF_'):
+            cgmf_id = int(account.replace('CGMF_', ''))
+        else:
+            # Check if it's an account
+            for acc in accounts:
+                if acc[1] == account:
+                    account_id = acc[0]
                     break
+            
+            # If not found in accounts, check warehouses
+            if account_id is None:
+                for wh in warehouses_list:
+                    if wh[1] == account:
+                        destination_warehouse_id = wh[0]
+                        break
         
         # Check if truck exists, if not create it with driver/owner details
         truck = db.get_truck_by_number(truck_number)
@@ -1269,7 +1634,7 @@ def warehouse_create_loading_slip():
         slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
                                       account_id, destination_warehouse_id, quantity_in_bags, quantity_in_mt, 
                                       truck_id, wagon_number, goods_name, truck_driver, truck_owner,
-                                      mobile_number_1, mobile_number_2, truck_details, None)
+                                      mobile_number_1, mobile_number_2, truck_details, None, cgmf_id)
         
         if slip_id:
             flash(f'Loading slip #{serial_number} created successfully!', 'success')
@@ -1278,6 +1643,7 @@ def warehouse_create_loading_slip():
                 return render_template('warehouse/create_loading_slip.html',
                                      warehouses=db.get_all_warehouses(),
                                      accounts=db.get_all_accounts(),
+                                     cgmf_list=db.get_all_cgmf(),
                                      trucks=db.get_all_trucks(),
                                      products=db.get_all_products(),
                                      print_slip_id=slip_id)
@@ -1287,12 +1653,14 @@ def warehouse_create_loading_slip():
     
     warehouses = db.get_all_warehouses()
     accounts = db.get_all_accounts()
+    cgmf_list = db.get_all_cgmf()
     trucks = db.get_all_trucks()
     products = db.get_all_products()
     
     return render_template('warehouse/create_loading_slip.html',
                          warehouses=warehouses,
                          accounts=accounts,
+                         cgmf_list=cgmf_list,
                          trucks=trucks,
                          products=products)
 
@@ -1370,7 +1738,7 @@ def warehouse_print_builty(builty_id):
         return redirect(url_for('warehouse_dashboard'))
     
     # Convert to dict for easier template access
-    # builty columns: 0-21 are from builty table, 22+ are joined
+    # Explicit column order from get_builty_by_id query
     builty_dict = {
         'builty_id': builty[0],
         'builty_number': builty[1],
@@ -1379,28 +1747,29 @@ def warehouse_print_builty(builty_id):
         'rake_point_name': builty[4],
         'account_id': builty[5],
         'warehouse_id': builty[6],
-        'truck_id': builty[7],
-        'loading_point': builty[8],
-        'unloading_point': builty[9],
-        'goods_name': builty[10],
-        'number_of_bags': builty[11],
-        'quantity_mt': builty[12],
-        'kg_per_bag': builty[13],
-        'rate_per_mt': builty[14],
-        'total_freight': builty[15],
-        'advance': builty[16],
-        'to_pay': builty[17],
-        'lr_number': builty[18],
-        'lr_index': builty[19],
-        'created_by_role': builty[20],
-        'created_at': builty[21],
-        'account_name': builty[22],
-        'warehouse_name': builty[23],
-        'truck_number': builty[24],
-        'driver_name': builty[25],
-        'driver_mobile': builty[26],
-        'owner_name': builty[27],
-        'owner_mobile': builty[28]
+        'cgmf_id': builty[7],
+        'truck_id': builty[8],
+        'loading_point': builty[9],
+        'unloading_point': builty[10],
+        'goods_name': builty[11],
+        'number_of_bags': builty[12],
+        'quantity_mt': builty[13],
+        'kg_per_bag': builty[14],
+        'rate_per_mt': builty[15],
+        'total_freight': builty[16],
+        'advance': builty[17],
+        'to_pay': builty[18],
+        'lr_number': builty[19],
+        'lr_index': builty[20],
+        'created_by_role': builty[21],
+        'created_at': builty[22],
+        'account_name': builty[23],
+        'warehouse_name': builty[24],
+        'truck_number': builty[25],
+        'driver_name': builty[26],
+        'driver_mobile': builty[27],
+        'owner_name': builty[28],
+        'owner_mobile': builty[29]
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -1490,15 +1859,20 @@ def warehouse_create_builty():
             flash(f'Error: Warehouse has only {balance["balance"]:.2f} MT available. Cannot dispatch {quantity_wt_mt:.2f} MT', 'error')
             return redirect(url_for('warehouse_create_builty'))
         
-        # Determine destination (account or warehouse)
+        # Determine destination (account, warehouse, or CGMF)
         accounts = db.get_all_accounts()
         account_id = None
         destination_warehouse_id = None
+        cgmf_id = None
         
-        for account in accounts:
-            if account[1] == account_warehouse:
-                account_id = account[0]
-                break
+        # Check if it's a CGMF account
+        if account_warehouse and account_warehouse.startswith('CGMF:'):
+            cgmf_id = int(account_warehouse.split(':')[1])
+        else:
+            for account in accounts:
+                if account[1] == account_warehouse:
+                    account_id = account[0]
+                    break
         
         # Get rake code from most recent stock IN
         rake_code_result = db.execute_custom_query('''
@@ -1523,7 +1897,7 @@ def warehouse_create_builty():
         builty_id = db.add_builty(builty_number, rake_code, date, warehouse_name, account_id, destination_warehouse_id,
                                   truck_id, loading_point, unloading_point, goods_name, number_of_bags,
                                   quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, lr_number,
-                                  0, 'Warehouse')
+                                  0, 'Warehouse', cgmf_id)
         
         if builty_id:
             # Link loading slip to builty if provided
@@ -1547,11 +1921,13 @@ def warehouse_create_builty():
     warehouses = db.get_all_warehouses()
     accounts = db.get_all_accounts()
     loading_slips = db.get_all_loading_slips()  # Only unlinked loading slips
+    cgmf_list = db.get_all_cgmf()
     
     return render_template('warehouse/create_builty.html',
                          warehouses=warehouses,
                          accounts=accounts,
-                         loading_slips=loading_slips)
+                         loading_slips=loading_slips,
+                         cgmf_list=cgmf_list)
 
 @app.route('/warehouse/stock-out', methods=['GET', 'POST'])
 @login_required
@@ -1664,40 +2040,136 @@ def warehouse_stock_out():
 @app.route('/warehouse/balance')
 @login_required
 def warehouse_balance_all():
-    """View balance across all warehouses"""
+    """View balance across all warehouses with filtering support"""
     if current_user.role != 'Warehouse':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
+    
+    # Get filter parameters
+    selected_warehouse = request.args.get('warehouse', 'all')
+    date_filter = request.args.get('date_filter', 'all')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    
+    # Get all warehouses for dropdown
+    warehouses = db.get_all_warehouses()
+    
+    # Build date condition
+    date_condition = ""
+    date_params = []
+    
+    from datetime import datetime, timedelta
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    if date_filter == 'today':
+        date_condition = " AND DATE(ws.date) = ?"
+        date_params = [today]
+    elif date_filter == 'week':
+        week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        date_condition = " AND DATE(ws.date) >= ?"
+        date_params = [week_ago]
+    elif date_filter == 'month':
+        month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        date_condition = " AND DATE(ws.date) >= ?"
+        date_params = [month_ago]
+    elif date_filter == 'custom' and start_date and end_date:
+        date_condition = " AND DATE(ws.date) >= ? AND DATE(ws.date) <= ?"
+        date_params = [start_date, end_date]
     
     # Get overall stock statistics
     warehouse_balances = []
     account_balances = []
     
-    warehouses = db.get_all_warehouses()
-    for warehouse in warehouses:
-        balance = db.get_warehouse_balance_stock(warehouse[0])
+    # Build warehouse condition
+    if selected_warehouse != 'all':
+        try:
+            selected_warehouse_id = int(selected_warehouse)
+            warehouse_filter = [w for w in warehouses if w[0] == selected_warehouse_id]
+            warehouses_to_process = warehouse_filter
+        except:
+            warehouses_to_process = warehouses
+    else:
+        warehouses_to_process = warehouses
+    
+    for warehouse in warehouses_to_process:
+        # Get filtered balance
+        if date_condition:
+            result = db.execute_custom_query(f'''
+                SELECT 
+                    COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) as stock_in,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) as stock_out
+                FROM warehouse_stock ws
+                WHERE warehouse_id = ? {date_condition}
+            ''', [warehouse[0]] + date_params)
+            if result:
+                stock_in = result[0][0] or 0
+                stock_out = result[0][1] or 0
+            else:
+                stock_in, stock_out = 0, 0
+        else:
+            balance = db.get_warehouse_balance_stock(warehouse[0])
+            stock_in = balance.get('stock_in', 0)
+            stock_out = balance.get('stock_out', 0)
+        
         warehouse_balances.append([
+            warehouse[0],  # warehouse_id
             warehouse[1],  # warehouse_name
             warehouse[2],  # location
-            balance.get('stock_in', 0),
-            balance.get('stock_out', 0)
+            stock_in,
+            stock_out
         ])
     
     # Calculate totals
-    total_stock_in = sum(w[2] for w in warehouse_balances)
-    total_stock_out = sum(w[3] for w in warehouse_balances)
+    total_stock_in = sum(w[3] for w in warehouse_balances)
+    total_stock_out = sum(w[4] for w in warehouse_balances)
+    total_balance = total_stock_in - total_stock_out
+    
+    # Get recent transactions for the filtered scope
+    if selected_warehouse != 'all':
+        wh_cond = "ws.warehouse_id = ?"
+        wh_params = [int(selected_warehouse)]
+    else:
+        wh_cond = "1=1"
+        wh_params = []
+    
+    recent_transactions = db.execute_custom_query(f'''
+        SELECT ws.date, ws.transaction_type, ws.quantity_mt, w.warehouse_name,
+               COALESCE(b.builty_number, 'Direct Entry') as builty_number,
+               ws.notes
+        FROM warehouse_stock ws
+        JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+        LEFT JOIN builty b ON ws.builty_id = b.builty_id
+        WHERE {wh_cond} {date_condition}
+        ORDER BY ws.date DESC, ws.created_at DESC
+        LIMIT 20
+    ''', wh_params + date_params)
     
     # Get account balances (simplified)
     accounts = db.get_all_accounts()
     for account in accounts:
-        # This would need a database function to calculate per-account stock
         account_balances.append([account[1], 0, 0])  # Placeholder
+    
+    # Get selected warehouse name for display
+    selected_warehouse_name = "All Warehouses"
+    if selected_warehouse != 'all':
+        for wh in warehouses:
+            if wh[0] == int(selected_warehouse):
+                selected_warehouse_name = wh[1]
+                break
     
     return render_template('warehouse/balance.html',
                          warehouse_balances=warehouse_balances,
                          account_balances=account_balances,
                          total_stock_in=total_stock_in,
-                         total_stock_out=total_stock_out)
+                         total_stock_out=total_stock_out,
+                         total_balance=total_balance,
+                         warehouses=warehouses,
+                         selected_warehouse=selected_warehouse,
+                         selected_warehouse_name=selected_warehouse_name,
+                         date_filter=date_filter,
+                         start_date=start_date,
+                         end_date=end_date,
+                         recent_transactions=recent_transactions)
 
 @app.route('/warehouse/balance/<int:warehouse_id>')
 @login_required
@@ -1865,6 +2337,7 @@ def download_eway_bill(filename):
     else:
         flash('File not found', 'error')
         return redirect(url_for('accountant_all_ebills'))
+
 
 @app.route('/admin/download-database-backup')
 @login_required

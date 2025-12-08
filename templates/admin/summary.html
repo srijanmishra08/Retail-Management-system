@@ -1,60 +1,126 @@
 {% extends "base.html" %}
 
-{% block title %}Rake Summary - FIMS{% endblock %}
+{% block title %}Summary - FIMS{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-table"></i> Rake Summary</h2>
-    <button class="btn btn-success" onclick="window.print()">
-        <i class="bi bi-printer"></i> Print
-    </button>
+    <h2><i class="bi bi-bar-chart-line"></i> Summary</h2>
+    <div class="btn-group" role="group">
+        <a href="{{ url_for('admin_summary', view='rakes') }}" 
+           class="btn {% if view_type == 'rakes' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            <i class="bi bi-train-freight-front"></i> Rake Summary
+        </a>
+        <a href="{{ url_for('admin_summary', view='total') }}" 
+           class="btn {% if view_type == 'total' %}btn-success{% else %}btn-outline-success{% endif %}">
+            <i class="bi bi-clipboard-data"></i> Total Summary
+        </a>
+        <a href="{{ url_for('admin_summary', view='per_account') }}" 
+           class="btn {% if view_type == 'per_account' %}btn-info{% else %}btn-outline-info{% endif %}">
+            <i class="bi bi-people"></i> Per Account Summary
+        </a>
+    </div>
 </div>
 
+{% if view_type == 'rakes' %}
+<!-- Total Shortage Alert -->
+{% if total_shortage and total_shortage > 0 %}
+<div class="alert alert-danger mb-3">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+        <div>
+            <strong>Total Shortage from Closed Rakes:</strong>
+            <span class="fs-5 ms-2">{{ "%.2f"|format(total_shortage) }} MT</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- RAKE SUMMARY VIEW - Exactly like Dashboard -->
 <div class="card">
-    <div class="card-body">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-train-freight-front"></i> Rake Summary</h5>
+        <button class="btn btn-sm btn-success" onclick="exportTableToExcel('rakeTable', 'rake_summary')">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+    </div>
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover table-striped">
-                <thead class="table-dark">
+            <table class="table table-hover mb-0" id="rakeTable">
+                <thead>
                     <tr>
                         <th>Rake Code</th>
-                        <th>Company Name</th>
+                        <th>Company</th>
+                        <th>Product</th>
                         <th>Date</th>
-                        <th>RR Quantity (MT)</th>
-                        <th>Stock IN (MT)</th>
-                        <th>Stock OUT (MT)</th>
-                        <th>Balance (MT)</th>
+                        <th>RR Quantity</th>
+                        <th>Qty Dispatched</th>
+                        <th>Remaining</th>
+                        <th>Shortage</th>
+                        <th>Status</th>
+                        <th>Rake Point</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if summary %}
-                        {% for item in summary %}
+                    {% if rakes %}
+                        {% for rake in rakes %}
                         <tr>
+                            <td><strong>{{ rake.rake_code }}</strong></td>
+                            <td>{{ rake.company_name }}</td>
+                            <td>{{ rake.product_name }}</td>
+                            <td>{{ rake.date }}</td>
+                            <td>{{ "%.2f"|format(rake.rr_quantity) }} MT</td>
+                            <td class="text-primary"><strong>{{ "%.2f"|format(rake.dispatched) }} MT</strong></td>
+                            <td class="text-success"><strong>{{ "%.2f"|format(rake.remaining) }} MT</strong></td>
                             <td>
-                                <a href="{{ url_for('admin_rake_details', rake_code=item[0]) }}" 
-                                   class="text-decoration-none fw-bold">
-                                    <i class="bi bi-box-arrow-up-right"></i> {{ item[0] }}
-                                </a>
+                                {% if rake.is_closed %}
+                                    <span class="text-danger"><strong>{{ "%.2f"|format(rake.shortage) }} MT</strong></span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
                             </td>
-                            <td>{{ item[1] }}</td>
-                            <td>{{ item[2] }}</td>
-                            <td class="text-end">{{ "%.2f"|format(item[3]) }}</td>
-                            <td class="text-end text-success">{{ "%.2f"|format(item[4]) }}</td>
-                            <td class="text-end text-danger">{{ "%.2f"|format(item[5]) }}</td>
-                            <td class="text-end"><strong>{{ "%.2f"|format(item[4] - item[5]) }}</strong></td>
+                            <td>
+                                {% if rake.is_closed %}
+                                    <span class="badge bg-dark">Closed</span>
+                                {% elif rake.remaining > 0 %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Completed</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ rake.rake_point_name }}</td>
+                            <td>
+                                <a href="{{ url_for('admin_rake_details', rake_code=rake.rake_code) }}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> Details
+                                </a>
+                                {% if not rake.is_closed %}
+                                <form action="{{ url_for('admin_close_rake', rake_code=rake.rake_code) }}" method="POST" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                            onclick="return confirm('Are you sure you want to close rake {{ rake.rake_code }}? This will calculate the shortage and cannot be undone.');">
+                                        <i class="bi bi-x-circle"></i> Close
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                         
                         <!-- Totals Row -->
-                        <tr class="table-primary fw-bold">
-                            <td colspan="3">TOTAL</td>
-                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='3')) }}</td>
-                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='4')) }}</td>
-                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='5')) }}</td>
-                            <td class="text-end">{{ "%.2f"|format(summary|sum(attribute='4') - summary|sum(attribute='5')) }}</td>
+                        <tr class="table-dark fw-bold">
+                            <td colspan="4">GRAND TOTAL</td>
+                            <td>{{ "%.2f"|format(rakes|sum(attribute='rr_quantity')) }} MT</td>
+                            <td>{{ "%.2f"|format(rakes|sum(attribute='dispatched')) }} MT</td>
+                            <td>{{ "%.2f"|format(rakes|sum(attribute='remaining')) }} MT</td>
+                            <td class="text-danger">{{ "%.2f"|format(total_shortage) }} MT</td>
+                            <td colspan="3"></td>
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted">No rakes found</td>
+                            <td colspan="11" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No rakes found
+                            </td>
                         </tr>
                     {% endif %}
                 </tbody>
@@ -62,4 +128,432 @@
         </div>
     </div>
 </div>
+
+{% elif view_type == 'total' %}
+<!-- TOTAL SUMMARY VIEW -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h6>Total RR Quantity</h6>
+                <h3>{{ "%.2f"|format(rakes|sum(attribute='rr_quantity')) }} MT</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h6>Total Dispatched</h6>
+                <h3>{{ "%.2f"|format(rakes|sum(attribute='dispatched')) }} MT</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <h6>Total Balance</h6>
+                <h3>{{ "%.2f"|format(rakes|sum(attribute='remaining')) }} MT</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Accounts Summary -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-people-fill"></i> Accounts (Dealers/Retailers) Summary</h5>
+        <button class="btn btn-sm btn-light" onclick="exportTableToExcel('accountsTable', 'accounts_summary')">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0" id="accountsTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Account Name</th>
+                        <th>Type</th>
+                        <th class="text-end">Total Qty (MT)</th>
+                        <th class="text-center">Rakes</th>
+                        <th class="text-center">Builties</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if total_account_summary %}
+                        {% for item in total_account_summary %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ item[0] }}</strong></td>
+                            <td><span class="badge bg-secondary">{{ item[1] }}</span></td>
+                            <td class="text-end text-primary"><strong>{{ "%.2f"|format(item[2]) }}</strong></td>
+                            <td class="text-center">{{ item[3] }}</td>
+                            <td class="text-center">{{ item[4] }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-info fw-bold">
+                            <td colspan="3">TOTAL TO ACCOUNTS</td>
+                            <td class="text-end">{{ "%.2f"|format(total_account_summary|sum(attribute='2')) }} MT</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="text-center text-muted">No dispatches to accounts</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- CGMF Summary -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-building-check"></i> CGMF (CG Markfed) Summary</h5>
+        <button class="btn btn-sm btn-light" onclick="exportTableToExcel('cgmfTable', 'cgmf_summary')">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0" id="cgmfTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Society Name</th>
+                        <th>District</th>
+                        <th>Destination</th>
+                        <th class="text-end">Total Qty (MT)</th>
+                        <th class="text-center">Rakes</th>
+                        <th class="text-center">Builties</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if cgmf_summary %}
+                        {% for item in cgmf_summary %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ item[0] }}</strong></td>
+                            <td>{{ item[1] }}</td>
+                            <td>{{ item[2] }}</td>
+                            <td class="text-end text-success"><strong>{{ "%.2f"|format(item[3]) }}</strong></td>
+                            <td class="text-center">{{ item[4] }}</td>
+                            <td class="text-center">{{ item[5] }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-success fw-bold">
+                            <td colspan="4">TOTAL TO CGMF</td>
+                            <td class="text-end">{{ "%.2f"|format(cgmf_summary|sum(attribute='3')) }} MT</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="7" class="text-center text-muted">No dispatches to CGMF</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Warehouses Summary -->
+<div class="card mb-4">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-building"></i> Warehouses Summary</h5>
+        <button class="btn btn-sm btn-dark" onclick="exportTableToExcel('warehouseTable', 'warehouse_summary')">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0" id="warehouseTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Warehouse Name</th>
+                        <th>Location</th>
+                        <th class="text-end">Total Qty (MT)</th>
+                        <th class="text-center">Rakes</th>
+                        <th class="text-center">Builties</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if warehouse_summary %}
+                        {% for item in warehouse_summary %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ item[0] }}</strong></td>
+                            <td>{{ item[1] }}</td>
+                            <td class="text-end text-warning"><strong>{{ "%.2f"|format(item[2]) }}</strong></td>
+                            <td class="text-center">{{ item[3] }}</td>
+                            <td class="text-center">{{ item[4] }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-warning fw-bold">
+                            <td colspan="3">TOTAL TO WAREHOUSES</td>
+                            <td class="text-end">{{ "%.2f"|format(warehouse_summary|sum(attribute='2')) }} MT</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="text-center text-muted">No dispatches to warehouses</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% elif view_type == 'per_account' %}
+<!-- PER ACCOUNT SUMMARY VIEW -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-person-lines-fill"></i> Per Account Dispatch Details</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">Select an account to view detailed dispatch information from all rakes.</p>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">Select Account/Dealer</label>
+                <select class="form-select" id="accountSelect" onchange="showAccountDetails()">
+                    <option value="">-- Select Account --</option>
+                    {% for item in total_account_summary %}
+                    <option value="{{ item[0] }}" data-type="{{ item[1] }}" data-qty="{{ item[2] }}" data-rakes="{{ item[3] }}" data-builties="{{ item[4] }}">
+                        {{ item[0] }} ({{ item[1] }}) - {{ "%.2f"|format(item[2]) }} MT
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label fw-bold">Select CGMF Society</label>
+                <select class="form-select" id="cgmfSelect" onchange="showCGMFDetails()">
+                    <option value="">-- Select CGMF Society --</option>
+                    {% for item in cgmf_summary %}
+                    <option value="{{ item[0] }}" data-district="{{ item[1] }}" data-destination="{{ item[2] }}" data-qty="{{ item[3] }}" data-rakes="{{ item[4] }}" data-builties="{{ item[5] }}">
+                        {{ item[0] }} - {{ item[1] }} - {{ "%.2f"|format(item[3]) }} MT
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <!-- Account Details Display -->
+        <div id="accountDetails" class="mt-4" style="display: none;">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-person-badge"></i> <span id="detailAccountName"></span></span>
+                    <button class="btn btn-sm btn-light" onclick="exportTableToExcel('accountDetailTable', 'account_details')">
+                        <i class="bi bi-file-earmark-excel"></i> Export Excel
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">Type</small>
+                                <h6 id="detailAccountType" class="mb-0"></h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">Total Quantity</small>
+                                <h6 id="detailAccountQty" class="mb-0 text-primary"></h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">Rakes</small>
+                                <h6 id="detailAccountRakes" class="mb-0"></h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">Builties</small>
+                                <h6 id="detailAccountBuilties" class="mb-0"></h6>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered" id="accountDetailTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Rake Code</th>
+                                    <th>Builty Number</th>
+                                    <th>Date</th>
+                                    <th class="text-end">Quantity (MT)</th>
+                                    <th>Goods</th>
+                                </tr>
+                            </thead>
+                            <tbody id="accountDetailBody">
+                                <!-- Will be populated via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CGMF Details Display -->
+        <div id="cgmfDetails" class="mt-4" style="display: none;">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-building-check"></i> <span id="detailCGMFName"></span></span>
+                    <button class="btn btn-sm btn-light" onclick="exportTableToExcel('cgmfDetailTable', 'cgmf_details')">
+                        <i class="bi bi-file-earmark-excel"></i> Export Excel
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">District</small>
+                                <h6 id="detailCGMFDistrict" class="mb-0"></h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">Total Quantity</small>
+                                <h6 id="detailCGMFQty" class="mb-0 text-success"></h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">Rakes</small>
+                                <h6 id="detailCGMFRakes" class="mb-0"></h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-2 bg-light rounded text-center">
+                                <small class="text-muted">Builties</small>
+                                <h6 id="detailCGMFBuilties" class="mb-0"></h6>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered" id="cgmfDetailTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Rake Code</th>
+                                    <th>Builty Number</th>
+                                    <th>Date</th>
+                                    <th class="text-end">Quantity (MT)</th>
+                                    <th>Goods</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cgmfDetailBody">
+                                <!-- Will be populated via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Export table to Excel
+function exportTableToExcel(tableID, filename = '') {
+    var downloadLink;
+    var dataType = 'application/vnd.ms-excel';
+    var tableSelect = document.getElementById(tableID);
+    var tableHTML = tableSelect.outerHTML.replace(/ /g, '%20');
+    
+    filename = filename ? filename + '.xls' : 'excel_data.xls';
+    
+    downloadLink = document.createElement("a");
+    document.body.appendChild(downloadLink);
+    
+    if (navigator.msSaveOrOpenBlob) {
+        var blob = new Blob(['\ufeff', tableHTML], { type: dataType });
+        navigator.msSaveOrOpenBlob(blob, filename);
+    } else {
+        downloadLink.href = 'data:' + dataType + ', ' + tableHTML;
+        downloadLink.download = filename;
+        downloadLink.click();
+    }
+}
+
+// Show account details
+function showAccountDetails() {
+    var select = document.getElementById('accountSelect');
+    var selectedOption = select.options[select.selectedIndex];
+    
+    if (select.value) {
+        // Clear CGMF selection
+        document.getElementById('cgmfSelect').value = '';
+        document.getElementById('cgmfDetails').style.display = 'none';
+        
+        // Show account details
+        document.getElementById('accountDetails').style.display = 'block';
+        document.getElementById('detailAccountName').textContent = select.value;
+        document.getElementById('detailAccountType').textContent = selectedOption.dataset.type;
+        document.getElementById('detailAccountQty').textContent = parseFloat(selectedOption.dataset.qty).toFixed(2) + ' MT';
+        document.getElementById('detailAccountRakes').textContent = selectedOption.dataset.rakes;
+        document.getElementById('detailAccountBuilties').textContent = selectedOption.dataset.builties;
+        
+        // Fetch detailed builty data
+        fetch('/api/account-dispatches/' + encodeURIComponent(select.value))
+            .then(response => response.json())
+            .then(data => {
+                var tbody = document.getElementById('accountDetailBody');
+                tbody.innerHTML = '';
+                data.forEach(function(item) {
+                    var row = `<tr>
+                        <td>${item.rake_code}</td>
+                        <td>${item.builty_number}</td>
+                        <td>${item.date}</td>
+                        <td class="text-end">${parseFloat(item.quantity_mt).toFixed(2)}</td>
+                        <td>${item.goods_name}</td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            });
+    } else {
+        document.getElementById('accountDetails').style.display = 'none';
+    }
+}
+
+// Show CGMF details
+function showCGMFDetails() {
+    var select = document.getElementById('cgmfSelect');
+    var selectedOption = select.options[select.selectedIndex];
+    
+    if (select.value) {
+        // Clear account selection
+        document.getElementById('accountSelect').value = '';
+        document.getElementById('accountDetails').style.display = 'none';
+        
+        // Show CGMF details
+        document.getElementById('cgmfDetails').style.display = 'block';
+        document.getElementById('detailCGMFName').textContent = select.value;
+        document.getElementById('detailCGMFDistrict').textContent = selectedOption.dataset.district;
+        document.getElementById('detailCGMFQty').textContent = parseFloat(selectedOption.dataset.qty).toFixed(2) + ' MT';
+        document.getElementById('detailCGMFRakes').textContent = selectedOption.dataset.rakes;
+        document.getElementById('detailCGMFBuilties').textContent = selectedOption.dataset.builties;
+        
+        // Fetch detailed builty data
+        fetch('/api/cgmf-dispatches/' + encodeURIComponent(select.value))
+            .then(response => response.json())
+            .then(data => {
+                var tbody = document.getElementById('cgmfDetailBody');
+                tbody.innerHTML = '';
+                data.forEach(function(item) {
+                    var row = `<tr>
+                        <td>${item.rake_code}</td>
+                        <td>${item.builty_number}</td>
+                        <td>${item.date}</td>
+                        <td class="text-end">${parseFloat(item.quantity_mt).toFixed(2)}</td>
+                        <td>${item.goods_name}</td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            });
+    } else {
+        document.getElementById('cgmfDetails').style.display = 'none';
+    }
+}
+</script>
 {% endblock %}

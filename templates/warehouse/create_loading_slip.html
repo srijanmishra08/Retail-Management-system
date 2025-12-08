@@ -67,8 +67,15 @@
                             <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - Warehouse</option>
                             {% endfor %}
                         </optgroup>
+                        {% if cgmf_list %}
+                        <optgroup label="🏛️ CGMF (CG Markfed)">
+                            {% for cgmf in cgmf_list %}
+                            <option value="CGMF:{{ cgmf[0] }}">{{ cgmf[3] }} - {{ cgmf[1] }} ({{ cgmf[2] }})</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
                     </select>
-                    <small class="text-muted">Stock can be sent to dealers/retailers OR other warehouses</small>
+                    <small class="text-muted">Stock can be sent to dealers/retailers, warehouses, or CGMF societies</small>
                 </div>
                 
                 <div class="col-md-6 mb-3">

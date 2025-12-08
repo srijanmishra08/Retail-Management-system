@@ -57,6 +57,7 @@
                                 <th>Builty Number</th>
                                 <th>Truck Number</th>
                                 <th>Goods Name</th>
+                                <th>Bags</th>
                                 <th>Quantity (MT)</th>
                                 <th>LR Number</th>
                                 <th>Action</th>
@@ -68,10 +69,11 @@
                                 <tr>
                                     <td>{{ builty[3] }}</td>
                                     <td><strong>{{ builty[1] }}</strong></td>
-                                    <td><strong>{{ builty[22] }}</strong></td>
-                                    <td>{{ builty[10] }}</td>
-                                    <td class="text-end">{{ "%.2f"|format(builty[12]) }}</td>
-                                    <td>{{ builty[16] }}</td>
+                                    <td><strong>{{ builty[26] if builty[26] else 'N/A' }}</strong></td>
+                                    <td>{{ builty[11] }}</td>
+                                    <td>{{ builty[12] }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(builty[13]) }}</td>
+                                    <td>{{ builty[19] if builty[19] else 'N/A' }}</td>
                                     <td>
                                         <a href="{{ url_for('rakepoint_print_builty', builty_id=builty[0]) }}" 
                                            class="btn btn-sm btn-primary" 
@@ -84,7 +86,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted">No builties created yet</td>
+                                    <td colspan="8" class="text-center text-muted">No builties created yet</td>
                                 </tr>
                             {% endif %}
                         </tbody>

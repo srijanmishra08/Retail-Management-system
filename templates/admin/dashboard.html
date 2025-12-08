@@ -57,7 +57,7 @@
 
 <!-- Warehouse Stock Summary -->
 <div class="row mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-success bg-opacity-10 text-success">
@@ -71,7 +71,7 @@
         </div>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-danger bg-opacity-10 text-danger">
@@ -85,7 +85,7 @@
         </div>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-primary bg-opacity-10 text-primary">
@@ -94,6 +94,20 @@
                 <div class="ms-3 flex-grow-1">
                     <div class="text-muted small">Net Warehouse Balance</div>
                     <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in - stats.total_stock_out) }} MT</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Total Shortage (Closed Rakes)</div>
+                    <h3 class="mb-0 text-danger">{{ "%.2f"|format(total_shortage) }} MT</h3>
                 </div>
             </div>
         </div>
@@ -246,8 +260,10 @@
                         <th>RR Quantity</th>
                         <th>Qty Dispatched</th>
                         <th>Remaining</th>
-                        <th>Live Status</th>
+                        <th>Shortage</th>
+                        <th>Status</th>
                         <th>Rake Point</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -261,13 +277,34 @@
                         <td class="text-primary"><strong>{{ "%.2f"|format(rake.dispatched) }} MT</strong></td>
                         <td class="text-success"><strong>{{ "%.2f"|format(rake.remaining) }} MT</strong></td>
                         <td>
-                            {% if rake.remaining > 0 %}
+                            {% if rake.is_closed %}
+                                <span class="text-danger"><strong>{{ "%.2f"|format(rake.shortage) }} MT</strong></span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if rake.is_closed %}
+                                <span class="badge bg-dark">Closed</span>
+                            {% elif rake.remaining > 0 %}
                                 <span class="badge bg-success">Active</span>
                             {% else %}
                                 <span class="badge bg-secondary">Completed</span>
                             {% endif %}
                         </td>
                         <td>{{ rake.rake_point_name }}</td>
+                        <td>
+                            {% if not rake.is_closed %}
+                                <form action="{{ url_for('admin_close_rake', rake_code=rake.rake_code) }}" method="POST" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-danger" 
+                                            onclick="return confirm('Are you sure you want to close rake {{ rake.rake_code }}? This will calculate the shortage and cannot be undone.');">
+                                        <i class="bi bi-x-circle"></i> Close
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="text-muted">Closed</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

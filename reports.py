@@ -27,7 +27,7 @@ class ReportGenerator:
         styles = getSampleStyleSheet()
         
         # Title
-        title = Paragraph("<b>FERTILIZER INVENTORY MANAGEMENT SYSTEM</b>", styles['Title'])
+        title = Paragraph("<b>PAYAL FERTILIZERS</b>", styles['Title'])
         elements.append(title)
         elements.append(Spacer(1, 0.2*inch))
         

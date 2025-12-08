@@ -39,16 +39,16 @@
                             <td>{{ builty[0] }}</td>
                             <td><strong>{{ builty[1] }}</strong></td>
                             <td>{{ builty[3][:10] if builty[3] else 'N/A' }}</td>
-                            <td>{{ builty[16] if builty[16] else 'N/A' }}</td>
-                            <td>{{ builty[10] }}</td>
+                            <td>{{ builty[19] if builty[19] else 'N/A' }}</td>
                             <td>{{ builty[11] }}</td>
-                            <td>{{ builty[12] }} MT</td>
-                            <td>₹{{ "{:,.2f}".format(builty[14] if builty[14] else 0) }}</td>
+                            <td>{{ builty[12] }}</td>
+                            <td>{{ builty[13] }} MT</td>
                             <td>₹{{ "{:,.2f}".format(builty[15] if builty[15] else 0) }}</td>
-                            <td>{{ builty[22] if builty[22] else 'N/A' }}</td>
-                            <td>{{ builty[20] if builty[20] else 'N/A' }}</td>
-                            <td>{{ builty[21] if builty[21] else 'N/A' }}</td>
-                            <td>{{ builty[19][:16] if builty[19] else 'N/A' }}</td>
+                            <td>₹{{ "{:,.2f}".format(builty[16] if builty[16] else 0) }}</td>
+                            <td>{{ builty[26] if builty[26] else 'N/A' }}</td>
+                            <td>{{ builty[24] if builty[24] else 'N/A' }}</td>
+                            <td>{{ builty[25] if builty[25] else 'N/A' }}</td>
+                            <td>{{ builty[22][:16] if builty[22] else 'N/A' }}</td>
                             <td>
                                 <a href="{{ url_for('admin_print_builty', builty_id=builty[0]) }}" 
                                    class="btn btn-sm btn-primary" 

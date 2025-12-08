@@ -12,8 +12,11 @@
         <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#addCompanyModal">
             <i class="bi bi-building"></i> Add Company
         </button>
-        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
+        <button class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
             <i class="bi bi-person-badge"></i> Add Employee
+        </button>
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addCGMFModal">
+            <i class="bi bi-geo-alt"></i> Add CGMF
         </button>
     </div>
 </div>
@@ -38,6 +41,9 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link" data-bs-toggle="tab" href="#employees">Employees</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#cgmf">CGMF</a>
             </li>
         </ul>
     </div>
@@ -208,6 +214,36 @@
                     </table>
                 </div>
             </div>
+            
+            <!-- CGMF (CG Markfed) -->
+            <div class="tab-pane fade" id="cgmf">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>District</th>
+                                <th>Destination</th>
+                                <th>Society Name</th>
+                                <th>Contact</th>
+                                <th>Created At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cgmf in cgmf_list %}
+                            <tr>
+                                <td>{{ cgmf[0] }}</td>
+                                <td><span class="badge bg-primary">{{ cgmf[1] }}</span></td>
+                                <td>{{ cgmf[2] }}</td>
+                                <td><strong>{{ cgmf[3] }}</strong></td>
+                                <td>{{ cgmf[4] }}</td>
+                                <td>{{ cgmf[5] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -333,6 +369,80 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-info">Add Employee</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add CGMF Modal -->
+<div class="modal fade" id="addCGMFModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin_add_cgmf') }}">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-geo-alt"></i> Add CGMF Society (CG Markfed)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="cgmf_district" class="form-label">District <span class="text-danger">*</span></label>
+                        <select class="form-select" id="cgmf_district" name="district" required>
+                            <option value="">Select District</option>
+                            <option value="Balod">Balod</option>
+                            <option value="Baloda Bazar">Baloda Bazar</option>
+                            <option value="Balrampur">Balrampur</option>
+                            <option value="Bastar">Bastar</option>
+                            <option value="Bemetara">Bemetara</option>
+                            <option value="Bijapur">Bijapur</option>
+                            <option value="Bilaspur">Bilaspur</option>
+                            <option value="Dantewada">Dantewada</option>
+                            <option value="Dhamtari">Dhamtari</option>
+                            <option value="Durg">Durg</option>
+                            <option value="Gariaband">Gariaband</option>
+                            <option value="Gaurela-Pendra-Marwahi">Gaurela-Pendra-Marwahi</option>
+                            <option value="Janjgir-Champa">Janjgir-Champa</option>
+                            <option value="Jashpur">Jashpur</option>
+                            <option value="Kabirdham">Kabirdham</option>
+                            <option value="Kanker">Kanker</option>
+                            <option value="Khairagarh-Chhuikhadan-Gandai">Khairagarh-Chhuikhadan-Gandai</option>
+                            <option value="Kondagaon">Kondagaon</option>
+                            <option value="Korba">Korba</option>
+                            <option value="Koriya">Koriya</option>
+                            <option value="Mahasamund">Mahasamund</option>
+                            <option value="Manendragarh-Chirmiri-Bharatpur">Manendragarh-Chirmiri-Bharatpur</option>
+                            <option value="Mohla-Manpur-Ambagarh Chowki">Mohla-Manpur-Ambagarh Chowki</option>
+                            <option value="Mungeli">Mungeli</option>
+                            <option value="Narayanpur">Narayanpur</option>
+                            <option value="Raigarh">Raigarh</option>
+                            <option value="Raipur">Raipur</option>
+                            <option value="Rajnandgaon">Rajnandgaon</option>
+                            <option value="Sakti">Sakti</option>
+                            <option value="Sarangarh-Bilaigarh">Sarangarh-Bilaigarh</option>
+                            <option value="Sukma">Sukma</option>
+                            <option value="Surajpur">Surajpur</option>
+                            <option value="Surguja">Surguja</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="cgmf_destination" class="form-label">Destination <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="cgmf_destination" name="destination" required placeholder="e.g., Block/Town Name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="cgmf_society" class="form-label">Society Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="cgmf_society" name="society_name" required placeholder="e.g., Primary Agricultural Cooperative Society">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="cgmf_contact" class="form-label">Contact Number</label>
+                        <input type="text" class="form-control" id="cgmf_contact" name="contact" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Add CGMF Society</button>
                 </div>
             </form>
         </div>

@@ -72,23 +72,37 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="account" class="form-label">Dispatch To (Account/Warehouse) <span class="text-danger">*</span></label>
-                    <select class="form-select" id="account" name="account" required>
+                    <select class="form-select" id="account" name="account" required onchange="toggleSubHead()">
                         <option value="">-- Select Destination --</option>
                         <optgroup label="👥 Accounts (Dealers/Retailers)">
                             {% for account in accounts %}
-                            <option value="{{ account[1] }}">{{ account[1] }} - {{ account[2] }}</option>
+                            <option value="{{ account[1] }}" data-type="{{ account[2] }}">{{ account[1] }} - {{ account[2] }}</option>
                             {% endfor %}
                         </optgroup>
                         <optgroup label="🏢 Warehouses">
                             {% for warehouse in warehouses %}
-                            <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - Warehouse</option>
+                            <option value="{{ warehouse[1] }}" data-type="Warehouse">{{ warehouse[1] }} - Warehouse</option>
                             {% endfor %}
                         </optgroup>
+                        {% if cgmf_list %}
+                        <optgroup label="🏛️ CGMF (CG Markfed)">
+                            {% for cgmf in cgmf_list %}
+                            <option value="CGMF:{{ cgmf[0] }}" data-type="CGMF">{{ cgmf[3] }} - {{ cgmf[1] }} ({{ cgmf[2] }})</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
                     </select>
-                    <small class="text-muted">Stock can be sent to dealers/retailers OR warehouses</small>
+                    <small class="text-muted">Stock can be sent to dealers/retailers, warehouses, or CGMF societies</small>
                 </div>
                 
-                <div class="col-md-6 mb-3">
+                <!-- Sub Head field (shown only for Payal accounts) -->
+                <div class="col-md-6 mb-3" id="sub_head_container" style="display: none;">
+                    <label for="sub_head" class="form-label">Sub Head <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="sub_head" name="sub_head" placeholder="Enter sub head for Payal account">
+                    <small class="text-muted">Required for Payal accounts</small>
+                </div>
+                
+                <div class="col-md-6 mb-3" id="wagon_container">
                     <label for="wagon_number" class="form-label">Wagon Number <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="wagon_number" name="wagon_number" required placeholder="Enter wagon number">
                 </div>
@@ -299,7 +313,45 @@ document.querySelector('form').addEventListener('submit', function(e) {
         alert(`Cannot create loading slip!\nRemaining rake quantity: ${currentRakeBalance.remaining.toFixed(2)} MT\nRequested quantity: ${quantity.toFixed(2)} MT`);
         return false;
     }
+    
+    // Validate sub_head if Payal account is selected
+    const accountSelect = document.getElementById('account');
+    const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+    const accountType = selectedOption.dataset.type;
+    
+    if (accountType === 'Payal') {
+        const subHead = document.getElementById('sub_head').value.trim();
+        if (!subHead) {
+            e.preventDefault();
+            alert('Sub Head is required for Payal accounts!');
+            return false;
+        }
+    }
 });
+
+// Toggle Sub Head field based on account type
+function toggleSubHead() {
+    const accountSelect = document.getElementById('account');
+    const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+    const accountType = selectedOption.dataset.type;
+    const subHeadContainer = document.getElementById('sub_head_container');
+    const subHeadInput = document.getElementById('sub_head');
+    const wagonContainer = document.getElementById('wagon_container');
+    
+    if (accountType === 'Payal') {
+        subHeadContainer.style.display = 'block';
+        subHeadInput.required = true;
+        // Adjust wagon container to next row
+        wagonContainer.classList.remove('col-md-6');
+        wagonContainer.classList.add('col-md-12');
+    } else {
+        subHeadContainer.style.display = 'none';
+        subHeadInput.required = false;
+        subHeadInput.value = '';
+        wagonContainer.classList.remove('col-md-12');
+        wagonContainer.classList.add('col-md-6');
+    }
+}
 
 // Auto-open print window and reset form if print action was clicked
 {% if print_slip_id %}

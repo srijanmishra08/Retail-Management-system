@@ -42,7 +42,7 @@
                         <th>Account Name</th>
                         <th>Type</th>
                         <th>Total Quantity (MT)</th>
-                        <th>Builties</th>
+                        <th>Loading Slips</th>
                         <th>Details</th>
                     </tr>
                 </thead>
@@ -53,7 +53,7 @@
                         <td><span class="badge bg-secondary">{{ dispatch[1] }}</span></td>
                         <td class="text-end text-primary"><strong>{{ "%.2f"|format(dispatch[2]) }} MT</strong></td>
                         <td class="text-center">{{ dispatch[3] }}</td>
-                        <td><small class="text-muted">{{ dispatch[4] if dispatch[4]|length < 100 else dispatch[4][:100] + '...' }}</small></td>
+                        <td><small class="text-muted">{{ dispatch[4][:100] + '...' if dispatch[4] and dispatch[4]|length > 100 else dispatch[4] or '-' }}</small></td>
                     </tr>
                     {% endfor %}
                     <tr class="table-light fw-bold">
@@ -70,10 +70,10 @@
     </div>
 </div>
 
-<!-- Stock Dispatched to Warehouses (Warehouse Stock IN) -->
+<!-- Stock Dispatched to Warehouses -->
 <div class="card mb-4">
     <div class="card-header bg-warning text-dark">
-        <h5 class="mb-0"><i class="bi bi-building"></i> Dispatched to Warehouses (Warehouse Stock IN) - Total: {{ "%.2f"|format(total_to_warehouses) }} MT</h5>
+        <h5 class="mb-0"><i class="bi bi-building"></i> Dispatched to Warehouses - Total: {{ "%.2f"|format(total_to_warehouses) }} MT</h5>
     </div>
     <div class="card-body">
         {% if warehouse_dispatches %}
@@ -84,7 +84,7 @@
                         <th>Warehouse Name</th>
                         <th>Location</th>
                         <th>Total Quantity (MT)</th>
-                        <th>Builties</th>
+                        <th>Loading Slips</th>
                         <th>Details</th>
                     </tr>
                 </thead>
@@ -95,7 +95,7 @@
                         <td>{{ dispatch[1] }}</td>
                         <td class="text-end text-warning"><strong>{{ "%.2f"|format(dispatch[2]) }} MT</strong></td>
                         <td class="text-center">{{ dispatch[3] }}</td>
-                        <td><small class="text-muted">{{ dispatch[4] if dispatch[4]|length < 100 else dispatch[4][:100] + '...' }}</small></td>
+                        <td><small class="text-muted">{{ dispatch[4][:100] + '...' if dispatch[4] and dispatch[4]|length > 100 else dispatch[4] or '-' }}</small></td>
                     </tr>
                     {% endfor %}
                     <tr class="table-light fw-bold">
@@ -111,6 +111,48 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Stock Dispatched to CGMF -->
+{% if cgmf_dispatches %}
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-building-check"></i> Dispatched to CGMF (CG Markfed) - Total: {{ "%.2f"|format(total_to_cgmf) }} MT</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Society Name</th>
+                        <th>District</th>
+                        <th>Destination</th>
+                        <th>Total Quantity (MT)</th>
+                        <th>Loading Slips</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dispatch in cgmf_dispatches %}
+                    <tr>
+                        <td><strong>{{ dispatch[0] }}</strong></td>
+                        <td>{{ dispatch[1] }}</td>
+                        <td>{{ dispatch[2] }}</td>
+                        <td class="text-end text-success"><strong>{{ "%.2f"|format(dispatch[3]) }} MT</strong></td>
+                        <td class="text-center">{{ dispatch[4] }}</td>
+                        <td><small class="text-muted">{{ dispatch[5][:100] + '...' if dispatch[5] and dispatch[5]|length > 100 else dispatch[5] or '-' }}</small></td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-light fw-bold">
+                        <td colspan="3">TOTAL TO CGMF</td>
+                        <td class="text-end">{{ "%.2f"|format(total_to_cgmf) }} MT</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Summary Card -->
 <div class="card">
@@ -138,22 +180,30 @@
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="p-3 border rounded bg-primary bg-opacity-10">
-                    <h6 class="text-muted">Total Dispatched</h6>
-                    <h4 class="text-primary">{{ "%.2f"|format(total_to_accounts + total_to_warehouses) }} MT</h4>
+                <div class="p-3 border rounded bg-success bg-opacity-10">
+                    <h6 class="text-muted">To CGMF</h6>
+                    <h4 class="text-success">{{ "%.2f"|format(total_to_cgmf|default(0)) }} MT</h4>
                 </div>
             </div>
         </div>
         <hr>
         <div class="row text-center mt-3">
-            <div class="col-md-12">
-                <div class="p-3 border rounded {% if rake_info[4]|float - (total_to_accounts + total_to_warehouses) > 0 %}bg-danger{% else %}bg-success{% endif %} bg-opacity-10">
+            <div class="col-md-6">
+                <div class="p-3 border rounded bg-primary bg-opacity-10">
+                    <h6 class="text-muted">Total Dispatched</h6>
+                    <h4 class="text-primary">{{ "%.2f"|format(total_to_accounts + total_to_warehouses + (total_to_cgmf|default(0))) }} MT</h4>
+                </div>
+            </div>
+            <div class="col-md-6">
+                {% set total_dispatched = total_to_accounts + total_to_warehouses + (total_to_cgmf|default(0)) %}
+                {% set remaining = rake_info[4]|float - total_dispatched %}
+                <div class="p-3 border rounded {% if remaining > 0 %}bg-danger{% else %}bg-success{% endif %} bg-opacity-10">
                     <h6 class="text-muted">Remaining in Rake</h6>
-                    <h4 class="{% if rake_info[4]|float - (total_to_accounts + total_to_warehouses) > 0 %}text-danger{% else %}text-success{% endif %}">
-                        {{ "%.2f"|format(rake_info[4]|float - (total_to_accounts + total_to_warehouses)) }} MT
+                    <h4 class="{% if remaining > 0 %}text-danger{% else %}text-success{% endif %}">
+                        {{ "%.2f"|format(remaining) }} MT
                     </h4>
                     <small class="text-muted">
-                        (RR Quantity {{ "%.2f"|format(rake_info[4]|float) }} MT - Total Dispatched {{ "%.2f"|format(total_to_accounts + total_to_warehouses) }} MT)
+                        (RR: {{ "%.2f"|format(rake_info[4]|float) }} MT - Dispatched: {{ "%.2f"|format(total_dispatched) }} MT)
                     </small>
                 </div>
             </div>

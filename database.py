@@ -127,6 +127,18 @@ class Database:
             )
         ''')
         
+        # CGMF (CG Markfed) table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cgmf (
+                cgmf_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                district TEXT NOT NULL,
+                destination TEXT NOT NULL,
+                society_name TEXT NOT NULL,
+                contact TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         # Warehouses table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS warehouses (
@@ -161,6 +173,7 @@ class Database:
                 rake_point_name TEXT,
                 account_id INTEGER,
                 warehouse_id INTEGER,
+                cgmf_id INTEGER,
                 truck_id INTEGER NOT NULL,
                 loading_point TEXT NOT NULL,
                 unloading_point TEXT NOT NULL,
@@ -178,6 +191,7 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
                 FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
+                FOREIGN KEY (cgmf_id) REFERENCES cgmf(cgmf_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id),
                 FOREIGN KEY (rake_code) REFERENCES rakes(rake_code)
             )
@@ -193,6 +207,7 @@ class Database:
                 destination TEXT NOT NULL,
                 account_id INTEGER,
                 warehouse_id INTEGER,
+                cgmf_id INTEGER,
                 quantity_bags INTEGER NOT NULL,
                 quantity_mt REAL NOT NULL,
                 truck_id INTEGER NOT NULL,
@@ -207,6 +222,7 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
                 FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
+                FOREIGN KEY (cgmf_id) REFERENCES cgmf(cgmf_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id),
                 FOREIGN KEY (builty_id) REFERENCES builty(builty_id)
             )
@@ -225,6 +241,7 @@ class Database:
                 quantity_mt REAL NOT NULL,
                 employee_id INTEGER,
                 account_id INTEGER,
+                cgmf_id INTEGER,
                 account_type TEXT,
                 dealer_name TEXT,
                 source_type TEXT DEFAULT 'rake',
@@ -239,6 +256,7 @@ class Database:
                 FOREIGN KEY (product_id) REFERENCES products(product_id),
                 FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
+                FOREIGN KEY (cgmf_id) REFERENCES cgmf(cgmf_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id)
             )
         ''')
@@ -301,6 +319,69 @@ class Database:
         
         # Migrate old 'Company' account type to 'Payal'
         cursor.execute("UPDATE accounts SET account_type = 'Payal' WHERE account_type = 'Company'")
+        
+        # Migration: Add cgmf_id column to builty table if it doesn't exist
+        try:
+            cursor.execute("SELECT cgmf_id FROM builty LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE builty ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
+            print("Migration: Added cgmf_id column to builty table")
+        
+        # Migration: Add cgmf_id column to loading_slips table if it doesn't exist
+        try:
+            cursor.execute("SELECT cgmf_id FROM loading_slips LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE loading_slips ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
+            print("Migration: Added cgmf_id column to loading_slips table")
+        
+        # Migration: Add cgmf_id column to warehouse_stock table if it doesn't exist
+        try:
+            cursor.execute("SELECT cgmf_id FROM warehouse_stock LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
+            print("Migration: Added cgmf_id column to warehouse_stock table")
+        
+        # Migration: Add sub_head column to loading_slips table if it doesn't exist
+        try:
+            cursor.execute("SELECT sub_head FROM loading_slips LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE loading_slips ADD COLUMN sub_head TEXT")
+            print("Migration: Added sub_head column to loading_slips table")
+        
+        # Migration: Add sub_head column to builty table if it doesn't exist
+        try:
+            cursor.execute("SELECT sub_head FROM builty LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE builty ADD COLUMN sub_head TEXT")
+            print("Migration: Added sub_head column to builty table")
+        
+        # Migration: Add sub_head column to warehouse_stock table if it doesn't exist
+        try:
+            cursor.execute("SELECT sub_head FROM warehouse_stock LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN sub_head TEXT")
+            print("Migration: Added sub_head column to warehouse_stock table")
+        
+        # Migration: Add is_closed column to rakes table if it doesn't exist
+        try:
+            cursor.execute("SELECT is_closed FROM rakes LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE rakes ADD COLUMN is_closed INTEGER DEFAULT 0")
+            print("Migration: Added is_closed column to rakes table")
+        
+        # Migration: Add closed_at column to rakes table if it doesn't exist
+        try:
+            cursor.execute("SELECT closed_at FROM rakes LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE rakes ADD COLUMN closed_at TIMESTAMP")
+            print("Migration: Added closed_at column to rakes table")
+        
+        # Migration: Add shortage column to rakes table if it doesn't exist
+        try:
+            cursor.execute("SELECT shortage FROM rakes LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE rakes ADD COLUMN shortage REAL DEFAULT 0")
+            print("Migration: Added shortage column to rakes table")
         
         conn.commit()
         conn.close()
@@ -417,6 +498,69 @@ class Database:
             'remaining': total_quantity - dispatched_quantity,
             'unit_per_bag': unit_per_bag
         }
+    
+    def close_rake(self, rake_code):
+        """Close a rake and calculate shortage (rr_quantity - total dispatched)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Get rake's rr_quantity
+            cursor.execute('SELECT rr_quantity FROM rakes WHERE rake_code = ?', (rake_code,))
+            rake_result = cursor.fetchone()
+            if not rake_result:
+                conn.close()
+                return False, "Rake not found"
+            
+            rr_quantity = rake_result[0]
+            
+            # Get total dispatched via loading slips
+            cursor.execute('''
+                SELECT COALESCE(SUM(quantity_mt), 0)
+                FROM loading_slips
+                WHERE rake_code = ?
+            ''', (rake_code,))
+            dispatched_quantity = cursor.fetchone()[0]
+            
+            # Calculate shortage
+            shortage = rr_quantity - dispatched_quantity
+            
+            # Update rake as closed
+            cursor.execute('''
+                UPDATE rakes 
+                SET is_closed = 1, closed_at = CURRENT_TIMESTAMP, shortage = ?
+                WHERE rake_code = ?
+            ''', (shortage, rake_code))
+            
+            conn.commit()
+            conn.close()
+            return True, shortage
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            return False, str(e)
+    
+    def get_total_shortage(self):
+        """Get total shortage from all closed rakes"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COALESCE(SUM(shortage), 0) FROM rakes WHERE is_closed = 1
+        ''')
+        total_shortage = cursor.fetchone()[0]
+        conn.close()
+        return total_shortage
+    
+    def get_closed_rakes(self):
+        """Get all closed rakes with shortage info"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM rakes WHERE is_closed = 1 ORDER BY closed_at DESC
+        ''')
+        rakes = cursor.fetchall()
+        conn.close()
+        return rakes
     
     def get_next_serial_number_for_rake(self, rake_code):
         """Get the next serial number for a rake's loading slip"""
@@ -630,6 +774,45 @@ class Database:
         conn.close()
         return employee
     
+    # ========== CGMF (CG Markfed) Operations ==========
+    
+    def add_cgmf(self, district, destination, society_name, contact=''):
+        """Add new CGMF society"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO cgmf (district, destination, society_name, contact)
+                VALUES (?, ?, ?, ?)
+            ''', (district, destination, society_name, contact))
+            cgmf_id = cursor.lastrowid
+            conn.commit()
+            return cgmf_id
+        except Exception as e:
+            print(f"Error adding CGMF: {e}")
+            conn.rollback()
+            return None
+        finally:
+            conn.close()
+    
+    def get_all_cgmf(self):
+        """Get all CGMF societies"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM cgmf ORDER BY district, society_name')
+        cgmf_list = cursor.fetchall()
+        conn.close()
+        return cgmf_list
+    
+    def get_cgmf_by_id(self, cgmf_id):
+        """Get CGMF by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM cgmf WHERE cgmf_id = ?', (cgmf_id,))
+        cgmf = cursor.fetchone()
+        conn.close()
+        return cgmf
+    
     # ========== Warehouse Operations ==========
     
     def get_all_warehouses(self):
@@ -694,18 +877,18 @@ class Database:
     def add_builty(self, builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
                    truck_id, loading_point, unloading_point, goods_name, number_of_bags,
                    quantity_mt, kg_per_bag, rate_per_mt, total_freight, advance=0, to_pay=0, lr_number='', 
-                   lr_index=0, created_by_role=''):
-        """Add new builty"""
+                   lr_index=0, created_by_role='', cgmf_id=None):
+        """Add new builty - supports accounts, warehouses, and CGMF"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO builty (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
+                INSERT INTO builty (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id, cgmf_id,
                                    truck_id, loading_point, unloading_point, goods_name, number_of_bags,
                                    quantity_mt, kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number,
                                    lr_index, created_by_role)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id, truck_id,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id, cgmf_id, truck_id,
                   loading_point, unloading_point, goods_name, number_of_bags, quantity_mt,
                   kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number, lr_index, created_by_role))
             
@@ -724,11 +907,13 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT b.*, a.account_name, w.warehouse_name, t.truck_number
+            SELECT b.*, a.account_name, w.warehouse_name, t.truck_number,
+                   c.society_name as cgmf_name, c.district as cgmf_district
             FROM builty b
             LEFT JOIN accounts a ON b.account_id = a.account_id
             LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
             LEFT JOIN trucks t ON b.truck_id = t.truck_id
+            LEFT JOIN cgmf c ON b.cgmf_id = c.cgmf_id
             ORDER BY b.created_at DESC
         ''')
         builties = cursor.fetchall()
@@ -757,7 +942,12 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT b.*, a.account_name, w.warehouse_name, t.truck_number, 
+            SELECT b.builty_id, b.builty_number, b.rake_code, b.date, b.rake_point_name,
+                   b.account_id, b.warehouse_id, b.cgmf_id, b.truck_id, 
+                   b.loading_point, b.unloading_point, b.goods_name, b.number_of_bags,
+                   b.quantity_mt, b.kg_per_bag, b.rate_per_mt, b.total_freight,
+                   b.advance, b.to_pay, b.lr_number, b.lr_index, b.created_by_role, b.created_at,
+                   a.account_name, w.warehouse_name, t.truck_number, 
                    t.driver_name, t.driver_mobile, t.owner_name, t.owner_mobile
             FROM builty b
             LEFT JOIN accounts a ON b.account_id = a.account_id
@@ -773,20 +963,20 @@ class Database:
     
     def add_loading_slip(self, rake_code, slip_number, loading_point_name, destination,
                         account_id, warehouse_id, quantity_bags, quantity_mt, truck_id, wagon_number, 
-                        goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id=None):
-        """Add new loading slip with complete truck and goods details - supports both accounts and warehouses"""
+                        goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id=None, cgmf_id=None, sub_head=None):
+        """Add new loading slip with complete truck and goods details - supports accounts, warehouses, and CGMF"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
                 INSERT INTO loading_slips (rake_code, slip_number, loading_point_name, destination,
-                                          account_id, warehouse_id, quantity_bags, quantity_mt, truck_id, 
+                                          account_id, warehouse_id, cgmf_id, quantity_bags, quantity_mt, truck_id, 
                                           wagon_number, goods_name, truck_driver, truck_owner,
-                                          mobile_number_1, mobile_number_2, truck_details, builty_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (rake_code, slip_number, loading_point_name, destination, account_id, warehouse_id,
+                                          mobile_number_1, mobile_number_2, truck_details, builty_id, sub_head)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (rake_code, slip_number, loading_point_name, destination, account_id, warehouse_id, cgmf_id,
                   quantity_bags, quantity_mt, truck_id, wagon_number, goods_name,
-                  truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id))
+                  truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id, sub_head))
             
             slip_id = cursor.lastrowid
             conn.commit()
@@ -884,7 +1074,7 @@ class Database:
     
     def add_warehouse_stock_in(self, warehouse_id, builty_id, quantity_mt, employee_id=None,
                                account_id=None, date=None, notes='', company_id=None, product_id=None,
-                               source_type='rake', truck_id=None, serial_number=None):
+                               source_type='rake', truck_id=None, serial_number=None, cgmf_id=None, sub_head=None):
         """Add stock in to warehouse"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -895,11 +1085,11 @@ class Database:
             
             cursor.execute('''
                 INSERT INTO warehouse_stock (serial_number, warehouse_id, builty_id, transaction_type, 
-                                            quantity_mt, employee_id, account_id, date, notes,
-                                            company_id, product_id, source_type, truck_id)
-                VALUES (?, ?, ?, 'IN', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (serial_number, warehouse_id, builty_id, quantity_mt, employee_id, account_id, date, notes,
-                  company_id, product_id, source_type, truck_id))
+                                            quantity_mt, employee_id, account_id, cgmf_id, date, notes,
+                                            company_id, product_id, source_type, truck_id, sub_head)
+                VALUES (?, ?, ?, 'IN', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (serial_number, warehouse_id, builty_id, quantity_mt, employee_id, account_id, cgmf_id, date, notes,
+                  company_id, product_id, source_type, truck_id, sub_head))
             
             stock_id = cursor.lastrowid
             conn.commit()

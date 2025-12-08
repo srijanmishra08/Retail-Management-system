@@ -62,17 +62,19 @@
             <div id="rake_section">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="builty_number" class="form-label">Builty Number</label>
+                        <label for="builty_number" class="form-label">Builty Number (Sent to Warehouse)</label>
                         <select class="form-select" id="builty_number" name="builty_number">
                             <option value="">Select Builty</option>
                             {% for builty in builties %}
                             <option value="{{ builty[0] }}" 
                                     data-goods="{{ builty[10] }}" 
-                                    data-quantity="{{ builty[12] }}">
-                                {{ builty[1] }} - {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
+                                    data-quantity="{{ builty[12] }}"
+                                    data-warehouse="{{ builty.dest_warehouse_name if builty.dest_warehouse_name else builty[-1] }}">
+                                {{ builty[1] }} - {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT) → {{ builty.dest_warehouse_name if builty.dest_warehouse_name else builty[-1] }}
                             </option>
                             {% endfor %}
                         </select>
+                        <small class="form-text text-muted">Only showing builties sent to warehouses from Rakepoint</small>
                     </div>
                 </div>
             </div>
@@ -136,16 +138,33 @@
             
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label for="account_id" class="form-label">Account Name <span class="text-danger">*</span></label>
-                    <select class="form-select" id="account_id" name="account_id" required>
-                        <option value="">Select Account</option>
-                        {% for account in accounts %}
-                        <option value="{{ account[0] }}">{{ account[1] }} ({{ account[2] }})</option>
-                        {% endfor %}
+                    <label for="account_id" class="form-label">Account / CGMF <span class="text-danger">*</span></label>
+                    <select class="form-select" id="account_id" name="account_id" required onchange="toggleSubHead()">
+                        <option value="">-- Select Account/CGMF --</option>
+                        <optgroup label="👥 Accounts (Dealers/Retailers)">
+                            {% for account in accounts %}
+                            <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }} - {{ account[2] }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% if cgmf_list %}
+                        <optgroup label="🏛️ CGMF (CG Markfed)">
+                            {% for cgmf in cgmf_list %}
+                            <option value="CGMF:{{ cgmf[0] }}" data-type="CGMF">{{ cgmf[3] }} - {{ cgmf[1] }} ({{ cgmf[2] }})</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
                     </select>
+                    <small class="form-text text-muted">Select the account or CGMF society this stock belongs to</small>
                 </div>
                 
-                <div class="col-md-6 mb-3">
+                <!-- Sub Head field (shown only for Payal accounts) -->
+                <div class="col-md-6 mb-3" id="sub_head_container" style="display: none;">
+                    <label for="sub_head" class="form-label">Sub Head <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="sub_head" name="sub_head" placeholder="Enter sub head for Payal account">
+                    <small class="text-muted">Required for Payal accounts</small>
+                </div>
+                
+                <div class="col-md-6 mb-3" id="remarks_container">
                     <label for="remarks" class="form-label">Remarks</label>
                     <input type="text" class="form-control" id="remarks" name="remarks" placeholder="Additional notes (optional)">
                 </div>
@@ -299,6 +318,46 @@ document.querySelectorAll('input[name="source_type"]').forEach(radio => {
             document.getElementById('account_id').value = '';
         }
     });
+});
+
+// Toggle Sub Head field based on account type
+function toggleSubHead() {
+    const accountSelect = document.getElementById('account_id');
+    const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+    const accountType = selectedOption.dataset.type;
+    const subHeadContainer = document.getElementById('sub_head_container');
+    const subHeadInput = document.getElementById('sub_head');
+    const remarksContainer = document.getElementById('remarks_container');
+    
+    if (accountType === 'Payal') {
+        subHeadContainer.style.display = 'block';
+        subHeadInput.required = true;
+        // Adjust remarks container to next row
+        remarksContainer.classList.remove('col-md-6');
+        remarksContainer.classList.add('col-md-12');
+    } else {
+        subHeadContainer.style.display = 'none';
+        subHeadInput.required = false;
+        subHeadInput.value = '';
+        remarksContainer.classList.remove('col-md-12');
+        remarksContainer.classList.add('col-md-6');
+    }
+}
+
+// Form submission validation for sub_head
+document.querySelector('form').addEventListener('submit', function(e) {
+    const accountSelect = document.getElementById('account_id');
+    const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+    const accountType = selectedOption.dataset.type;
+    
+    if (accountType === 'Payal') {
+        const subHead = document.getElementById('sub_head').value.trim();
+        if (!subHead) {
+            e.preventDefault();
+            alert('Sub Head is required for Payal accounts!');
+            return false;
+        }
+    }
 });
 </script>
 {% endblock %}
