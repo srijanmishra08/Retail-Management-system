@@ -1,21 +1,54 @@
 """
 Database module for FIMS - Redesigned for specific workflows
-Handles all database operations with SQLite
+Handles all database operations with SQLite (local) or Turso/LibSQL (cloud)
 """
 
 import sqlite3
+import os
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# Try to import libsql for Turso cloud database
+try:
+    import libsql_experimental as libsql
+    LIBSQL_AVAILABLE = True
+except ImportError:
+    LIBSQL_AVAILABLE = False
 
 class Database:
     def __init__(self, db_name='fims.db'):
         self.db_name = db_name
+        
+        # Check for Turso cloud database configuration
+        self.turso_url = os.environ.get('TURSO_DATABASE_URL')
+        self.turso_token = os.environ.get('TURSO_AUTH_TOKEN')
+        
+        # Determine if we should use cloud database
+        self.use_cloud = (
+            LIBSQL_AVAILABLE and 
+            self.turso_url and 
+            self.turso_token
+        )
+        
+        if self.use_cloud:
+            print("🌐 Using Turso Cloud Database")
+        else:
+            print("💾 Using Local SQLite Database")
     
     def get_connection(self):
-        """Get database connection"""
-        conn = sqlite3.connect(self.db_name)
-        conn.row_factory = sqlite3.Row
-        return conn
+        """Get database connection - either local SQLite or Turso cloud"""
+        if self.use_cloud:
+            # Use Turso cloud database
+            conn = libsql.connect(
+                self.turso_url,
+                auth_token=self.turso_token
+            )
+            return conn
+        else:
+            # Use local SQLite database
+            conn = sqlite3.connect(self.db_name)
+            conn.row_factory = sqlite3.Row
+            return conn
     
     def execute_custom_query(self, query, params=None):
         """Execute a custom SQL query and return results"""
