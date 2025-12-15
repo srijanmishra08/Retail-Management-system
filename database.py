@@ -104,6 +104,9 @@ class Database:
                 product_name TEXT NOT NULL,
                 product_code TEXT,
                 rake_point_name TEXT NOT NULL,
+                is_closed INTEGER DEFAULT 0,
+                closed_at TIMESTAMP,
+                shortage REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -221,6 +224,7 @@ class Database:
                 lr_number TEXT,
                 lr_index INTEGER,
                 created_by_role TEXT,
+                sub_head TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
                 FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
@@ -252,6 +256,7 @@ class Database:
                 mobile_number_2 TEXT,
                 truck_details TEXT,
                 builty_id INTEGER,
+                sub_head TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
                 FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
@@ -282,6 +287,7 @@ class Database:
                 date DATE NOT NULL,
                 notes TEXT,
                 remark TEXT,
+                sub_head TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
                 FOREIGN KEY (builty_id) REFERENCES builty(builty_id),
@@ -356,65 +362,74 @@ class Database:
         # Migration: Add cgmf_id column to builty table if it doesn't exist
         try:
             cursor.execute("SELECT cgmf_id FROM builty LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE builty ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
-            print("Migration: Added cgmf_id column to builty table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'cgmf_id' in str(e).lower():
+                cursor.execute("ALTER TABLE builty ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
+                print("Migration: Added cgmf_id column to builty table")
         
         # Migration: Add cgmf_id column to loading_slips table if it doesn't exist
         try:
             cursor.execute("SELECT cgmf_id FROM loading_slips LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE loading_slips ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
-            print("Migration: Added cgmf_id column to loading_slips table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'cgmf_id' in str(e).lower():
+                cursor.execute("ALTER TABLE loading_slips ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
+                print("Migration: Added cgmf_id column to loading_slips table")
         
         # Migration: Add cgmf_id column to warehouse_stock table if it doesn't exist
         try:
             cursor.execute("SELECT cgmf_id FROM warehouse_stock LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
-            print("Migration: Added cgmf_id column to warehouse_stock table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'cgmf_id' in str(e).lower():
+                cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
+                print("Migration: Added cgmf_id column to warehouse_stock table")
         
         # Migration: Add sub_head column to loading_slips table if it doesn't exist
         try:
             cursor.execute("SELECT sub_head FROM loading_slips LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE loading_slips ADD COLUMN sub_head TEXT")
-            print("Migration: Added sub_head column to loading_slips table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'sub_head' in str(e).lower():
+                cursor.execute("ALTER TABLE loading_slips ADD COLUMN sub_head TEXT")
+                print("Migration: Added sub_head column to loading_slips table")
         
         # Migration: Add sub_head column to builty table if it doesn't exist
         try:
             cursor.execute("SELECT sub_head FROM builty LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE builty ADD COLUMN sub_head TEXT")
-            print("Migration: Added sub_head column to builty table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'sub_head' in str(e).lower():
+                cursor.execute("ALTER TABLE builty ADD COLUMN sub_head TEXT")
+                print("Migration: Added sub_head column to builty table")
         
         # Migration: Add sub_head column to warehouse_stock table if it doesn't exist
         try:
             cursor.execute("SELECT sub_head FROM warehouse_stock LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN sub_head TEXT")
-            print("Migration: Added sub_head column to warehouse_stock table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'sub_head' in str(e).lower():
+                cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN sub_head TEXT")
+                print("Migration: Added sub_head column to warehouse_stock table")
         
         # Migration: Add is_closed column to rakes table if it doesn't exist
         try:
             cursor.execute("SELECT is_closed FROM rakes LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE rakes ADD COLUMN is_closed INTEGER DEFAULT 0")
-            print("Migration: Added is_closed column to rakes table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'is_closed' in str(e).lower():
+                cursor.execute("ALTER TABLE rakes ADD COLUMN is_closed INTEGER DEFAULT 0")
+                print("Migration: Added is_closed column to rakes table")
         
         # Migration: Add closed_at column to rakes table if it doesn't exist
         try:
             cursor.execute("SELECT closed_at FROM rakes LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE rakes ADD COLUMN closed_at TIMESTAMP")
-            print("Migration: Added closed_at column to rakes table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'closed_at' in str(e).lower():
+                cursor.execute("ALTER TABLE rakes ADD COLUMN closed_at TIMESTAMP")
+                print("Migration: Added closed_at column to rakes table")
         
         # Migration: Add shortage column to rakes table if it doesn't exist
         try:
             cursor.execute("SELECT shortage FROM rakes LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE rakes ADD COLUMN shortage REAL DEFAULT 0")
-            print("Migration: Added shortage column to rakes table")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'shortage' in str(e).lower():
+                cursor.execute("ALTER TABLE rakes ADD COLUMN shortage REAL DEFAULT 0")
+                print("Migration: Added shortage column to rakes table")
         
         conn.commit()
         conn.close()
