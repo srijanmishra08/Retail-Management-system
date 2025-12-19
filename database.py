@@ -50,6 +50,14 @@ class Database:
             conn.row_factory = sqlite3.Row
             return conn
     
+    def close_connection(self, conn):
+        """Safely close database connection (handles libsql which doesn't have close())"""
+        if not self.use_cloud:
+            try:
+                self.close_connection(conn)
+            except:
+                pass
+    
     def execute_custom_query(self, query, params=None):
         """Execute a custom SQL query and return results"""
         conn = self.get_connection()
@@ -74,7 +82,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def initialize_database(self):
         """Create all tables and insert default data"""
@@ -432,7 +440,7 @@ class Database:
                 print("Migration: Added shortage column to rakes table")
         
         conn.commit()
-        conn.close()
+        self.close_connection(conn)
         print("Database initialized successfully!")
     
     # ========== User Operations ==========
@@ -443,7 +451,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
         user = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         
         if user and check_password_hash(user[2], password):
             return user
@@ -455,7 +463,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
         user = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return user
     
     def get_all_users(self):
@@ -464,7 +472,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT user_id, username, role, created_at FROM users')
         users = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return users
     
     # ========== Rake Operations (Admin) ==========
@@ -490,7 +498,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_rakes(self):
         """Get all rakes"""
@@ -498,7 +506,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM rakes ORDER BY created_at DESC')
         rakes = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return rakes
     
     def get_rake_by_code(self, rake_code):
@@ -507,7 +515,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM rakes WHERE rake_code = ?', (rake_code,))
         rake = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return rake
     
     def get_rake_balance(self, rake_code):
@@ -524,7 +532,7 @@ class Database:
         ''', (rake_code,))
         rake_result = cursor.fetchone()
         if not rake_result:
-            conn.close()
+            self.close_connection(conn)
             return None
         
         total_quantity = rake_result[0]
@@ -538,7 +546,7 @@ class Database:
         ''', (rake_code,))
         dispatched_quantity = cursor.fetchone()[0]
         
-        conn.close()
+        self.close_connection(conn)
         
         return {
             'total': total_quantity,
@@ -557,7 +565,7 @@ class Database:
             cursor.execute('SELECT rr_quantity FROM rakes WHERE rake_code = ?', (rake_code,))
             rake_result = cursor.fetchone()
             if not rake_result:
-                conn.close()
+                self.close_connection(conn)
                 return False, "Rake not found"
             
             rr_quantity = rake_result[0]
@@ -581,11 +589,11 @@ class Database:
             ''', (shortage, rake_code))
             
             conn.commit()
-            conn.close()
+            self.close_connection(conn)
             return True, shortage
         except Exception as e:
             conn.rollback()
-            conn.close()
+            self.close_connection(conn)
             return False, str(e)
     
     def get_total_shortage(self):
@@ -596,7 +604,7 @@ class Database:
             SELECT COALESCE(SUM(shortage), 0) FROM rakes WHERE is_closed = 1
         ''')
         total_shortage = cursor.fetchone()[0]
-        conn.close()
+        self.close_connection(conn)
         return total_shortage
     
     def get_closed_rakes(self):
@@ -607,7 +615,7 @@ class Database:
             SELECT * FROM rakes WHERE is_closed = 1 ORDER BY closed_at DESC
         ''')
         rakes = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return rakes
     
     def get_next_serial_number_for_rake(self, rake_code):
@@ -623,7 +631,7 @@ class Database:
         ''', (rake_code,))
         next_serial = cursor.fetchone()[0]
         
-        conn.close()
+        self.close_connection(conn)
         return next_serial
     
     def get_next_lr_number(self):
@@ -640,7 +648,7 @@ class Database:
         ''')
         result = cursor.fetchone()[0]
         
-        conn.close()
+        self.close_connection(conn)
         
         if result:
             return str(int(result) + 1)
@@ -659,7 +667,7 @@ class Database:
         ''', (warehouse_id,))
         result = cursor.fetchone()[0]
         
-        conn.close()
+        self.close_connection(conn)
         
         if result:
             return int(result) + 1
@@ -685,7 +693,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_accounts(self):
         """Get all accounts"""
@@ -693,7 +701,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM accounts ORDER BY account_name')
         accounts = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return accounts
     
     def get_accounts_by_type(self, account_type):
@@ -702,7 +710,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM accounts WHERE account_type = ? ORDER BY account_name', (account_type,))
         accounts = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return accounts
     
     # ========== Product Operations ==========
@@ -724,7 +732,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_products(self):
         """Get all products"""
@@ -732,7 +740,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM products ORDER BY product_name')
         products = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return products
     
     def get_product_by_name(self, product_name):
@@ -741,7 +749,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM products WHERE product_name = ?', (product_name,))
         product = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return product
     
     # ========== Company Operations ==========
@@ -763,7 +771,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_companies(self):
         """Get all companies"""
@@ -771,7 +779,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM companies ORDER BY company_name')
         companies = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return companies
     
     def get_company_by_id(self, company_id):
@@ -780,7 +788,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM companies WHERE company_id = ?', (company_id,))
         company = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return company
     
     # ========== Employee Operations ==========
@@ -802,7 +810,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_employees(self):
         """Get all employees"""
@@ -810,7 +818,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM employees ORDER BY employee_name')
         employees = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return employees
     
     def get_employee_by_id(self, employee_id):
@@ -819,7 +827,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM employees WHERE employee_id = ?', (employee_id,))
         employee = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return employee
     
     # ========== CGMF (CG Markfed) Operations ==========
@@ -841,7 +849,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_cgmf(self):
         """Get all CGMF societies"""
@@ -849,7 +857,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM cgmf ORDER BY district, society_name')
         cgmf_list = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return cgmf_list
     
     def get_cgmf_by_id(self, cgmf_id):
@@ -858,7 +866,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM cgmf WHERE cgmf_id = ?', (cgmf_id,))
         cgmf = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return cgmf
     
     # ========== Warehouse Operations ==========
@@ -869,7 +877,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM warehouses')
         warehouses = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return warehouses
     
     def get_warehouse_by_id(self, warehouse_id):
@@ -878,7 +886,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM warehouses WHERE warehouse_id = ?', (warehouse_id,))
         warehouse = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return warehouse
     
     # ========== Truck Operations ==========
@@ -900,7 +908,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_trucks(self):
         """Get all trucks"""
@@ -908,7 +916,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM trucks ORDER BY truck_number')
         trucks = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return trucks
     
     def get_truck_by_number(self, truck_number):
@@ -917,7 +925,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM trucks WHERE truck_number = ?', (truck_number,))
         truck = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return truck
     
     # ========== Builty Operations (Rake Point & Warehouse) ==========
@@ -948,7 +956,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_builties(self):
         """Get all builties"""
@@ -965,7 +973,7 @@ class Database:
             ORDER BY b.created_at DESC
         ''')
         builties = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return builties
     
     def get_warehouse_builties(self):
@@ -982,7 +990,7 @@ class Database:
             ORDER BY b.created_at DESC
         ''')
         builties = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return builties
     
     def get_builty_by_id(self, builty_id):
@@ -1004,7 +1012,7 @@ class Database:
             WHERE b.builty_id = ?
         ''', (builty_id,))
         builty = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         return builty
     
     # ========== Loading Slip Operations (Rake Point) ==========
@@ -1034,7 +1042,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_loading_slips_by_rake(self, rake_code):
         """Get loading slips by rake code"""
@@ -1049,7 +1057,7 @@ class Database:
             ORDER BY ls.slip_number
         ''', (rake_code,))
         slips = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return slips
     
     def get_all_loading_slips(self):
@@ -1072,7 +1080,7 @@ class Database:
             ORDER BY ls.slip_id DESC
         ''')
         slips = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return slips
     
     def get_all_loading_slips_with_status(self):
@@ -1096,7 +1104,7 @@ class Database:
             ORDER BY ls.slip_id DESC
         ''')
         slips = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return slips
     
     def link_loading_slip_to_builty(self, slip_id, builty_id):
@@ -1116,7 +1124,7 @@ class Database:
             conn.rollback()
             return False
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     # ========== Warehouse Stock Operations ==========
     
@@ -1147,7 +1155,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def add_warehouse_stock_out(self, warehouse_id, builty_id, quantity_mt, 
                                 account_id, date, notes=''):
@@ -1169,7 +1177,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def update_warehouse_stock_allocation(self, stock_id, quantity_mt, account_type, dealer_name, remark):
         """Update warehouse stock allocation details"""
@@ -1189,7 +1197,7 @@ class Database:
             conn.rollback()
             return False
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_warehouse_stock_summary(self):
         """Get warehouse stock summary with company, product, quantity, and warehouse"""
@@ -1213,7 +1221,7 @@ class Database:
             ORDER BY c.company_name, p.product_name, w.warehouse_name
         ''')
         summary = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return summary
     
     def get_warehouse_balance_stock(self, warehouse_id):
@@ -1228,7 +1236,7 @@ class Database:
             WHERE warehouse_id = ?
         ''', (warehouse_id,))
         result = cursor.fetchone()
-        conn.close()
+        self.close_connection(conn)
         
         if result:
             stock_in = result[0]
@@ -1250,7 +1258,7 @@ class Database:
             ORDER BY ws.date DESC, ws.created_at DESC
         ''', (warehouse_id,))
         transactions = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return transactions
     
     # ========== E-Bill Operations (Accountant) ==========
@@ -1273,7 +1281,7 @@ class Database:
             conn.rollback()
             return None
         finally:
-            conn.close()
+            self.close_connection(conn)
     
     def get_all_ebills(self):
         """Get all e-bills with complete builty details"""
@@ -1292,7 +1300,7 @@ class Database:
             ORDER BY e.created_at DESC
         ''')
         ebills = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return ebills
     
     def get_builties_without_ebills(self):
@@ -1307,7 +1315,7 @@ class Database:
             ORDER BY b.date DESC
         ''')
         builties = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return builties
     
     # ========== Dashboard Statistics ==========
@@ -1343,7 +1351,7 @@ class Database:
         total_ebills = result[0]
         total_ebill_amount = result[1]
         
-        conn.close()
+        self.close_connection(conn)
         
         return {
             'total_rakes': total_rakes,
@@ -1374,5 +1382,5 @@ class Database:
             ORDER BY r.date DESC
         ''')
         summary = cursor.fetchall()
-        conn.close()
+        self.close_connection(conn)
         return summary
