@@ -1,0 +1,12 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+*.db
+.env
+venv/
+.venv/
+migrate_to_turso.py
+Procfile
+*.md
+fims.db
