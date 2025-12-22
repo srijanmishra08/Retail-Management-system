@@ -11,8 +11,13 @@ import os
 from database import Database
 from reports import ReportGenerator
 
-app = Flask(__name__)
-app.secret_key = 'fims-secret-key-change-in-production'
+# Get the directory where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(__name__, 
+            template_folder=os.path.join(BASE_DIR, 'templates'),
+            static_folder=os.path.join(BASE_DIR, 'static'))
+app.secret_key = os.environ.get('SECRET_KEY', 'fims-secret-key-change-in-production')
 
 # Initialize database
 db = Database()
