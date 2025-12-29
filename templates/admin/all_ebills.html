@@ -27,6 +27,7 @@
                             <th>Goods</th>
                             <th>Quantity (MT)</th>
                             <th>Amount</th>
+                            <th>Bill PDF</th>
                             <th>Eway Bill PDF</th>
                             <th>Created</th>
                         </tr>
@@ -45,13 +46,23 @@
                             <td>{{ ebill[8] }}</td>
                             <td>₹{{ "{:,.2f}".format(ebill[2]) }}</td>
                             <td>
+                                {% if ebill[12] %}
+                                    <a href="{{ url_for('admin_download_bill', filename=ebill[12]) }}" 
+                                       class="btn btn-sm btn-primary">
+                                        <i class="bi bi-download"></i> Bill
+                                    </a>
+                                {% else %}
+                                    <span class="badge bg-secondary">No Bill</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 {% if ebill[4] %}
                                     <a href="{{ url_for('admin_download_eway_bill', filename=ebill[4]) }}" 
                                        class="btn btn-sm btn-success">
-                                        <i class="bi bi-download"></i> Download
+                                        <i class="bi bi-download"></i> Eway
                                     </a>
                                 {% else %}
-                                    <span class="badge bg-secondary">No PDF</span>
+                                    <span class="badge bg-secondary">No Eway</span>
                                 {% endif %}
                             </td>
                             <td>{{ ebill[5][:16] if ebill[5] else 'N/A' }}</td>

@@ -60,6 +60,7 @@
                         <th>Goods</th>
                         <th>Quantity (MT)</th>
                         <th>Amount (₹)</th>
+                        <th>Bill</th>
                         <th>Eway Bill</th>
                         <th>Actions</th>
                     </tr>
@@ -77,6 +78,23 @@
                             <td class="text-end">{{ "%.2f"|format(ebill[8]) if ebill[8] else '0.00' }}</td>
                             <td class="text-end">₹{{ "%.2f"|format(ebill[2]) }}</td>
                             <td>
+                                {% if ebill[12] %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> Uploaded
+                                </span>
+                                <br>
+                                <a href="{{ url_for('download_bill', filename=ebill[12]) }}" 
+                                   class="btn btn-sm btn-primary mt-1" 
+                                   target="_blank">
+                                    <i class="bi bi-file-pdf"></i> Bill
+                                </a>
+                                {% else %}
+                                <span class="badge bg-warning">
+                                    <i class="bi bi-exclamation-triangle"></i> Not Uploaded
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 {% if ebill[4] %}
                                 <span class="badge bg-success">
                                     <i class="bi bi-check-circle"></i> Uploaded
@@ -85,7 +103,7 @@
                                 <a href="{{ url_for('download_eway_bill', filename=ebill[4]) }}" 
                                    class="btn btn-sm btn-info mt-1" 
                                    target="_blank">
-                                    <i class="bi bi-file-pdf"></i> Download
+                                    <i class="bi bi-file-pdf"></i> Eway
                                 </a>
                                 {% else %}
                                 <span class="badge bg-warning">
@@ -104,7 +122,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted">No e-bills found</td>
+                            <td colspan="11" class="text-center text-muted">No e-bills found</td>
                         </tr>
                     {% endif %}
                 </tbody>

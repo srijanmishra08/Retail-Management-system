@@ -112,6 +112,7 @@ class Database:
                 product_name TEXT NOT NULL,
                 product_code TEXT,
                 rake_point_name TEXT NOT NULL,
+                builty_head TEXT,
                 is_closed INTEGER DEFAULT 0,
                 closed_at TIMESTAMP,
                 shortage REAL DEFAULT 0,
@@ -233,6 +234,8 @@ class Database:
                 lr_index INTEGER,
                 created_by_role TEXT,
                 sub_head TEXT,
+                receiver_name TEXT,
+                received_quantity REAL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
                 FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id),
@@ -315,6 +318,7 @@ class Database:
                 builty_id INTEGER NOT NULL,
                 ebill_number TEXT UNIQUE NOT NULL,
                 amount REAL NOT NULL,
+                bill_pdf TEXT,
                 eway_bill_pdf TEXT,
                 generated_date DATE NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -439,6 +443,38 @@ class Database:
                 cursor.execute("ALTER TABLE rakes ADD COLUMN shortage REAL DEFAULT 0")
                 print("Migration: Added shortage column to rakes table")
         
+        # Migration: Add bill_pdf column to ebills table if it doesn't exist
+        try:
+            cursor.execute("SELECT bill_pdf FROM ebills LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'bill_pdf' in str(e).lower():
+                cursor.execute("ALTER TABLE ebills ADD COLUMN bill_pdf TEXT")
+                print("Migration: Added bill_pdf column to ebills table")
+        
+        # Migration: Add builty_head column to rakes table
+        try:
+            cursor.execute("SELECT builty_head FROM rakes LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'builty_head' in str(e).lower():
+                cursor.execute("ALTER TABLE rakes ADD COLUMN builty_head TEXT")
+                print("Migration: Added builty_head column to rakes table")
+        
+        # Migration: Add receiver_name column to builty table
+        try:
+            cursor.execute("SELECT receiver_name FROM builty LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'receiver_name' in str(e).lower():
+                cursor.execute("ALTER TABLE builty ADD COLUMN receiver_name TEXT")
+                print("Migration: Added receiver_name column to builty table")
+        
+        # Migration: Add received_quantity column to builty table
+        try:
+            cursor.execute("SELECT received_quantity FROM builty LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'received_quantity' in str(e).lower():
+                cursor.execute("ALTER TABLE builty ADD COLUMN received_quantity REAL")
+                print("Migration: Added received_quantity column to builty table")
+        
         conn.commit()
         self.close_connection(conn)
         print("Database initialized successfully!")
@@ -478,17 +514,17 @@ class Database:
     # ========== Rake Operations (Admin) ==========
     
     def add_rake(self, rake_code, company_name, company_code, date, rr_quantity, 
-                 product_name, product_code, rake_point_name):
+                 product_name, product_code, rake_point_name, builty_head=None):
         """Add new rake"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
                 INSERT INTO rakes (rake_code, company_name, company_code, date, rr_quantity,
-                                  product_name, product_code, rake_point_name)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                  product_name, product_code, rake_point_name, builty_head)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (rake_code, company_name, company_code, date, rr_quantity, 
-                  product_name, product_code, rake_point_name))
+                  product_name, product_code, rake_point_name, builty_head))
             
             rake_id = cursor.lastrowid
             conn.commit()
@@ -695,6 +731,36 @@ class Database:
         finally:
             self.close_connection(conn)
     
+    def delete_account(self, account_id):
+        """Delete an account by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # Check if account is used in any builties
+            cursor.execute('SELECT COUNT(*) FROM builty WHERE account_id = ?', (account_id,))
+            if cursor.fetchone()[0] > 0:
+                return False, "Account is used in builties and cannot be deleted"
+            
+            # Check if account is used in any loading slips
+            cursor.execute('SELECT COUNT(*) FROM loading_slips WHERE account_id = ?', (account_id,))
+            if cursor.fetchone()[0] > 0:
+                return False, "Account is used in loading slips and cannot be deleted"
+            
+            # Check if account is used in any warehouse stock
+            cursor.execute('SELECT COUNT(*) FROM warehouse_stock WHERE account_id = ?', (account_id,))
+            if cursor.fetchone()[0] > 0:
+                return False, "Account is used in warehouse stock records and cannot be deleted"
+            
+            cursor.execute('DELETE FROM accounts WHERE account_id = ?', (account_id,))
+            conn.commit()
+            return True, "Account deleted successfully"
+        except Exception as e:
+            print(f"Error deleting account: {e}")
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
     def get_all_accounts(self):
         """Get all accounts"""
         conn = self.get_connection()
@@ -889,6 +955,74 @@ class Database:
         self.close_connection(conn)
         return warehouse
     
+    def add_warehouse(self, warehouse_name, location, capacity):
+        """Add new warehouse"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO warehouses (warehouse_name, location, capacity)
+                VALUES (?, ?, ?)
+            ''', (warehouse_name, location, capacity))
+            warehouse_id = cursor.lastrowid
+            conn.commit()
+            return warehouse_id
+        except Exception as e:
+            print(f"Error adding warehouse: {e}")
+            conn.rollback()
+            return None
+        finally:
+            self.close_connection(conn)
+    
+    def update_warehouse(self, warehouse_id, warehouse_name, location, capacity):
+        """Update warehouse details"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE warehouses 
+                SET warehouse_name = ?, location = ?, capacity = ?
+                WHERE warehouse_id = ?
+            ''', (warehouse_name, location, capacity, warehouse_id))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error updating warehouse: {e}")
+            conn.rollback()
+            return False
+        finally:
+            self.close_connection(conn)
+    
+    def delete_warehouse(self, warehouse_id):
+        """Delete a warehouse by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # Check if warehouse is used in any builties
+            cursor.execute('SELECT COUNT(*) FROM builty WHERE warehouse_id = ?', (warehouse_id,))
+            if cursor.fetchone()[0] > 0:
+                return False, "Warehouse is used in builties and cannot be deleted"
+            
+            # Check if warehouse is used in any loading slips
+            cursor.execute('SELECT COUNT(*) FROM loading_slips WHERE warehouse_id = ?', (warehouse_id,))
+            if cursor.fetchone()[0] > 0:
+                return False, "Warehouse is used in loading slips and cannot be deleted"
+            
+            # Check if warehouse has stock entries
+            cursor.execute('SELECT COUNT(*) FROM warehouse_stock WHERE warehouse_id = ?', (warehouse_id,))
+            if cursor.fetchone()[0] > 0:
+                return False, "Warehouse has stock entries and cannot be deleted"
+            
+            cursor.execute('DELETE FROM warehouses WHERE warehouse_id = ?', (warehouse_id,))
+            conn.commit()
+            return True, "Warehouse deleted successfully"
+        except Exception as e:
+            print(f"Error deleting warehouse: {e}")
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
     # ========== Truck Operations ==========
     
     def add_truck(self, truck_number, driver_name, driver_mobile, owner_name, owner_mobile):
@@ -933,7 +1067,7 @@ class Database:
     def add_builty(self, builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
                    truck_id, loading_point, unloading_point, goods_name, number_of_bags,
                    quantity_mt, kg_per_bag, rate_per_mt, total_freight, advance=0, to_pay=0, lr_number='', 
-                   lr_index=0, created_by_role='', cgmf_id=None):
+                   lr_index=0, created_by_role='', cgmf_id=None, sub_head=None, receiver_name=None, received_quantity=None):
         """Add new builty - supports accounts, warehouses, and CGMF"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -942,11 +1076,12 @@ class Database:
                 INSERT INTO builty (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id, cgmf_id,
                                    truck_id, loading_point, unloading_point, goods_name, number_of_bags,
                                    quantity_mt, kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number,
-                                   lr_index, created_by_role)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   lr_index, created_by_role, sub_head, receiver_name, received_quantity)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (builty_number, rake_code, date, rake_point_name, account_id, warehouse_id, cgmf_id, truck_id,
                   loading_point, unloading_point, goods_name, number_of_bags, quantity_mt,
-                  kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number, lr_index, created_by_role))
+                  kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number, lr_index, created_by_role, sub_head,
+                  receiver_name, received_quantity))
             
             builty_id = cursor.lastrowid
             conn.commit()
@@ -1004,11 +1139,13 @@ class Database:
                    b.quantity_mt, b.kg_per_bag, b.rate_per_mt, b.total_freight,
                    b.advance, b.to_pay, b.lr_number, b.lr_index, b.created_by_role, b.created_at,
                    a.account_name, w.warehouse_name, t.truck_number, 
-                   t.driver_name, t.driver_mobile, t.owner_name, t.owner_mobile
+                   t.driver_name, t.driver_mobile, t.owner_name, t.owner_mobile,
+                   r.builty_head, b.receiver_name, b.received_quantity
             FROM builty b
             LEFT JOIN accounts a ON b.account_id = a.account_id
             LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
             LEFT JOIN trucks t ON b.truck_id = t.truck_id
+            LEFT JOIN rakes r ON b.rake_code = r.rake_code
             WHERE b.builty_id = ?
         ''', (builty_id,))
         builty = cursor.fetchone()
@@ -1263,15 +1400,15 @@ class Database:
     
     # ========== E-Bill Operations (Accountant) ==========
     
-    def add_ebill(self, builty_id, ebill_number, amount, generated_date, eway_bill_pdf=None):
+    def add_ebill(self, builty_id, ebill_number, amount, generated_date, bill_pdf=None, eway_bill_pdf=None):
         """Add new e-bill"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO ebills (builty_id, ebill_number, amount, generated_date, eway_bill_pdf)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (builty_id, ebill_number, amount, generated_date, eway_bill_pdf))
+                INSERT INTO ebills (builty_id, ebill_number, amount, generated_date, bill_pdf, eway_bill_pdf)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (builty_id, ebill_number, amount, generated_date, bill_pdf, eway_bill_pdf))
             
             ebill_id = cursor.lastrowid
             conn.commit()
@@ -1292,7 +1429,8 @@ class Database:
                    e.eway_bill_pdf, e.created_at,
                    b.builty_number, b.goods_name, b.quantity_mt, b.lr_number,
                    t.truck_number,
-                   COALESCE(a.account_name, 'N/A') as account_name
+                   COALESCE(a.account_name, 'N/A') as account_name,
+                   e.bill_pdf, b.builty_id, b.created_by_role
             FROM ebills e
             LEFT JOIN builty b ON e.builty_id = b.builty_id
             LEFT JOIN trucks t ON b.truck_id = t.truck_id
@@ -1317,6 +1455,28 @@ class Database:
         builties = cursor.fetchall()
         self.close_connection(conn)
         return builties
+    
+    def get_ebills_by_builty_creator(self, created_by_role):
+        """Get e-bills for builties created by a specific role"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT e.ebill_id, e.ebill_number, e.amount, e.generated_date, 
+                   e.eway_bill_pdf, e.created_at,
+                   b.builty_number, b.goods_name, b.quantity_mt, b.lr_number,
+                   t.truck_number,
+                   COALESCE(a.account_name, 'N/A') as account_name,
+                   e.bill_pdf, b.builty_id, b.created_by_role
+            FROM ebills e
+            LEFT JOIN builty b ON e.builty_id = b.builty_id
+            LEFT JOIN trucks t ON b.truck_id = t.truck_id
+            LEFT JOIN accounts a ON b.account_id = a.account_id
+            WHERE b.created_by_role = ?
+            ORDER BY e.created_at DESC
+        ''', (created_by_role,))
+        ebills = cursor.fetchall()
+        self.close_connection(conn)
+        return ebills
     
     # ========== Dashboard Statistics ==========
     

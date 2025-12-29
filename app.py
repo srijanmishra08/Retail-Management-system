@@ -143,9 +143,10 @@ def admin_add_rake():
         product_name = request.form.get('product_name')
         product_code = request.form.get('product_code')
         rake_point_name = request.form.get('rake_point_name')
+        builty_head = request.form.get('builty_head')
         
         rake_id = db.add_rake(rake_code, company_name, company_code, date, rr_quantity,
-                             product_name, product_code, rake_point_name)
+                             product_name, product_code, rake_point_name, builty_head)
         
         if rake_id:
             flash(f'Rake {rake_code} added successfully!', 'success')
@@ -413,6 +414,22 @@ def admin_add_cgmf():
         flash(f'CGMF Society "{society_name}" added successfully!', 'success')
     else:
         flash('Error adding CGMF society.', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
+
+@app.route('/admin/delete-account/<int:account_id>', methods=['POST'])
+@login_required
+def admin_delete_account(account_id):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    success, message = db.delete_account(account_id)
+    
+    if success:
+        flash(message, 'success')
+    else:
+        flash(f'Error: {message}', 'error')
     
     return redirect(url_for('admin_manage_accounts'))
 
@@ -712,6 +729,93 @@ def admin_download_eway_bill(filename):
         flash('File not found', 'error')
         return redirect(url_for('admin_all_ebills'))
 
+@app.route('/admin/download-bill/<filename>')
+@login_required
+def admin_download_bill(filename):
+    """Admin can also download bill PDFs"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('admin_all_ebills'))
+
+@app.route('/admin/manage-warehouses', methods=['GET'])
+@login_required
+def admin_manage_warehouses():
+    """Admin view to manage warehouses"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    warehouses = db.get_all_warehouses()
+    return render_template('admin/manage_warehouses.html', warehouses=warehouses)
+
+@app.route('/admin/add-warehouse', methods=['POST'])
+@login_required
+def admin_add_warehouse():
+    """Admin can add new warehouse"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    warehouse_name = request.form.get('warehouse_name')
+    location = request.form.get('location', '')
+    capacity = float(request.form.get('capacity', 0))
+    
+    warehouse_id = db.add_warehouse(warehouse_name, location, capacity)
+    
+    if warehouse_id:
+        flash(f'Warehouse "{warehouse_name}" added successfully!', 'success')
+    else:
+        flash('Error adding warehouse.', 'error')
+    
+    return redirect(url_for('admin_manage_warehouses'))
+
+@app.route('/admin/edit-warehouse/<int:warehouse_id>', methods=['POST'])
+@login_required
+def admin_edit_warehouse(warehouse_id):
+    """Admin can edit warehouse"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    warehouse_name = request.form.get('warehouse_name')
+    location = request.form.get('location', '')
+    capacity = float(request.form.get('capacity', 0))
+    
+    success = db.update_warehouse(warehouse_id, warehouse_name, location, capacity)
+    
+    if success:
+        flash(f'Warehouse "{warehouse_name}" updated successfully!', 'success')
+    else:
+        flash('Error updating warehouse.', 'error')
+    
+    return redirect(url_for('admin_manage_warehouses'))
+
+@app.route('/admin/delete-warehouse/<int:warehouse_id>', methods=['POST'])
+@login_required
+def admin_delete_warehouse(warehouse_id):
+    """Admin can delete warehouse"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    success, message = db.delete_warehouse(warehouse_id)
+    
+    if success:
+        flash(message, 'success')
+    else:
+        flash(f'Error: {message}', 'error')
+    
+    return redirect(url_for('admin_manage_warehouses'))
+
 @app.route('/admin/print-loading-slip/<int:slip_id>')
 @login_required
 def admin_print_loading_slip(slip_id):
@@ -788,7 +892,10 @@ def admin_print_builty(builty_id):
         'driver_name': builty[26],
         'driver_mobile': builty[27],
         'owner_name': builty[28],
-        'owner_mobile': builty[29]
+        'owner_mobile': builty[29],
+        'builty_head': builty[30] if len(builty) > 30 else None,
+        'receiver_name': builty[31] if len(builty) > 31 else None,
+        'received_quantity': builty[32] if len(builty) > 32 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -919,10 +1026,16 @@ def rakepoint_create_builty():
         kg_per_bag = (quantity_wt_mt * 1000) / number_of_bags if number_of_bags > 0 else 50
         rate_per_mt = total_freight / quantity_wt_mt if quantity_wt_mt > 0 else 0
         
+        # Get sub_head and receiver details
+        sub_head = request.form.get('sub_head', '')
+        receiver_name = request.form.get('receiver_name', '')
+        received_quantity = request.form.get('received_quantity')
+        received_quantity = float(received_quantity) if received_quantity else None
+        
         builty_id = db.add_builty(builty_number, rake_code, date, rake_point_name, account_id, warehouse_id,
                                   truck_id, loading_point, unloading_point, goods_name, number_of_bags,
                                   quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, freight_advance, to_pay, lr_number,
-                                  0, 'RakePoint', cgmf_id)
+                                  0, 'RakePoint', cgmf_id, sub_head, receiver_name, received_quantity)
         
         if builty_id:
             # Link the loading slip to this builty
@@ -1301,7 +1414,10 @@ def rakepoint_print_builty(builty_id):
         'driver_name': builty[26],
         'driver_mobile': builty[27],
         'owner_name': builty[28],
-        'owner_mobile': builty[29]
+        'owner_mobile': builty[29],
+        'builty_head': builty[30] if len(builty) > 30 else None,
+        'receiver_name': builty[31] if len(builty) > 31 else None,
+        'received_quantity': builty[32] if len(builty) > 32 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -1338,6 +1454,51 @@ def rakepoint_all_builties():
     ''')
     
     return render_template('rakepoint/all_builties.html', builties=builties)
+
+@app.route('/rakepoint/view-ebills')
+@login_required
+def rakepoint_view_ebills():
+    """RakePoint can view e-bills for builties they created"""
+    if current_user.role != 'RakePoint':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    ebills = db.get_ebills_by_builty_creator('RakePoint')
+    return render_template('rakepoint/view_ebills.html', ebills=ebills)
+
+@app.route('/rakepoint/download-bill/<filename>')
+@login_required
+def rakepoint_download_bill(filename):
+    """RakePoint can download bill PDFs for their builties"""
+    if current_user.role != 'RakePoint':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('rakepoint_view_ebills'))
+
+@app.route('/rakepoint/download-eway-bill/<filename>')
+@login_required
+def rakepoint_download_eway_bill(filename):
+    """RakePoint can download eway bill PDFs for their builties"""
+    if current_user.role != 'RakePoint':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('rakepoint_view_ebills'))
 
 # ========== WAREHOUSE Dashboard & Routes ==========
 
@@ -1774,7 +1935,10 @@ def warehouse_print_builty(builty_id):
         'driver_name': builty[26],
         'driver_mobile': builty[27],
         'owner_name': builty[28],
-        'owner_mobile': builty[29]
+        'owner_mobile': builty[29],
+        'builty_head': builty[30] if len(builty) > 30 else None,
+        'receiver_name': builty[31] if len(builty) > 31 else None,
+        'received_quantity': builty[32] if len(builty) > 32 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -1898,11 +2062,17 @@ def warehouse_create_builty():
         kg_per_bag = (quantity_wt_mt * 1000) / number_of_bags if number_of_bags > 0 else 50
         rate_per_mt = total_freight / quantity_wt_mt if quantity_wt_mt > 0 else 0
         
+        # Get sub_head and receiver details
+        sub_head = request.form.get('sub_head', '')
+        receiver_name = request.form.get('receiver_name', '')
+        received_quantity = request.form.get('received_quantity')
+        received_quantity = float(received_quantity) if received_quantity else None
+        
         # Create builty
         builty_id = db.add_builty(builty_number, rake_code, date, warehouse_name, account_id, destination_warehouse_id,
                                   truck_id, loading_point, unloading_point, goods_name, number_of_bags,
-                                  quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, lr_number,
-                                  0, 'Warehouse', cgmf_id)
+                                  quantity_wt_mt, kg_per_bag, rate_per_mt, total_freight, 0, 0, lr_number,
+                                  0, 'Warehouse', cgmf_id, sub_head, receiver_name, received_quantity)
         
         if builty_id:
             # Link loading slip to builty if provided
@@ -2215,6 +2385,51 @@ def warehouse_all_builties():
     
     return render_template('warehouse/all_builties.html', builties=builties)
 
+@app.route('/warehouse/view-ebills')
+@login_required
+def warehouse_view_ebills():
+    """Warehouse can view e-bills for builties they created"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    ebills = db.get_ebills_by_builty_creator('Warehouse')
+    return render_template('warehouse/view_ebills.html', ebills=ebills)
+
+@app.route('/warehouse/download-bill/<filename>')
+@login_required
+def warehouse_download_bill(filename):
+    """Warehouse can download bill PDFs for their builties"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('warehouse_view_ebills'))
+
+@app.route('/warehouse/download-eway-bill/<filename>')
+@login_required
+def warehouse_download_eway_bill(filename):
+    """Warehouse can download eway bill PDFs for their builties"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('warehouse_view_ebills'))
+
 # ========== ACCOUNTANT Dashboard & Routes ==========
 
 @app.route('/accountant/dashboard')
@@ -2281,8 +2496,27 @@ def accountant_create_ebill():
     if request.method == 'POST':
         builty_id = request.form.get('builty_id')
         ebill_number = request.form.get('ebill_number')
-        amount = float(request.form.get('amount'))
+        amount = 0.0  # Amount field removed from form
         generated_date = request.form.get('ebill_date')  # Fixed: was 'generated_date'
+        
+        # Handle file upload for bill PDF
+        bill_pdf = None
+        if 'bill_pdf' in request.files:
+            file = request.files['bill_pdf']
+            if file and file.filename and file.filename.endswith('.pdf'):
+                # Create uploads directory if it doesn't exist
+                import os
+                upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                # Generate unique filename
+                from datetime import datetime
+                filename = f"BILL_{ebill_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                filepath = os.path.join(upload_folder, filename)
+                
+                # Save the file
+                file.save(filepath)
+                bill_pdf = filename
         
         # Handle file upload for eway bill PDF
         eway_bill_pdf = None
@@ -2296,14 +2530,14 @@ def accountant_create_ebill():
                 
                 # Generate unique filename
                 from datetime import datetime
-                filename = f"{ebill_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                filename = f"EWAY_{ebill_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
                 filepath = os.path.join(upload_folder, filename)
                 
                 # Save the file
                 file.save(filepath)
                 eway_bill_pdf = filename
         
-        ebill_id = db.add_ebill(builty_id, ebill_number, amount, generated_date, eway_bill_pdf)
+        ebill_id = db.add_ebill(builty_id, ebill_number, amount, generated_date, bill_pdf, eway_bill_pdf)
         
         if ebill_id:
             flash(f'E-Bill {ebill_number} created successfully!', 'success')
@@ -2335,6 +2569,23 @@ def download_eway_bill(filename):
         return redirect(url_for('index'))
     
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
+    filepath = os.path.join(upload_folder, filename)
+    
+    if os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    else:
+        flash('File not found', 'error')
+        return redirect(url_for('accountant_all_ebills'))
+
+@app.route('/accountant/download-bill/<filename>')
+@login_required
+def download_bill(filename):
+    """Download bill PDF"""
+    if current_user.role != 'Accountant':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
     filepath = os.path.join(upload_folder, filename)
     
     if os.path.exists(filepath):

@@ -195,6 +195,9 @@
                 <a class="nav-link {% if 'admin_warehouse_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_warehouse_summary') }}">
                     <i class="bi bi-bar-chart-fill"></i> Warehouse Summary
                 </a>
+                <a class="nav-link {% if 'admin_manage_warehouses' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_manage_warehouses') }}">
+                    <i class="bi bi-building"></i> Manage Warehouses
+                </a>
             {% elif current_user.role == 'RakePoint' %}
                 <a class="nav-link {% if 'rakepoint_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_dashboard') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard
@@ -210,6 +213,9 @@
                 </a>
                 <a class="nav-link {% if 'rakepoint_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_all_builties') }}">
                     <i class="bi bi-file-earmark-text"></i> All Builties
+                </a>
+                <a class="nav-link {% if 'rakepoint_view_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_view_ebills') }}">
+                    <i class="bi bi-receipt"></i> View E-Bills
                 </a>
             {% elif current_user.role == 'Warehouse' %}
                 <a class="nav-link {% if 'warehouse_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_dashboard') }}">
@@ -230,6 +236,9 @@
                 </a>
                 <a class="nav-link {% if 'warehouse_all_builties' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_all_builties') }}">
                     <i class="bi bi-file-earmark-text"></i> All Builties
+                </a>
+                <a class="nav-link {% if 'warehouse_view_ebills' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_view_ebills') }}">
+                    <i class="bi bi-receipt"></i> View E-Bills
                 </a>
                 <div class="px-3 py-2 text-white-50 small"><strong>Reports</strong></div>
                 <a class="nav-link {% if 'warehouse_balance_all' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_balance_all') }}">

@@ -61,6 +61,7 @@
                                 <th>Contact</th>
                                 <th>Address</th>
                                 <th>Created At</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -72,6 +73,15 @@
                                 <td>{{ account[3] }}</td>
                                 <td>{{ account[4] }}</td>
                                 <td>{{ account[5] }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('admin_delete_account', account_id=account[0]) }}" 
+                                          style="display: inline;" 
+                                          onsubmit="return confirm('Are you sure you want to delete this account? This action cannot be undone.');">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Delete Account">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
