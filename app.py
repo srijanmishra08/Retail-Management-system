@@ -174,6 +174,22 @@ def admin_close_rake(rake_code):
     
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/reopen-rake/<rake_code>', methods=['POST'])
+@login_required
+def admin_reopen_rake(rake_code):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    success = db.reopen_rake(rake_code)
+    
+    if success:
+        flash(f'Rake {rake_code} reopened successfully!', 'success')
+    else:
+        flash(f'Error reopening rake', 'error')
+    
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/summary')
 @login_required
 def admin_summary():
@@ -339,8 +355,13 @@ def admin_manage_accounts():
         account_type = request.form.get('account_type')
         contact = request.form.get('contact')
         address = request.form.get('address')
+        distance = request.form.get('distance', 0)
+        try:
+            distance = float(distance) if distance else 0
+        except ValueError:
+            distance = 0
         
-        account_id = db.add_account(account_name, account_type, contact, address)
+        account_id = db.add_account(account_name, account_type, contact, address, distance)
         
         if account_id:
             flash(f'Account {account_name} added successfully!', 'success')
@@ -365,8 +386,13 @@ def admin_add_company():
     contact_person = request.form.get('contact_person', '')
     mobile = request.form.get('mobile', '')
     address = request.form.get('address', '')
+    distance = request.form.get('distance', 0)
+    try:
+        distance = float(distance) if distance else 0
+    except ValueError:
+        distance = 0
     
-    company_id = db.add_company(company_name, company_code, contact_person, mobile, address)
+    company_id = db.add_company(company_name, company_code, contact_person, mobile, address, distance)
     
     if company_id:
         flash(f'Company {company_name} added successfully!', 'success')
@@ -407,8 +433,13 @@ def admin_add_cgmf():
     destination = request.form.get('destination')
     society_name = request.form.get('society_name')
     contact = request.form.get('contact', '')
+    distance = request.form.get('distance', 0)
+    try:
+        distance = float(distance) if distance else 0
+    except ValueError:
+        distance = 0
     
-    cgmf_id = db.add_cgmf(district, destination, society_name, contact)
+    cgmf_id = db.add_cgmf(district, destination, society_name, contact, distance)
     
     if cgmf_id:
         flash(f'CGMF Society "{society_name}" added successfully!', 'success')
@@ -481,6 +512,89 @@ def admin_all_builties():
     
     builties = db.get_all_builties()
     return render_template('admin/all_builties.html', builties=builties)
+
+@app.route('/admin/delete-builty/<int:builty_id>', methods=['POST'])
+@login_required
+def admin_delete_builty(builty_id):
+    """Admin delete builty"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    delete_loading_slip = request.form.get('delete_loading_slip', 'false') == 'true'
+    success, message = db.delete_builty(builty_id, delete_loading_slip)
+    
+    if success:
+        flash(message, 'success')
+    else:
+        flash(message, 'error')
+    
+    return redirect(url_for('admin_all_builties'))
+
+@app.route('/admin/delete-loading-slip/<int:slip_id>', methods=['POST'])
+@login_required
+def admin_delete_loading_slip(slip_id):
+    """Admin delete loading slip"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    delete_builty = request.form.get('delete_builty', 'false') == 'true'
+    success, message = db.delete_loading_slip(slip_id, delete_builty)
+    
+    if success:
+        flash(message, 'success')
+    else:
+        flash(message, 'error')
+    
+    return redirect(url_for('admin_all_loading_slips'))
+
+@app.route('/admin/edit-loading-slip/<int:slip_id>', methods=['POST'])
+@login_required
+def admin_edit_loading_slip(slip_id):
+    """Admin edit loading slip"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    destination = request.form.get('destination')
+    quantity_bags = int(request.form.get('quantity_bags', 0))
+    quantity_mt = float(request.form.get('quantity_mt', 0))
+    goods_name = request.form.get('goods_name')
+    
+    success, message = db.update_loading_slip(slip_id, destination, quantity_bags, quantity_mt, goods_name)
+    
+    if success:
+        flash(message, 'success')
+    else:
+        flash(message, 'error')
+    
+    return redirect(url_for('admin_all_loading_slips'))
+
+@app.route('/admin/edit-builty/<int:builty_id>', methods=['POST'])
+@login_required
+def admin_edit_builty(builty_id):
+    """Admin edit builty"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    unloading_point = request.form.get('unloading_point', '')
+    number_of_bags = int(request.form.get('number_of_bags', 0))
+    quantity_mt = float(request.form.get('quantity_mt', 0))
+    rate_per_mt = float(request.form.get('rate_per_mt', 0))
+    total_freight = float(request.form.get('total_freight', 0))
+    advance = float(request.form.get('advance', 0))
+    to_pay = float(request.form.get('to_pay', 0))
+    
+    success, message = db.update_builty(builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay)
+    
+    if success:
+        flash(message, 'success')
+    else:
+        flash(message, 'error')
+    
+    return redirect(url_for('admin_all_builties'))
 
 @app.route('/admin/all-ebills')
 @login_required
@@ -768,8 +882,13 @@ def admin_add_warehouse():
     warehouse_name = request.form.get('warehouse_name')
     location = request.form.get('location', '')
     capacity = float(request.form.get('capacity', 0))
+    distance = request.form.get('distance', 0)
+    try:
+        distance = float(distance) if distance else 0
+    except ValueError:
+        distance = 0
     
-    warehouse_id = db.add_warehouse(warehouse_name, location, capacity)
+    warehouse_id = db.add_warehouse(warehouse_name, location, capacity, distance)
     
     if warehouse_id:
         flash(f'Warehouse "{warehouse_name}" added successfully!', 'success')
@@ -1417,7 +1536,8 @@ def rakepoint_print_builty(builty_id):
         'owner_mobile': builty[29],
         'builty_head': builty[30] if len(builty) > 30 else None,
         'receiver_name': builty[31] if len(builty) > 31 else None,
-        'received_quantity': builty[32] if len(builty) > 32 else None
+        'received_quantity': builty[32] if len(builty) > 32 else None,
+        'account_address': builty[33] if len(builty) > 33 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -1938,7 +2058,8 @@ def warehouse_print_builty(builty_id):
         'owner_mobile': builty[29],
         'builty_head': builty[30] if len(builty) > 30 else None,
         'receiver_name': builty[31] if len(builty) > 31 else None,
-        'received_quantity': builty[32] if len(builty) > 32 else None
+        'received_quantity': builty[32] if len(builty) > 32 else None,
+        'account_address': builty[33] if len(builty) > 33 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)

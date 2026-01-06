@@ -69,12 +69,12 @@
                             <td>{{ rake.company_name }}</td>
                             <td>{{ rake.product_name }}</td>
                             <td>{{ rake.date }}</td>
-                            <td>{{ "%.2f"|format(rake.rr_quantity) }} MT</td>
-                            <td class="text-primary"><strong>{{ "%.2f"|format(rake.dispatched) }} MT</strong></td>
-                            <td class="text-success"><strong>{{ "%.2f"|format(rake.remaining) }} MT</strong></td>
+                            <td>{{ "%.2f"|format(rake.rr_quantity|float) }} MT</td>
+                            <td class="text-primary"><strong>{{ "%.2f"|format(rake.dispatched|float) }} MT</strong></td>
+                            <td class="text-success"><strong>{{ "%.2f"|format(rake.remaining|float) }} MT</strong></td>
                             <td>
                                 {% if rake.is_closed %}
-                                    <span class="text-danger"><strong>{{ "%.2f"|format(rake.shortage) }} MT</strong></span>
+                                    <span class="text-danger"><strong>{{ "%.2f"|format(rake.shortage|float) }} MT</strong></span>
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}

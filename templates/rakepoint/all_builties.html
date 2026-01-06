@@ -48,6 +48,13 @@
                                    title="Print Builty">
                                     <i class="bi bi-printer"></i>
                                 </a>
+                                <a href="{{ url_for('rakepoint_print_builty', builty_id=builty[0]) }}" 
+                                   class="btn btn-sm btn-success ms-1" 
+                                   target="_blank" 
+                                   title="Download Builty"
+                                   onclick="event.preventDefault(); downloadBuilty('{{ url_for('rakepoint_print_builty', builty_id=builty[0]) }}');">
+                                    <i class="bi bi-download"></i>
+                                </a>
                             </td>
                         </tr>
                         {% endfor %}
@@ -77,5 +84,13 @@
             row.style.display = text.includes(searchText) ? '' : 'none';
         }
     });
+    
+    // Download builty function - opens in new window and triggers print/save as PDF
+    function downloadBuilty(url) {
+        const win = window.open(url, '_blank');
+        win.addEventListener('load', function() {
+            setTimeout(() => win.print(), 500);
+        });
+    }
 </script>
 {% endblock %}

@@ -191,6 +191,9 @@
     <button class="print-button no-print" onclick="window.print()">
         🖨️ Print Builty
     </button>
+    <button class="print-button no-print" onclick="downloadBuilty()" style="right: 150px; background: #10b981;">
+        📥 Download Builty
+    </button>
     
     <div class="header">
         <h1>BUILTY / CONSIGNMENT NOTE</h1>
@@ -213,10 +216,6 @@
             <div class="info-row">
                 <div class="info-label">LR Number:</div>
                 <div class="info-value">{{ builty.lr_number or 'N/A' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Rake Code:</div>
-                <div class="info-value">{{ builty.rake_code or 'N/A' }}</div>
             </div>
         </div>
         
@@ -246,18 +245,27 @@
                 <div class="info-label">Loading Point:</div>
                 <div class="info-value">{{ builty.loading_point }}</div>
             </div>
+            {% if builty.warehouse_name %}
             <div class="info-row">
                 <div class="info-label">Unloading Point:</div>
                 <div class="info-value">{{ builty.unloading_point }}</div>
             </div>
             <div class="info-row">
-                <div class="info-label">Account:</div>
-                <div class="info-value"><strong>{{ builty.account_name or 'N/A' }}</strong></div>
-            </div>
-            <div class="info-row">
                 <div class="info-label">Warehouse:</div>
-                <div class="info-value"><strong>{{ builty.warehouse_name or 'N/A' }}</strong></div>
+                <div class="info-value"><strong>{{ builty.warehouse_name }}</strong></div>
             </div>
+            {% else %}
+            <div class="info-row">
+                <div class="info-label">Destination:</div>
+                <div class="info-value">{{ builty.account_address or builty.unloading_point or 'N/A' }}</div>
+            </div>
+            {% endif %}
+            {% if builty.account_name %}
+            <div class="info-row">
+                <div class="info-label">Account:</div>
+                <div class="info-value"><strong>{{ builty.account_name }}</strong></div>
+            </div>
+            {% endif %}
         </div>
     </div>
     
@@ -341,5 +349,22 @@
     <div class="footer">
         This is a computer-generated builty. Generated on {{ datetime.now().strftime('%d-%m-%Y %H:%M:%S') }}
     </div>
+    
+    <script>
+    function downloadBuilty() {
+        // Hide buttons before capturing
+        const buttons = document.querySelectorAll('.no-print');
+        buttons.forEach(btn => btn.style.display = 'none');
+        
+        // Use browser's print to PDF functionality
+        // This triggers the print dialog where user can select "Save as PDF"
+        window.print();
+        
+        // Show buttons again after print dialog
+        setTimeout(() => {
+            buttons.forEach(btn => btn.style.display = '');
+        }, 1000);
+    }
+    </script>
 </body>
 </html>

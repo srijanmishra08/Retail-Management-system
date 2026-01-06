@@ -54,7 +54,7 @@ class Database:
         """Safely close database connection (handles libsql which doesn't have close())"""
         if not self.use_cloud:
             try:
-                self.close_connection(conn)
+                conn.close()
             except:
                 pass
     
@@ -128,6 +128,7 @@ class Database:
                 account_type TEXT NOT NULL,
                 contact TEXT,
                 address TEXT,
+                distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -156,6 +157,7 @@ class Database:
                 contact_person TEXT,
                 mobile TEXT,
                 address TEXT,
+                distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -180,6 +182,7 @@ class Database:
                 destination TEXT NOT NULL,
                 society_name TEXT NOT NULL,
                 contact TEXT,
+                distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -191,6 +194,7 @@ class Database:
                 warehouse_name TEXT NOT NULL,
                 location TEXT,
                 capacity REAL,
+                distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -632,6 +636,38 @@ class Database:
             self.close_connection(conn)
             return False, str(e)
     
+    def reopen_rake(self, rake_code):
+        """Reopen a closed rake"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Check if rake is currently closed
+            cursor.execute('SELECT is_closed FROM rakes WHERE rake_code = ?', (rake_code,))
+            result = cursor.fetchone()
+            if not result:
+                self.close_connection(conn)
+                return False, "Rake not found"
+            
+            if not result[0]:
+                self.close_connection(conn)
+                return False, "Rake is not closed"
+            
+            # Reopen the rake
+            cursor.execute('''
+                UPDATE rakes 
+                SET is_closed = 0, closed_at = NULL, shortage = 0
+                WHERE rake_code = ?
+            ''', (rake_code,))
+            
+            conn.commit()
+            self.close_connection(conn)
+            return True, "Rake reopened successfully"
+        except Exception as e:
+            conn.rollback()
+            self.close_connection(conn)
+            return False, str(e)
+    
     def get_total_shortage(self):
         """Get total shortage from all closed rakes"""
         conn = self.get_connection()
@@ -712,15 +748,15 @@ class Database:
     
     # ========== Account Operations ==========
     
-    def add_account(self, account_name, account_type, contact, address):
+    def add_account(self, account_name, account_type, contact, address, distance=0):
         """Add new account"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO accounts (account_name, account_type, contact, address)
-                VALUES (?, ?, ?, ?)
-            ''', (account_name, account_type, contact, address))
+                INSERT INTO accounts (account_name, account_type, contact, address, distance)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (account_name, account_type, contact, address, distance))
             account_id = cursor.lastrowid
             conn.commit()
             return account_id
@@ -820,15 +856,15 @@ class Database:
     
     # ========== Company Operations ==========
     
-    def add_company(self, company_name, company_code='', contact_person='', mobile='', address=''):
+    def add_company(self, company_name, company_code='', contact_person='', mobile='', address='', distance=0):
         """Add new company"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO companies (company_name, company_code, contact_person, mobile, address)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (company_name, company_code, contact_person, mobile, address))
+                INSERT INTO companies (company_name, company_code, contact_person, mobile, address, distance)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (company_name, company_code, contact_person, mobile, address, distance))
             company_id = cursor.lastrowid
             conn.commit()
             return company_id
@@ -898,15 +934,15 @@ class Database:
     
     # ========== CGMF (CG Markfed) Operations ==========
     
-    def add_cgmf(self, district, destination, society_name, contact=''):
+    def add_cgmf(self, district, destination, society_name, contact='', distance=0):
         """Add new CGMF society"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO cgmf (district, destination, society_name, contact)
-                VALUES (?, ?, ?, ?)
-            ''', (district, destination, society_name, contact))
+                INSERT INTO cgmf (district, destination, society_name, contact, distance)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (district, destination, society_name, contact, distance))
             cgmf_id = cursor.lastrowid
             conn.commit()
             return cgmf_id
@@ -955,15 +991,15 @@ class Database:
         self.close_connection(conn)
         return warehouse
     
-    def add_warehouse(self, warehouse_name, location, capacity):
+    def add_warehouse(self, warehouse_name, location, capacity, distance=0):
         """Add new warehouse"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO warehouses (warehouse_name, location, capacity)
-                VALUES (?, ?, ?)
-            ''', (warehouse_name, location, capacity))
+                INSERT INTO warehouses (warehouse_name, location, capacity, distance)
+                VALUES (?, ?, ?, ?)
+            ''', (warehouse_name, location, capacity, distance))
             warehouse_id = cursor.lastrowid
             conn.commit()
             return warehouse_id
@@ -1140,7 +1176,7 @@ class Database:
                    b.advance, b.to_pay, b.lr_number, b.lr_index, b.created_by_role, b.created_at,
                    a.account_name, w.warehouse_name, t.truck_number, 
                    t.driver_name, t.driver_mobile, t.owner_name, t.owner_mobile,
-                   r.builty_head, b.receiver_name, b.received_quantity
+                   r.builty_head, b.receiver_name, b.received_quantity, a.address as account_address
             FROM builty b
             LEFT JOIN accounts a ON b.account_id = a.account_id
             LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
@@ -1260,6 +1296,156 @@ class Database:
             print(f"Error linking loading slip to builty: {e}")
             conn.rollback()
             return False
+        finally:
+            self.close_connection(conn)
+    
+    def delete_loading_slip(self, slip_id, delete_builty=False):
+        """Delete a loading slip and optionally its associated builty"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # Get loading slip details
+            cursor.execute('SELECT * FROM loading_slips WHERE slip_id = ?', (slip_id,))
+            slip = cursor.fetchone()
+            if not slip:
+                return False, "Loading slip not found"
+            
+            builty_id = slip[18]  # builty_id column
+            
+            # If there's a linked builty and delete_builty is True, delete it first
+            if builty_id and delete_builty:
+                # Delete warehouse stock records for this builty
+                cursor.execute('DELETE FROM warehouse_stock WHERE builty_id = ?', (builty_id,))
+                # Delete the builty
+                cursor.execute('DELETE FROM builty WHERE builty_id = ?', (builty_id,))
+            elif builty_id and not delete_builty:
+                return False, "Loading slip has an associated builty. Please confirm builty deletion."
+            
+            # Delete the loading slip
+            cursor.execute('DELETE FROM loading_slips WHERE slip_id = ?', (slip_id,))
+            
+            conn.commit()
+            return True, "Loading slip deleted successfully"
+        except Exception as e:
+            print(f"Error deleting loading slip: {e}")
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
+    def delete_builty(self, builty_id, delete_loading_slip=False):
+        """Delete a builty and optionally its associated loading slip"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # Get builty details
+            cursor.execute('SELECT * FROM builty WHERE builty_id = ?', (builty_id,))
+            builty = cursor.fetchone()
+            if not builty:
+                return False, "Builty not found"
+            
+            # Delete warehouse stock records for this builty
+            cursor.execute('DELETE FROM warehouse_stock WHERE builty_id = ?', (builty_id,))
+            
+            # Find and handle linked loading slip
+            cursor.execute('SELECT slip_id FROM loading_slips WHERE builty_id = ?', (builty_id,))
+            linked_slip = cursor.fetchone()
+            
+            if linked_slip and delete_loading_slip:
+                cursor.execute('DELETE FROM loading_slips WHERE slip_id = ?', (linked_slip[0],))
+            elif linked_slip:
+                # Unlink the loading slip
+                cursor.execute('UPDATE loading_slips SET builty_id = NULL WHERE slip_id = ?', (linked_slip[0],))
+            
+            # Delete the builty
+            cursor.execute('DELETE FROM builty WHERE builty_id = ?', (builty_id,))
+            
+            conn.commit()
+            return True, "Builty deleted successfully"
+        except Exception as e:
+            print(f"Error deleting builty: {e}")
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
+    def get_loading_slip_by_id(self, slip_id):
+        """Get loading slip by ID with all details"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT ls.*, a.account_name, w.warehouse_name, t.truck_number
+            FROM loading_slips ls
+            LEFT JOIN accounts a ON ls.account_id = a.account_id
+            LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+            LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+            WHERE ls.slip_id = ?
+        ''', (slip_id,))
+        slip = cursor.fetchone()
+        self.close_connection(conn)
+        return slip
+    
+    def update_loading_slip(self, slip_id, destination, quantity_bags, quantity_mt, goods_name):
+        """Update loading slip details"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            # Get the original quantity to calculate difference
+            cursor.execute('SELECT quantity_mt FROM loading_slips WHERE slip_id = ?', (slip_id,))
+            old_slip = cursor.fetchone()
+            if not old_slip:
+                return False, "Loading slip not found"
+            
+            cursor.execute('''
+                UPDATE loading_slips 
+                SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?
+                WHERE slip_id = ?
+            ''', (destination, quantity_bags, quantity_mt, goods_name, slip_id))
+            
+            conn.commit()
+            return True, "Loading slip updated successfully"
+        except Exception as e:
+            print(f"Error updating loading slip: {e}")
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
+    def update_builty(self, builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay):
+        """Update builty details"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('SELECT * FROM builty WHERE builty_id = ?', (builty_id,))
+            old_builty = cursor.fetchone()
+            if not old_builty:
+                return False, "Builty not found"
+            
+            old_quantity = old_builty[13]  # quantity_mt
+            quantity_diff = quantity_mt - old_quantity
+            
+            # Update builty
+            cursor.execute('''
+                UPDATE builty 
+                SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
+                    rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?
+                WHERE builty_id = ?
+            ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, builty_id))
+            
+            # Update warehouse stock if there was a quantity change
+            if quantity_diff != 0:
+                cursor.execute('''
+                    UPDATE warehouse_stock 
+                    SET quantity_mt = quantity_mt + ?
+                    WHERE builty_id = ?
+                ''', (quantity_diff, builty_id))
+            
+            conn.commit()
+            return True, "Builty updated successfully"
+        except Exception as e:
+            print(f"Error updating builty: {e}")
+            conn.rollback()
+            return False, str(e)
         finally:
             self.close_connection(conn)
     
