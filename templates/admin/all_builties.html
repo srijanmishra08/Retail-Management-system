@@ -45,10 +45,10 @@
                             <td>{{ builty[13] }} MT</td>
                             <td>₹{{ "{:,.2f}".format(builty[15] if builty[15] else 0) }}</td>
                             <td>₹{{ "{:,.2f}".format(builty[16] if builty[16] else 0) }}</td>
-                            <td>{{ builty[26] if builty[26] else 'N/A' }}</td>
-                            <td>{{ builty[24] if builty[24] else 'N/A' }}</td>
-                            <td>{{ builty[25] if builty[25] else 'N/A' }}</td>
-                            <td>{{ builty[22][:16] if builty[22] else 'N/A' }}</td>
+                            <td>{{ builty[28] if builty[28] else 'N/A' }}</td>
+                            <td>{{ builty[26] if builty[26] else (builty[29] if builty[29] else 'N/A') }}</td>
+                            <td>{{ builty[27] if builty[27] else 'N/A' }}</td>
+                            <td>{{ builty[25][:16] if builty[25] else 'N/A' }}</td>
                             <td>
                                 <a href="{{ url_for('admin_print_builty', builty_id=builty[0]) }}" 
                                    class="btn btn-sm btn-primary" 
