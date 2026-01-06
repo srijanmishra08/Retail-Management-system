@@ -1119,8 +1119,16 @@ class Database:
                   kg_per_bag, rate_per_mt, total_freight, advance, to_pay, lr_number, lr_index, created_by_role, sub_head,
                   receiver_name, received_quantity))
             
-            builty_id = cursor.lastrowid
             conn.commit()
+            
+            # Get the builty_id - handle both sqlite and libsql
+            builty_id = cursor.lastrowid
+            if not builty_id or builty_id == 0:
+                # For libsql/Turso, try to get the last inserted id differently
+                cursor.execute('SELECT builty_id FROM builty WHERE builty_number = ? ORDER BY builty_id DESC LIMIT 1', (builty_number,))
+                result = cursor.fetchone()
+                builty_id = result[0] if result else None
+            
             return builty_id
         except Exception as e:
             print(f"Error adding builty: {e}")
@@ -1207,8 +1215,16 @@ class Database:
                   quantity_bags, quantity_mt, truck_id, wagon_number, goods_name,
                   truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id, sub_head))
             
-            slip_id = cursor.lastrowid
             conn.commit()
+            
+            # Get the slip_id - handle both sqlite and libsql
+            slip_id = cursor.lastrowid
+            if not slip_id or slip_id == 0:
+                # For libsql/Turso, try to get the last inserted id differently
+                cursor.execute('SELECT slip_id FROM loading_slips WHERE rake_code = ? AND slip_number = ? ORDER BY slip_id DESC LIMIT 1', (rake_code, slip_number))
+                result = cursor.fetchone()
+                slip_id = result[0] if result else None
+            
             return slip_id
         except Exception as e:
             print(f"Error adding loading slip: {e}")
