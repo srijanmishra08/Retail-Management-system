@@ -500,7 +500,10 @@ def admin_all_loading_slips():
         return redirect(url_for('index'))
     
     loading_slips = db.get_all_loading_slips_with_status()
-    return render_template('admin/all_loading_slips.html', loading_slips=loading_slips)
+    accounts = db.get_all_accounts()
+    warehouses = db.get_all_warehouses()
+    cgmf_list = db.get_all_cgmf()
+    return render_template('admin/all_loading_slips.html', loading_slips=loading_slips, accounts=accounts, warehouses=warehouses, cgmf_list=cgmf_list)
 
 @app.route('/admin/all-builties')
 @login_required
@@ -511,7 +514,10 @@ def admin_all_builties():
         return redirect(url_for('index'))
     
     builties = db.get_all_builties()
-    return render_template('admin/all_builties.html', builties=builties)
+    accounts = db.get_all_accounts()
+    warehouses = db.get_all_warehouses()
+    cgmf_list = db.get_all_cgmf()
+    return render_template('admin/all_builties.html', builties=builties, accounts=accounts, warehouses=warehouses, cgmf_list=cgmf_list)
 
 @app.route('/admin/delete-builty/<int:builty_id>', methods=['POST'])
 @login_required
@@ -557,12 +563,17 @@ def admin_edit_loading_slip(slip_id):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    destination = request.form.get('destination')
+    # Get destination from hidden field or manual entry
+    destination = request.form.get('destination_final') or request.form.get('destination', '')
+    account_id = request.form.get('account_id') or None
+    warehouse_id = request.form.get('warehouse_id') or None
+    cgmf_id = request.form.get('cgmf_id') or None
+    
     quantity_bags = int(request.form.get('quantity_bags', 0))
     quantity_mt = float(request.form.get('quantity_mt', 0))
     goods_name = request.form.get('goods_name')
     
-    success, message = db.update_loading_slip(slip_id, destination, quantity_bags, quantity_mt, goods_name)
+    success, message = db.update_loading_slip(slip_id, destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id)
     
     if success:
         flash(message, 'success')
@@ -579,7 +590,12 @@ def admin_edit_builty(builty_id):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    unloading_point = request.form.get('unloading_point', '')
+    # Get unloading point from hidden field or manual entry
+    unloading_point = request.form.get('unloading_point_final') or request.form.get('unloading_point', '')
+    account_id = request.form.get('account_id') or None
+    warehouse_id = request.form.get('warehouse_id') or None
+    cgmf_id = request.form.get('cgmf_id') or None
+    
     number_of_bags = int(request.form.get('number_of_bags', 0))
     quantity_mt = float(request.form.get('quantity_mt', 0))
     rate_per_mt = float(request.form.get('rate_per_mt', 0))
@@ -587,7 +603,7 @@ def admin_edit_builty(builty_id):
     advance = float(request.form.get('advance', 0))
     to_pay = float(request.form.get('to_pay', 0))
     
-    success, message = db.update_builty(builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay)
+    success, message = db.update_builty(builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id, warehouse_id, cgmf_id)
     
     if success:
         flash(message, 'success')

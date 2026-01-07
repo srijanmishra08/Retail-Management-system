@@ -137,9 +137,46 @@
                         <i class="bi bi-info-circle"></i> Editing quantity will affect the overall stock calculation.
                     </div>
                     <div class="mb-3">
-                        <label for="edit_destination" class="form-label">Destination</label>
-                        <input type="text" class="form-control" id="edit_destination" name="destination" required>
+                        <label for="edit_destination_type" class="form-label">Destination Type</label>
+                        <select class="form-select" id="edit_destination_type" onchange="toggleDestinationOptions()">
+                            <option value="account">Account (Dealer/Retailer)</option>
+                            <option value="warehouse">Warehouse</option>
+                            <option value="cgmf">CGMF (Markfed)</option>
+                            <option value="manual">Manual Entry</option>
+                        </select>
                     </div>
+                    <div class="mb-3" id="edit_account_select_div">
+                        <label for="edit_account_select" class="form-label">Select Account</label>
+                        <select class="form-select" id="edit_account_select" name="account_id">
+                            <option value="">-- Select Account --</option>
+                            {% for account in accounts %}
+                            <option value="{{ account[0] }}" data-name="{{ account[1] }}">{{ account[1] }} ({{ account[2] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_warehouse_select_div" style="display: none;">
+                        <label for="edit_warehouse_select" class="form-label">Select Warehouse</label>
+                        <select class="form-select" id="edit_warehouse_select" name="warehouse_id">
+                            <option value="">-- Select Warehouse --</option>
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse[0] }}" data-name="{{ warehouse[1] }}">{{ warehouse[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_cgmf_select_div" style="display: none;">
+                        <label for="edit_cgmf_select" class="form-label">Select CGMF Society</label>
+                        <select class="form-select" id="edit_cgmf_select" name="cgmf_id">
+                            <option value="">-- Select CGMF --</option>
+                            {% for cgmf in cgmf_list %}
+                            <option value="{{ cgmf[0] }}" data-name="{{ cgmf[3] }}">{{ cgmf[3] }} - {{ cgmf[2] }} ({{ cgmf[1] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_manual_dest_div" style="display: none;">
+                        <label for="edit_destination" class="form-label">Destination (Manual)</label>
+                        <input type="text" class="form-control" id="edit_destination" name="destination">
+                    </div>
+                    <input type="hidden" id="edit_destination_hidden" name="destination_final">
                     <div class="mb-3">
                         <label for="edit_quantity_bags" class="form-label">Quantity (Bags)</label>
                         <input type="number" class="form-control" id="edit_quantity_bags" name="quantity_bags" required>
@@ -155,7 +192,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning"><i class="bi bi-save"></i> Save Changes</button>
+                    <button type="submit" class="btn btn-warning" onclick="setDestinationValue()"><i class="bi bi-save"></i> Save Changes</button>
                 </div>
             </form>
         </div>
@@ -209,7 +246,47 @@
         document.getElementById('edit_quantity_bags').value = bags;
         document.getElementById('edit_quantity_mt').value = mt;
         document.getElementById('edit_goods_name').value = goods;
+        
+        // Reset to manual entry by default with current destination
+        document.getElementById('edit_destination_type').value = 'manual';
+        toggleDestinationOptions();
+        
         new bootstrap.Modal(document.getElementById('editSlipModal')).show();
+    }
+    
+    // Toggle destination options based on type
+    function toggleDestinationOptions() {
+        const type = document.getElementById('edit_destination_type').value;
+        document.getElementById('edit_account_select_div').style.display = type === 'account' ? 'block' : 'none';
+        document.getElementById('edit_warehouse_select_div').style.display = type === 'warehouse' ? 'block' : 'none';
+        document.getElementById('edit_cgmf_select_div').style.display = type === 'cgmf' ? 'block' : 'none';
+        document.getElementById('edit_manual_dest_div').style.display = type === 'manual' ? 'block' : 'none';
+        
+        // Clear selections
+        if (type !== 'account') document.getElementById('edit_account_select').value = '';
+        if (type !== 'warehouse') document.getElementById('edit_warehouse_select').value = '';
+        if (type !== 'cgmf') document.getElementById('edit_cgmf_select').value = '';
+    }
+    
+    // Set destination value before form submit
+    function setDestinationValue() {
+        const type = document.getElementById('edit_destination_type').value;
+        let destValue = '';
+        
+        if (type === 'account') {
+            const select = document.getElementById('edit_account_select');
+            destValue = select.options[select.selectedIndex]?.dataset.name || '';
+        } else if (type === 'warehouse') {
+            const select = document.getElementById('edit_warehouse_select');
+            destValue = select.options[select.selectedIndex]?.dataset.name || '';
+        } else if (type === 'cgmf') {
+            const select = document.getElementById('edit_cgmf_select');
+            destValue = select.options[select.selectedIndex]?.dataset.name || '';
+        } else {
+            destValue = document.getElementById('edit_destination').value;
+        }
+        
+        document.getElementById('edit_destination_hidden').value = destValue;
     }
 </script>
 {% endblock %}

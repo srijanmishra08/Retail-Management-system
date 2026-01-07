@@ -1401,7 +1401,7 @@ class Database:
         self.close_connection(conn)
         return slip
     
-    def update_loading_slip(self, slip_id, destination, quantity_bags, quantity_mt, goods_name):
+    def update_loading_slip(self, slip_id, destination, quantity_bags, quantity_mt, goods_name, account_id=None, warehouse_id=None, cgmf_id=None):
         """Update loading slip details"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1412,11 +1412,20 @@ class Database:
             if not old_slip:
                 return False, "Loading slip not found"
             
-            cursor.execute('''
-                UPDATE loading_slips 
-                SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?
-                WHERE slip_id = ?
-            ''', (destination, quantity_bags, quantity_mt, goods_name, slip_id))
+            # Update with account/warehouse/cgmf IDs if provided
+            if account_id or warehouse_id or cgmf_id:
+                cursor.execute('''
+                    UPDATE loading_slips 
+                    SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?,
+                        account_id = ?, warehouse_id = ?, cgmf_id = ?
+                    WHERE slip_id = ?
+                ''', (destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id, slip_id))
+            else:
+                cursor.execute('''
+                    UPDATE loading_slips 
+                    SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?
+                    WHERE slip_id = ?
+                ''', (destination, quantity_bags, quantity_mt, goods_name, slip_id))
             
             conn.commit()
             return True, "Loading slip updated successfully"
@@ -1427,7 +1436,7 @@ class Database:
         finally:
             self.close_connection(conn)
     
-    def update_builty(self, builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay):
+    def update_builty(self, builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id=None, warehouse_id=None, cgmf_id=None):
         """Update builty details"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1440,13 +1449,22 @@ class Database:
             old_quantity = old_builty[13]  # quantity_mt
             quantity_diff = quantity_mt - old_quantity
             
-            # Update builty
-            cursor.execute('''
-                UPDATE builty 
-                SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
-                    rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?
-                WHERE builty_id = ?
-            ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, builty_id))
+            # Update builty with account/warehouse/cgmf IDs if provided
+            if account_id or warehouse_id or cgmf_id:
+                cursor.execute('''
+                    UPDATE builty 
+                    SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
+                        rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?,
+                        account_id = ?, warehouse_id = ?, cgmf_id = ?
+                    WHERE builty_id = ?
+                ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id, warehouse_id, cgmf_id, builty_id))
+            else:
+                cursor.execute('''
+                    UPDATE builty 
+                    SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
+                        rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?
+                    WHERE builty_id = ?
+                ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, builty_id))
             
             # Update warehouse stock if there was a quantity change
             if quantity_diff != 0:
