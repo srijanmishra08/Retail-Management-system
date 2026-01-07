@@ -464,6 +464,32 @@ def admin_delete_account(account_id):
     
     return redirect(url_for('admin_manage_accounts'))
 
+@app.route('/admin/edit-account/<int:account_id>', methods=['POST'])
+@login_required
+def admin_edit_account(account_id):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    account_name = request.form.get('account_name')
+    account_type = request.form.get('account_type')
+    contact = request.form.get('contact', '')
+    address = request.form.get('address', '')
+    distance = request.form.get('distance', 0)
+    try:
+        distance = float(distance) if distance else 0
+    except ValueError:
+        distance = 0
+    
+    success, message = db.update_account(account_id, account_name, account_type, contact, address, distance)
+    
+    if success:
+        flash(f'Account "{account_name}" updated successfully!', 'success')
+    else:
+        flash(f'Error updating account: {message}', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
+
 @app.route('/admin/add-product', methods=['POST'])
 @login_required
 def admin_add_product():

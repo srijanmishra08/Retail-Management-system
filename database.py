@@ -815,6 +815,33 @@ class Database:
         self.close_connection(conn)
         return accounts
     
+    def get_account_by_id(self, account_id):
+        """Get account by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM accounts WHERE account_id = ?', (account_id,))
+        account = cursor.fetchone()
+        self.close_connection(conn)
+        return account
+    
+    def update_account(self, account_id, account_name, account_type, contact, address, distance=0):
+        """Update an existing account"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE accounts 
+                SET account_name = ?, account_type = ?, contact = ?, address = ?, distance = ?
+                WHERE account_id = ?
+            ''', (account_name, account_type, contact, address, distance, account_id))
+            conn.commit()
+            return True, "Account updated successfully"
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
     # ========== Product Operations ==========
     
     def add_product(self, product_name, product_code, product_type='Fertilizer', unit='MT', unit_per_bag=50.0, unit_type='kg', description=''):
