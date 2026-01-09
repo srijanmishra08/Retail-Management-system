@@ -814,10 +814,18 @@ def admin_logistic_bill():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    rakes = db.get_all_rakes()
-    warehouses = db.get_all_warehouses()
-    storage_data = db.get_warehouse_storage_data()
-    transport_data = db.get_warehouse_transport_data()
+    try:
+        rakes = db.get_all_rakes() or []
+        warehouses = db.get_all_warehouses() or []
+        storage_data = db.get_warehouse_storage_data() or []
+        transport_data = db.get_warehouse_transport_data() or []
+    except Exception as e:
+        print(f"Error loading logistic bill data: {e}")
+        rakes = []
+        warehouses = []
+        storage_data = []
+        transport_data = []
+        flash('Error loading some data. Please try again.', 'warning')
     
     return render_template('admin/logistic_bill.html',
                          rakes=rakes,
@@ -832,7 +840,11 @@ def admin_logistic_bill_rake_data(rake_code):
     if current_user.role != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
     
-    data = db.get_rake_transport_data(rake_code)
+    try:
+        data = db.get_rake_transport_data(rake_code)
+    except Exception as e:
+        print(f"Error fetching rake data: {e}")
+        data = []
     return jsonify(data)
 
 @app.route('/admin/logistic-bill/warehouse-data')
@@ -843,8 +855,13 @@ def admin_logistic_bill_warehouse_data(warehouse_id=None):
     if current_user.role != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
     
-    storage_data = db.get_warehouse_storage_data(warehouse_id)
-    transport_data = db.get_warehouse_transport_data(warehouse_id)
+    try:
+        storage_data = db.get_warehouse_storage_data(warehouse_id) or []
+        transport_data = db.get_warehouse_transport_data(warehouse_id) or []
+    except Exception as e:
+        print(f"Error fetching warehouse data: {e}")
+        storage_data = []
+        transport_data = []
     
     # Convert to JSON-friendly format
     storage_list = []

@@ -479,6 +479,38 @@ class Database:
                 cursor.execute("ALTER TABLE builty ADD COLUMN received_quantity REAL")
                 print("Migration: Added received_quantity column to builty table")
         
+        # Migration: Add distance column to accounts table
+        try:
+            cursor.execute("SELECT distance FROM accounts LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
+                cursor.execute("ALTER TABLE accounts ADD COLUMN distance REAL DEFAULT 0")
+                print("Migration: Added distance column to accounts table")
+        
+        # Migration: Add distance column to warehouses table
+        try:
+            cursor.execute("SELECT distance FROM warehouses LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
+                cursor.execute("ALTER TABLE warehouses ADD COLUMN distance REAL DEFAULT 0")
+                print("Migration: Added distance column to warehouses table")
+        
+        # Migration: Add distance column to companies table
+        try:
+            cursor.execute("SELECT distance FROM companies LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
+                cursor.execute("ALTER TABLE companies ADD COLUMN distance REAL DEFAULT 0")
+                print("Migration: Added distance column to companies table")
+        
+        # Migration: Add distance column to cgmf table
+        try:
+            cursor.execute("SELECT distance FROM cgmf LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
+                cursor.execute("ALTER TABLE cgmf ADD COLUMN distance REAL DEFAULT 0")
+                print("Migration: Added distance column to cgmf table")
+        
         conn.commit()
         self.close_connection(conn)
         print("Database initialized successfully!")
@@ -1799,53 +1831,63 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Get dispatches to warehouses
-        cursor.execute('''
-            SELECT 'Warehouse' as dest_type, w.warehouse_name as dest_name, w.warehouse_id as dest_id,
-                   SUM(ls.quantity_mt) as total_qty, w.distance as distance
-            FROM loading_slips ls
-            JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
-            WHERE ls.rake_code = ? AND ls.warehouse_id IS NOT NULL
-            GROUP BY w.warehouse_id, w.warehouse_name, w.distance
-        ''', (rake_code,))
-        warehouses = cursor.fetchall()
+        result = []
         
-        # Get dispatches to accounts (Dealers, Retailers, Payal)
-        cursor.execute('''
-            SELECT a.account_type as dest_type, a.account_name as dest_name, a.account_id as dest_id,
-                   SUM(ls.quantity_mt) as total_qty, a.distance as distance
-            FROM loading_slips ls
-            JOIN accounts a ON ls.account_id = a.account_id
-            WHERE ls.rake_code = ? AND ls.account_id IS NOT NULL
-            GROUP BY a.account_id, a.account_type, a.account_name, a.distance
-        ''', (rake_code,))
-        accounts = cursor.fetchall()
+        try:
+            # Get dispatches to warehouses
+            cursor.execute('''
+                SELECT 'Warehouse' as dest_type, w.warehouse_name as dest_name, w.warehouse_id as dest_id,
+                       SUM(ls.quantity_mt) as total_qty, COALESCE(w.distance, 0) as distance
+                FROM loading_slips ls
+                JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+                WHERE ls.rake_code = ? AND ls.warehouse_id IS NOT NULL
+                GROUP BY w.warehouse_id, w.warehouse_name
+            ''', (rake_code,))
+            warehouses = cursor.fetchall()
+            
+            for row in warehouses:
+                result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
+                              'quantity': row[3] or 0, 'distance': row[4] or 0})
+        except Exception as e:
+            print(f"Error fetching warehouse data: {e}")
         
-        # Get dispatches to CGMF
-        cursor.execute('''
-            SELECT 'CGMF' as dest_type, c.society_name || ' - ' || c.destination as dest_name, c.cgmf_id as dest_id,
-                   SUM(ls.quantity_mt) as total_qty, c.distance as distance
-            FROM loading_slips ls
-            JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
-            WHERE ls.rake_code = ? AND ls.cgmf_id IS NOT NULL
-            GROUP BY c.cgmf_id, c.society_name, c.destination, c.distance
-        ''', (rake_code,))
-        cgmf = cursor.fetchall()
+        try:
+            # Get dispatches to accounts (Dealers, Retailers, Payal)
+            cursor.execute('''
+                SELECT a.account_type as dest_type, a.account_name as dest_name, a.account_id as dest_id,
+                       SUM(ls.quantity_mt) as total_qty, COALESCE(a.distance, 0) as distance
+                FROM loading_slips ls
+                JOIN accounts a ON ls.account_id = a.account_id
+                WHERE ls.rake_code = ? AND ls.account_id IS NOT NULL
+                GROUP BY a.account_id, a.account_type, a.account_name
+            ''', (rake_code,))
+            accounts = cursor.fetchall()
+            
+            for row in accounts:
+                result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
+                              'quantity': row[3] or 0, 'distance': row[4] or 0})
+        except Exception as e:
+            print(f"Error fetching account data: {e}")
+        
+        try:
+            # Get dispatches to CGMF
+            cursor.execute('''
+                SELECT 'CGMF' as dest_type, c.society_name || ' - ' || c.destination as dest_name, c.cgmf_id as dest_id,
+                       SUM(ls.quantity_mt) as total_qty, COALESCE(c.distance, 0) as distance
+                FROM loading_slips ls
+                JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
+                WHERE ls.rake_code = ? AND ls.cgmf_id IS NOT NULL
+                GROUP BY c.cgmf_id, c.society_name, c.destination
+            ''', (rake_code,))
+            cgmf = cursor.fetchall()
+            
+            for row in cgmf:
+                result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
+                              'quantity': row[3] or 0, 'distance': row[4] or 0})
+        except Exception as e:
+            print(f"Error fetching CGMF data: {e}")
         
         self.close_connection(conn)
-        
-        # Combine all results
-        result = []
-        for row in warehouses:
-            result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
-                          'quantity': row[3] or 0, 'distance': row[4] or 0})
-        for row in accounts:
-            result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
-                          'quantity': row[3] or 0, 'distance': row[4] or 0})
-        for row in cgmf:
-            result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
-                          'quantity': row[3] or 0, 'distance': row[4] or 0})
-        
         return result
     
     def get_warehouse_storage_data(self, warehouse_id=None):
@@ -1853,29 +1895,34 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        if warehouse_id:
-            cursor.execute('''
-                SELECT ws.date, c.company_name, p.product_name, ws.quantity_mt,
-                       ws.stock_id, c.company_id, p.product_id
-                FROM warehouse_stock ws
-                LEFT JOIN companies c ON ws.company_id = c.company_id
-                LEFT JOIN products p ON ws.product_id = p.product_id
-                WHERE ws.transaction_type = 'IN' AND ws.warehouse_id = ?
-                ORDER BY ws.date DESC
-            ''', (warehouse_id,))
-        else:
-            cursor.execute('''
-                SELECT ws.date, c.company_name, p.product_name, ws.quantity_mt,
-                       ws.stock_id, c.company_id, p.product_id, w.warehouse_name
-                FROM warehouse_stock ws
-                LEFT JOIN companies c ON ws.company_id = c.company_id
-                LEFT JOIN products p ON ws.product_id = p.product_id
-                LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
-                WHERE ws.transaction_type = 'IN'
-                ORDER BY ws.date DESC
-            ''')
+        try:
+            if warehouse_id:
+                cursor.execute('''
+                    SELECT ws.date, c.company_name, p.product_name, ws.quantity_mt,
+                           ws.stock_id, c.company_id, p.product_id
+                    FROM warehouse_stock ws
+                    LEFT JOIN companies c ON ws.company_id = c.company_id
+                    LEFT JOIN products p ON ws.product_id = p.product_id
+                    WHERE ws.transaction_type = 'IN' AND ws.warehouse_id = ?
+                    ORDER BY ws.date DESC
+                ''', (warehouse_id,))
+            else:
+                cursor.execute('''
+                    SELECT ws.date, c.company_name, p.product_name, ws.quantity_mt,
+                           ws.stock_id, c.company_id, p.product_id, w.warehouse_name
+                    FROM warehouse_stock ws
+                    LEFT JOIN companies c ON ws.company_id = c.company_id
+                    LEFT JOIN products p ON ws.product_id = p.product_id
+                    LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+                    WHERE ws.transaction_type = 'IN'
+                    ORDER BY ws.date DESC
+                ''')
+            
+            data = cursor.fetchall()
+        except Exception as e:
+            print(f"Error fetching warehouse storage data: {e}")
+            data = []
         
-        data = cursor.fetchall()
         self.close_connection(conn)
         return data
     
@@ -1884,41 +1931,46 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        if warehouse_id:
-            cursor.execute('''
-                SELECT ws.date, t.truck_number, 
-                       COALESCE(a.account_name, cg.society_name, 'Direct') as account_name,
-                       p.product_name, ws.quantity_mt, 
-                       COALESCE(a.distance, cg.distance, 0) as distance,
-                       ws.stock_id, b.builty_number
-                FROM warehouse_stock ws
-                LEFT JOIN builty b ON ws.builty_id = b.builty_id
-                LEFT JOIN trucks t ON b.truck_id = t.truck_id
-                LEFT JOIN accounts a ON ws.account_id = a.account_id
-                LEFT JOIN cgmf cg ON ws.cgmf_id = cg.cgmf_id
-                LEFT JOIN products p ON ws.product_id = p.product_id
-                WHERE ws.transaction_type = 'OUT' AND ws.warehouse_id = ?
-                ORDER BY ws.date DESC
-            ''', (warehouse_id,))
-        else:
-            cursor.execute('''
-                SELECT ws.date, t.truck_number, 
-                       COALESCE(a.account_name, cg.society_name, 'Direct') as account_name,
-                       p.product_name, ws.quantity_mt, 
-                       COALESCE(a.distance, cg.distance, 0) as distance,
-                       ws.stock_id, b.builty_number, w.warehouse_name
-                FROM warehouse_stock ws
-                LEFT JOIN builty b ON ws.builty_id = b.builty_id
-                LEFT JOIN trucks t ON b.truck_id = t.truck_id
-                LEFT JOIN accounts a ON ws.account_id = a.account_id
-                LEFT JOIN cgmf cg ON ws.cgmf_id = cg.cgmf_id
-                LEFT JOIN products p ON ws.product_id = p.product_id
-                LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
-                WHERE ws.transaction_type = 'OUT'
-                ORDER BY ws.date DESC
-            ''')
+        try:
+            if warehouse_id:
+                cursor.execute('''
+                    SELECT ws.date, t.truck_number, 
+                           COALESCE(a.account_name, cg.society_name, 'Direct') as account_name,
+                           p.product_name, ws.quantity_mt, 
+                           0 as distance,
+                           ws.stock_id, b.builty_number
+                    FROM warehouse_stock ws
+                    LEFT JOIN builty b ON ws.builty_id = b.builty_id
+                    LEFT JOIN trucks t ON b.truck_id = t.truck_id
+                    LEFT JOIN accounts a ON ws.account_id = a.account_id
+                    LEFT JOIN cgmf cg ON ws.cgmf_id = cg.cgmf_id
+                    LEFT JOIN products p ON ws.product_id = p.product_id
+                    WHERE ws.transaction_type = 'OUT' AND ws.warehouse_id = ?
+                    ORDER BY ws.date DESC
+                ''', (warehouse_id,))
+            else:
+                cursor.execute('''
+                    SELECT ws.date, t.truck_number, 
+                           COALESCE(a.account_name, cg.society_name, 'Direct') as account_name,
+                           p.product_name, ws.quantity_mt, 
+                           0 as distance,
+                           ws.stock_id, b.builty_number, w.warehouse_name
+                    FROM warehouse_stock ws
+                    LEFT JOIN builty b ON ws.builty_id = b.builty_id
+                    LEFT JOIN trucks t ON b.truck_id = t.truck_id
+                    LEFT JOIN accounts a ON ws.account_id = a.account_id
+                    LEFT JOIN cgmf cg ON ws.cgmf_id = cg.cgmf_id
+                    LEFT JOIN products p ON ws.product_id = p.product_id
+                    LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+                    WHERE ws.transaction_type = 'OUT'
+                    ORDER BY ws.date DESC
+                ''')
+            
+            data = cursor.fetchall()
+        except Exception as e:
+            print(f"Error fetching warehouse transport data: {e}")
+            data = []
         
-        data = cursor.fetchall()
         self.close_connection(conn)
         return data
 
