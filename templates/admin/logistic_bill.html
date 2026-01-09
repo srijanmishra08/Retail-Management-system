@@ -24,7 +24,7 @@
                 <select class="form-select form-select-sm d-inline-block w-auto me-2" id="rakeSelect" onchange="loadRakeData()">
                     <option value="">Select Rake</option>
                     {% for rake in rakes %}
-                    <option value="{{ rake[0] }}">{{ rake[0] }} - {{ rake[1] }} ({{ rake[2] }})</option>
+                    <option value="{{ rake[1] }}">{{ rake[0] }} - {{ rake[1] }} ({{ rake[2] }})</option>
                     {% endfor %}
                 </select>
                 <button class="btn btn-success btn-sm" onclick="downloadRakeBillExcel()" id="downloadRakeBtn" disabled>
