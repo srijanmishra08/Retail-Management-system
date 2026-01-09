@@ -1791,3 +1791,134 @@ class Database:
         summary = cursor.fetchall()
         self.close_connection(conn)
         return summary
+    
+    # ========== Logistic Bill Operations ==========
+    
+    def get_rake_transport_data(self, rake_code):
+        """Get transport data for rake bill - dispatches grouped by destination type with distances"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Get dispatches to warehouses
+        cursor.execute('''
+            SELECT 'Warehouse' as dest_type, w.warehouse_name as dest_name, w.warehouse_id as dest_id,
+                   SUM(ls.quantity_mt) as total_qty, w.distance as distance
+            FROM loading_slips ls
+            JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+            WHERE ls.rake_code = ? AND ls.warehouse_id IS NOT NULL
+            GROUP BY w.warehouse_id, w.warehouse_name, w.distance
+        ''', (rake_code,))
+        warehouses = cursor.fetchall()
+        
+        # Get dispatches to accounts (Dealers, Retailers, Payal)
+        cursor.execute('''
+            SELECT a.account_type as dest_type, a.account_name as dest_name, a.account_id as dest_id,
+                   SUM(ls.quantity_mt) as total_qty, a.distance as distance
+            FROM loading_slips ls
+            JOIN accounts a ON ls.account_id = a.account_id
+            WHERE ls.rake_code = ? AND ls.account_id IS NOT NULL
+            GROUP BY a.account_id, a.account_type, a.account_name, a.distance
+        ''', (rake_code,))
+        accounts = cursor.fetchall()
+        
+        # Get dispatches to CGMF
+        cursor.execute('''
+            SELECT 'CGMF' as dest_type, c.society_name || ' - ' || c.destination as dest_name, c.cgmf_id as dest_id,
+                   SUM(ls.quantity_mt) as total_qty, c.distance as distance
+            FROM loading_slips ls
+            JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
+            WHERE ls.rake_code = ? AND ls.cgmf_id IS NOT NULL
+            GROUP BY c.cgmf_id, c.society_name, c.destination, c.distance
+        ''', (rake_code,))
+        cgmf = cursor.fetchall()
+        
+        self.close_connection(conn)
+        
+        # Combine all results
+        result = []
+        for row in warehouses:
+            result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
+                          'quantity': row[3] or 0, 'distance': row[4] or 0})
+        for row in accounts:
+            result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
+                          'quantity': row[3] or 0, 'distance': row[4] or 0})
+        for row in cgmf:
+            result.append({'dest_type': row[0], 'dest_name': row[1], 'dest_id': row[2], 
+                          'quantity': row[3] or 0, 'distance': row[4] or 0})
+        
+        return result
+    
+    def get_warehouse_storage_data(self, warehouse_id=None):
+        """Get warehouse stock in data for warehouse bill - storage section"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        if warehouse_id:
+            cursor.execute('''
+                SELECT ws.date, c.company_name, p.product_name, ws.quantity_mt,
+                       ws.stock_id, c.company_id, p.product_id
+                FROM warehouse_stock ws
+                LEFT JOIN companies c ON ws.company_id = c.company_id
+                LEFT JOIN products p ON ws.product_id = p.product_id
+                WHERE ws.transaction_type = 'IN' AND ws.warehouse_id = ?
+                ORDER BY ws.date DESC
+            ''', (warehouse_id,))
+        else:
+            cursor.execute('''
+                SELECT ws.date, c.company_name, p.product_name, ws.quantity_mt,
+                       ws.stock_id, c.company_id, p.product_id, w.warehouse_name
+                FROM warehouse_stock ws
+                LEFT JOIN companies c ON ws.company_id = c.company_id
+                LEFT JOIN products p ON ws.product_id = p.product_id
+                LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+                WHERE ws.transaction_type = 'IN'
+                ORDER BY ws.date DESC
+            ''')
+        
+        data = cursor.fetchall()
+        self.close_connection(conn)
+        return data
+    
+    def get_warehouse_transport_data(self, warehouse_id=None):
+        """Get warehouse stock out data for warehouse bill - transportation section (builty-wise)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        if warehouse_id:
+            cursor.execute('''
+                SELECT ws.date, t.truck_number, 
+                       COALESCE(a.account_name, cg.society_name, 'Direct') as account_name,
+                       p.product_name, ws.quantity_mt, 
+                       COALESCE(a.distance, cg.distance, 0) as distance,
+                       ws.stock_id, b.builty_number
+                FROM warehouse_stock ws
+                LEFT JOIN builty b ON ws.builty_id = b.builty_id
+                LEFT JOIN trucks t ON b.truck_id = t.truck_id
+                LEFT JOIN accounts a ON ws.account_id = a.account_id
+                LEFT JOIN cgmf cg ON ws.cgmf_id = cg.cgmf_id
+                LEFT JOIN products p ON ws.product_id = p.product_id
+                WHERE ws.transaction_type = 'OUT' AND ws.warehouse_id = ?
+                ORDER BY ws.date DESC
+            ''', (warehouse_id,))
+        else:
+            cursor.execute('''
+                SELECT ws.date, t.truck_number, 
+                       COALESCE(a.account_name, cg.society_name, 'Direct') as account_name,
+                       p.product_name, ws.quantity_mt, 
+                       COALESCE(a.distance, cg.distance, 0) as distance,
+                       ws.stock_id, b.builty_number, w.warehouse_name
+                FROM warehouse_stock ws
+                LEFT JOIN builty b ON ws.builty_id = b.builty_id
+                LEFT JOIN trucks t ON b.truck_id = t.truck_id
+                LEFT JOIN accounts a ON ws.account_id = a.account_id
+                LEFT JOIN cgmf cg ON ws.cgmf_id = cg.cgmf_id
+                LEFT JOIN products p ON ws.product_id = p.product_id
+                LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+                WHERE ws.transaction_type = 'OUT'
+                ORDER BY ws.date DESC
+            ''')
+        
+        data = cursor.fetchall()
+        self.close_connection(conn)
+        return data
+

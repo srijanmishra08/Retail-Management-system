@@ -198,6 +198,10 @@
                 <a class="nav-link {% if 'admin_manage_warehouses' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_manage_warehouses') }}">
                     <i class="bi bi-building"></i> Manage Warehouses
                 </a>
+                <div class="sidebar-section-header text-white-50"><strong>BILLING</strong></div>
+                <a class="nav-link {% if 'admin_logistic_bill' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_logistic_bill') }}">
+                    <i class="bi bi-truck"></i> Logistic Bill
+                </a>
             {% elif current_user.role == 'RakePoint' %}
                 <a class="nav-link {% if 'rakepoint_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('rakepoint_dashboard') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard

@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+
+{% block title %}Logistic Bill - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-truck"></i> Logistic Bill</h2>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-primary active" id="rakeBillBtn" onclick="showBillType('rake')">
+            <i class="bi bi-train-freight-front"></i> Rake Bill
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="warehouseBillBtn" onclick="showBillType('warehouse')">
+            <i class="bi bi-building"></i> Warehouse Bill
+        </button>
+    </div>
+</div>
+
+<!-- RAKE BILL SECTION -->
+<div id="rakeBillSection">
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-train-freight-front"></i> Rake Bill</h5>
+            <div>
+                <select class="form-select form-select-sm d-inline-block w-auto me-2" id="rakeSelect" onchange="loadRakeData()">
+                    <option value="">Select Rake</option>
+                    {% for rake in rakes %}
+                    <option value="{{ rake[0] }}">{{ rake[0] }} - {{ rake[1] }} ({{ rake[2] }})</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-success btn-sm" onclick="downloadRakeBillExcel()" id="downloadRakeBtn" disabled>
+                    <i class="bi bi-file-earmark-excel"></i> Download Excel
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Rake Transport Table -->
+            <h5 class="text-primary mb-3">1. Rake Transport</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="rakeTransportTable">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Type</th>
+                            <th>Account/Destination</th>
+                            <th>QT (MT)</th>
+                            <th>KM Distance</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rakeTransportBody">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Select a rake to load data</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="5" class="text-end">Rake Transport Total:</th>
+                            <th id="rakeTransportTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Rake Handling Table -->
+            <h5 class="text-primary mb-3">2. Rake Handling</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="rakeHandlingTable">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Handling Situation</th>
+                            <th>QT (MT)</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rakeHandlingBody">
+                        <tr data-situation="unloading_wagon">
+                            <td>Unloading from wagon to dump</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                        <tr data-situation="loading_dump">
+                            <td>Loading from dump to truck</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                        <tr data-situation="cgmf_unloading">
+                            <td>CGMF Unloading</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                        <tr data-situation="standardization">
+                            <td>Standardization</td>
+                            <td><input type="number" class="form-control form-control-sm handling-qty" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm handling-rate" step="0.01" min="0" onchange="calculateHandlingRow(this)"></td>
+                            <td class="handling-total">₹ 0.00</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="3" class="text-end">Rake Handling Total:</th>
+                            <th id="rakeHandlingTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Grand Total -->
+            <div class="card bg-success text-white">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">RAKE BILL GRAND TOTAL</h4>
+                    <h3 class="mb-0" id="rakeGrandTotal">₹ 0.00</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WAREHOUSE BILL SECTION -->
+<div id="warehouseBillSection" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-building"></i> Warehouse Bill</h5>
+            <div>
+                <select class="form-select form-select-sm d-inline-block w-auto me-2" id="warehouseSelect" onchange="loadWarehouseData()">
+                    <option value="">Select Warehouse (All)</option>
+                    {% for warehouse in warehouses %}
+                    <option value="{{ warehouse[0] }}">{{ warehouse[1] }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-success btn-sm" onclick="downloadWarehouseBillExcel()" id="downloadWarehouseBtn">
+                    <i class="bi bi-file-earmark-excel"></i> Download Excel
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Storage Table -->
+            <h5 class="text-info mb-3">1. Storage (Stock In)</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="storageTable">
+                    <thead class="table-info">
+                        <tr>
+                            <th>Date</th>
+                            <th>Company</th>
+                            <th>Product</th>
+                            <th>QT (MT)</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="storageBody">
+                        {% for item in storage_data %}
+                        <tr data-stock-id="{{ item[4] }}">
+                            <td>{{ item[0] }}</td>
+                            <td>{{ item[1] or '-' }}</td>
+                            <td>{{ item[2] or '-' }}</td>
+                            <td><input type="number" class="form-control form-control-sm storage-qty" value="{{ item[3] }}" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm storage-rate" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                            <td class="storage-total">₹ 0.00</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No storage data available</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="5" class="text-end">Storage Total:</th>
+                            <th id="storageTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Transportation Table -->
+            <h5 class="text-info mb-3">2. Transportation (Stock Out - Builty Wise)</h5>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover" id="transportTable">
+                    <thead class="table-info">
+                        <tr>
+                            <th>Date</th>
+                            <th>Truck</th>
+                            <th>Account</th>
+                            <th>Product</th>
+                            <th>QT (MT)</th>
+                            <th>KM</th>
+                            <th>Rate (₹)</th>
+                            <th>Total (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transportBody">
+                        {% for item in transport_data %}
+                        <tr data-stock-id="{{ item[6] }}">
+                            <td>{{ item[0] }}</td>
+                            <td>{{ item[1] or '-' }}</td>
+                            <td>{{ item[2] or '-' }}</td>
+                            <td>{{ item[3] or '-' }}</td>
+                            <td>{{ item[4] }}</td>
+                            <td><input type="number" class="form-control form-control-sm transport-km" value="{{ item[5] or 0 }}" step="0.1" min="0" onchange="calculateTransportRow(this)"></td>
+                            <td><input type="number" class="form-control form-control-sm transport-rate" step="0.01" min="0" onchange="calculateTransportRow(this)"></td>
+                            <td class="transport-total">₹ 0.00</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">No transportation data available</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="7" class="text-end">Transportation Total:</th>
+                            <th id="transportTotal">₹ 0.00</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Grand Total -->
+            <div class="card bg-info text-white">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">WAREHOUSE BILL GRAND TOTAL</h4>
+                    <h3 class="mb-0" id="warehouseGrandTotal">₹ 0.00</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Global variables to store data for Excel export
+let rakeTransportData = [];
+let rakeHandlingData = [];
+let warehouseStorageData = [];
+let warehouseTransportData = [];
+
+function showBillType(type) {
+    if (type === 'rake') {
+        document.getElementById('rakeBillSection').style.display = 'block';
+        document.getElementById('warehouseBillSection').style.display = 'none';
+        document.getElementById('rakeBillBtn').classList.add('active');
+        document.getElementById('rakeBillBtn').classList.remove('btn-outline-primary');
+        document.getElementById('rakeBillBtn').classList.add('btn-primary');
+        document.getElementById('warehouseBillBtn').classList.remove('active');
+        document.getElementById('warehouseBillBtn').classList.add('btn-outline-primary');
+        document.getElementById('warehouseBillBtn').classList.remove('btn-primary');
+    } else {
+        document.getElementById('rakeBillSection').style.display = 'none';
+        document.getElementById('warehouseBillSection').style.display = 'block';
+        document.getElementById('warehouseBillBtn').classList.add('active');
+        document.getElementById('warehouseBillBtn').classList.remove('btn-outline-primary');
+        document.getElementById('warehouseBillBtn').classList.add('btn-primary');
+        document.getElementById('rakeBillBtn').classList.remove('active');
+        document.getElementById('rakeBillBtn').classList.add('btn-outline-primary');
+        document.getElementById('rakeBillBtn').classList.remove('btn-primary');
+    }
+}
+
+function loadRakeData() {
+    const rakeCode = document.getElementById('rakeSelect').value;
+    if (!rakeCode) {
+        document.getElementById('rakeTransportBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted">Select a rake to load data</td></tr>';
+        document.getElementById('downloadRakeBtn').disabled = true;
+        return;
+    }
+    
+    document.getElementById('downloadRakeBtn').disabled = false;
+    
+    // Fetch rake transport data via AJAX
+    fetch('/admin/logistic-bill/rake-data/' + encodeURIComponent(rakeCode))
+        .then(response => response.json())
+        .then(data => {
+            rakeTransportData = data;
+            renderRakeTransportTable(data);
+        })
+        .catch(err => {
+            console.error('Error loading rake data:', err);
+            document.getElementById('rakeTransportBody').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function renderRakeTransportTable(data) {
+    const tbody = document.getElementById('rakeTransportBody');
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No dispatch data for this rake</td></tr>';
+        return;
+    }
+    
+    // Group by destination type
+    const grouped = {};
+    data.forEach(item => {
+        if (!grouped[item.dest_type]) {
+            grouped[item.dest_type] = [];
+        }
+        grouped[item.dest_type].push(item);
+    });
+    
+    let html = '';
+    const typeOrder = ['Warehouse', 'Dealer', 'Retailer', 'Payal', 'CGMF'];
+    
+    typeOrder.forEach(type => {
+        if (grouped[type]) {
+            grouped[type].forEach((item, idx) => {
+                html += `
+                    <tr data-dest-type="${item.dest_type}" data-dest-id="${item.dest_id}">
+                        <td>${idx === 0 ? '<strong>' + type + '</strong>' : ''}</td>
+                        <td>${item.dest_name}</td>
+                        <td><input type="number" class="form-control form-control-sm transport-qty" value="${item.quantity}" step="0.01" min="0" onchange="calculateTransportRowRake(this)"></td>
+                        <td><input type="number" class="form-control form-control-sm transport-km" value="${item.distance || 0}" step="0.1" min="0" onchange="calculateTransportRowRake(this)"></td>
+                        <td><input type="number" class="form-control form-control-sm transport-rate" step="0.01" min="0" onchange="calculateTransportRowRake(this)"></td>
+                        <td class="transport-total-rake">₹ 0.00</td>
+                    </tr>
+                `;
+            });
+        }
+    });
+    
+    tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">No dispatch data for this rake</td></tr>';
+}
+
+function calculateTransportRowRake(input) {
+    const row = input.closest('tr');
+    const qty = parseFloat(row.querySelector('.transport-qty').value) || 0;
+    const km = parseFloat(row.querySelector('.transport-km').value) || 0;
+    const rate = parseFloat(row.querySelector('.transport-rate').value) || 0;
+    const total = qty * km * rate;
+    row.querySelector('.transport-total-rake').textContent = '₹ ' + total.toFixed(2);
+    calculateRakeTotals();
+}
+
+function calculateHandlingRow(input) {
+    const row = input.closest('tr');
+    const qty = parseFloat(row.querySelector('.handling-qty').value) || 0;
+    const rate = parseFloat(row.querySelector('.handling-rate').value) || 0;
+    const total = qty * rate;
+    row.querySelector('.handling-total').textContent = '₹ ' + total.toFixed(2);
+    calculateRakeTotals();
+}
+
+function calculateRakeTotals() {
+    // Calculate transport total
+    let transportTotal = 0;
+    document.querySelectorAll('.transport-total-rake').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        transportTotal += value;
+    });
+    document.getElementById('rakeTransportTotal').textContent = '₹ ' + transportTotal.toFixed(2);
+    
+    // Calculate handling total
+    let handlingTotal = 0;
+    document.querySelectorAll('.handling-total').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        handlingTotal += value;
+    });
+    document.getElementById('rakeHandlingTotal').textContent = '₹ ' + handlingTotal.toFixed(2);
+    
+    // Calculate grand total
+    const grandTotal = transportTotal + handlingTotal;
+    document.getElementById('rakeGrandTotal').textContent = '₹ ' + grandTotal.toFixed(2);
+}
+
+function loadWarehouseData() {
+    const warehouseId = document.getElementById('warehouseSelect').value;
+    
+    // Fetch warehouse data via AJAX
+    fetch('/admin/logistic-bill/warehouse-data' + (warehouseId ? '/' + warehouseId : ''))
+        .then(response => response.json())
+        .then(data => {
+            warehouseStorageData = data.storage;
+            warehouseTransportData = data.transport;
+            renderWarehouseStorageTable(data.storage);
+            renderWarehouseTransportTable(data.transport);
+        })
+        .catch(err => {
+            console.error('Error loading warehouse data:', err);
+        });
+}
+
+function renderWarehouseStorageTable(data) {
+    const tbody = document.getElementById('storageBody');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No storage data available</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(item => {
+        html += `
+            <tr data-stock-id="${item.stock_id}">
+                <td>${item.date}</td>
+                <td>${item.company || '-'}</td>
+                <td>${item.product || '-'}</td>
+                <td><input type="number" class="form-control form-control-sm storage-qty" value="${item.quantity}" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                <td><input type="number" class="form-control form-control-sm storage-rate" step="0.01" min="0" onchange="calculateStorageRow(this)"></td>
+                <td class="storage-total">₹ 0.00</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+function renderWarehouseTransportTable(data) {
+    const tbody = document.getElementById('transportBody');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No transportation data available</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(item => {
+        html += `
+            <tr data-stock-id="${item.stock_id}">
+                <td>${item.date}</td>
+                <td>${item.truck || '-'}</td>
+                <td>${item.account || '-'}</td>
+                <td>${item.product || '-'}</td>
+                <td>${item.quantity}</td>
+                <td><input type="number" class="form-control form-control-sm transport-km" value="${item.distance || 0}" step="0.1" min="0" onchange="calculateTransportRow(this)"></td>
+                <td><input type="number" class="form-control form-control-sm transport-rate" step="0.01" min="0" onchange="calculateTransportRow(this)"></td>
+                <td class="transport-total">₹ 0.00</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+function calculateStorageRow(input) {
+    const row = input.closest('tr');
+    const qty = parseFloat(row.querySelector('.storage-qty').value) || 0;
+    const rate = parseFloat(row.querySelector('.storage-rate').value) || 0;
+    const total = qty * rate;
+    row.querySelector('.storage-total').textContent = '₹ ' + total.toFixed(2);
+    calculateWarehouseTotals();
+}
+
+function calculateTransportRow(input) {
+    const row = input.closest('tr');
+    const qtyCell = row.cells[4]; // QT is the 5th column (index 4)
+    const qty = parseFloat(qtyCell.textContent) || 0;
+    const km = parseFloat(row.querySelector('.transport-km').value) || 0;
+    const rate = parseFloat(row.querySelector('.transport-rate').value) || 0;
+    const total = qty * km * rate;
+    row.querySelector('.transport-total').textContent = '₹ ' + total.toFixed(2);
+    calculateWarehouseTotals();
+}
+
+function calculateWarehouseTotals() {
+    // Calculate storage total
+    let storageTotal = 0;
+    document.querySelectorAll('.storage-total').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        storageTotal += value;
+    });
+    document.getElementById('storageTotal').textContent = '₹ ' + storageTotal.toFixed(2);
+    
+    // Calculate transportation total
+    let transportTotal = 0;
+    document.querySelectorAll('.transport-total').forEach(cell => {
+        const value = parseFloat(cell.textContent.replace('₹ ', '').replace(',', '')) || 0;
+        transportTotal += value;
+    });
+    document.getElementById('transportTotal').textContent = '₹ ' + transportTotal.toFixed(2);
+    
+    // Calculate grand total
+    const grandTotal = storageTotal + transportTotal;
+    document.getElementById('warehouseGrandTotal').textContent = '₹ ' + grandTotal.toFixed(2);
+}
+
+function downloadRakeBillExcel() {
+    const rakeCode = document.getElementById('rakeSelect').value;
+    if (!rakeCode) {
+        alert('Please select a rake first');
+        return;
+    }
+    
+    // Collect transport data
+    const transportData = [];
+    document.querySelectorAll('#rakeTransportBody tr').forEach(row => {
+        if (row.querySelector('.transport-qty')) {
+            transportData.push({
+                dest_type: row.dataset.destType,
+                dest_name: row.cells[1].textContent,
+                quantity: parseFloat(row.querySelector('.transport-qty').value) || 0,
+                distance: parseFloat(row.querySelector('.transport-km').value) || 0,
+                rate: parseFloat(row.querySelector('.transport-rate').value) || 0,
+                total: parseFloat(row.querySelector('.transport-total-rake').textContent.replace('₹ ', '')) || 0
+            });
+        }
+    });
+    
+    // Collect handling data
+    const handlingData = [];
+    document.querySelectorAll('#rakeHandlingBody tr').forEach(row => {
+        handlingData.push({
+            situation: row.cells[0].textContent,
+            quantity: parseFloat(row.querySelector('.handling-qty').value) || 0,
+            rate: parseFloat(row.querySelector('.handling-rate').value) || 0,
+            total: parseFloat(row.querySelector('.handling-total').textContent.replace('₹ ', '')) || 0
+        });
+    });
+    
+    const totals = {
+        transport_total: parseFloat(document.getElementById('rakeTransportTotal').textContent.replace('₹ ', '')) || 0,
+        handling_total: parseFloat(document.getElementById('rakeHandlingTotal').textContent.replace('₹ ', '')) || 0,
+        grand_total: parseFloat(document.getElementById('rakeGrandTotal').textContent.replace('₹ ', '')) || 0
+    };
+    
+    // Send data to server for Excel generation
+    fetch('/admin/logistic-bill/download-rake-excel', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            rake_code: rakeCode,
+            transport_data: transportData,
+            handling_data: handlingData,
+            totals: totals
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Rake_Bill_' + rakeCode + '.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(err => {
+        console.error('Error downloading Excel:', err);
+        alert('Error downloading Excel file');
+    });
+}
+
+function downloadWarehouseBillExcel() {
+    const warehouseId = document.getElementById('warehouseSelect').value;
+    const warehouseName = document.getElementById('warehouseSelect').options[document.getElementById('warehouseSelect').selectedIndex].text;
+    
+    // Collect storage data
+    const storageData = [];
+    document.querySelectorAll('#storageBody tr').forEach(row => {
+        if (row.querySelector('.storage-qty')) {
+            storageData.push({
+                date: row.cells[0].textContent,
+                company: row.cells[1].textContent,
+                product: row.cells[2].textContent,
+                quantity: parseFloat(row.querySelector('.storage-qty').value) || 0,
+                rate: parseFloat(row.querySelector('.storage-rate').value) || 0,
+                total: parseFloat(row.querySelector('.storage-total').textContent.replace('₹ ', '')) || 0
+            });
+        }
+    });
+    
+    // Collect transport data
+    const transportData = [];
+    document.querySelectorAll('#transportBody tr').forEach(row => {
+        if (row.querySelector('.transport-km')) {
+            transportData.push({
+                date: row.cells[0].textContent,
+                truck: row.cells[1].textContent,
+                account: row.cells[2].textContent,
+                product: row.cells[3].textContent,
+                quantity: parseFloat(row.cells[4].textContent) || 0,
+                distance: parseFloat(row.querySelector('.transport-km').value) || 0,
+                rate: parseFloat(row.querySelector('.transport-rate').value) || 0,
+                total: parseFloat(row.querySelector('.transport-total').textContent.replace('₹ ', '')) || 0
+            });
+        }
+    });
+    
+    const totals = {
+        storage_total: parseFloat(document.getElementById('storageTotal').textContent.replace('₹ ', '')) || 0,
+        transport_total: parseFloat(document.getElementById('transportTotal').textContent.replace('₹ ', '')) || 0,
+        grand_total: parseFloat(document.getElementById('warehouseGrandTotal').textContent.replace('₹ ', '')) || 0
+    };
+    
+    // Send data to server for Excel generation
+    fetch('/admin/logistic-bill/download-warehouse-excel', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            warehouse_id: warehouseId,
+            warehouse_name: warehouseName,
+            storage_data: storageData,
+            transport_data: transportData,
+            totals: totals
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Warehouse_Bill_' + (warehouseName || 'All') + '.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(err => {
+        console.error('Error downloading Excel:', err);
+        alert('Error downloading Excel file');
+    });
+}
+
+// Load warehouse data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadWarehouseData();
+});
+</script>
+{% endblock %}

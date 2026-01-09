@@ -804,6 +804,334 @@ def admin_warehouse_summary():
                          end_date=end_date,
                          recent_transactions=recent_transactions)
 
+# ========== Logistic Bill Routes ==========
+
+@app.route('/admin/logistic-bill')
+@login_required
+def admin_logistic_bill():
+    """Logistic Bill page with Rake Bill and Warehouse Bill sections"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    rakes = db.get_all_rakes()
+    warehouses = db.get_all_warehouses()
+    storage_data = db.get_warehouse_storage_data()
+    transport_data = db.get_warehouse_transport_data()
+    
+    return render_template('admin/logistic_bill.html',
+                         rakes=rakes,
+                         warehouses=warehouses,
+                         storage_data=storage_data,
+                         transport_data=transport_data)
+
+@app.route('/admin/logistic-bill/rake-data/<rake_code>')
+@login_required
+def admin_logistic_bill_rake_data(rake_code):
+    """API to get rake transport data for logistic bill"""
+    if current_user.role != 'Admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = db.get_rake_transport_data(rake_code)
+    return jsonify(data)
+
+@app.route('/admin/logistic-bill/warehouse-data')
+@app.route('/admin/logistic-bill/warehouse-data/<int:warehouse_id>')
+@login_required
+def admin_logistic_bill_warehouse_data(warehouse_id=None):
+    """API to get warehouse storage and transport data for logistic bill"""
+    if current_user.role != 'Admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    storage_data = db.get_warehouse_storage_data(warehouse_id)
+    transport_data = db.get_warehouse_transport_data(warehouse_id)
+    
+    # Convert to JSON-friendly format
+    storage_list = []
+    for item in storage_data:
+        storage_list.append({
+            'date': str(item[0]) if item[0] else '',
+            'company': item[1] or '',
+            'product': item[2] or '',
+            'quantity': item[3] or 0,
+            'stock_id': item[4]
+        })
+    
+    transport_list = []
+    for item in transport_data:
+        transport_list.append({
+            'date': str(item[0]) if item[0] else '',
+            'truck': item[1] or '',
+            'account': item[2] or '',
+            'product': item[3] or '',
+            'quantity': item[4] or 0,
+            'distance': item[5] or 0,
+            'stock_id': item[6]
+        })
+    
+    return jsonify({
+        'storage': storage_list,
+        'transport': transport_list
+    })
+
+@app.route('/admin/logistic-bill/download-rake-excel', methods=['POST'])
+@login_required
+def admin_download_rake_excel():
+    """Download Rake Bill as Excel file"""
+    if current_user.role != 'Admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    data = request.get_json()
+    rake_code = data.get('rake_code')
+    transport_data = data.get('transport_data', [])
+    handling_data = data.get('handling_data', [])
+    totals = data.get('totals', {})
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rake Bill"
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    total_fill = PatternFill(start_color="10B981", end_color="10B981", fill_type="solid")
+    
+    # Title
+    ws['A1'] = f"RAKE BILL - {rake_code}"
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:F1')
+    
+    # Rake Transport Section
+    ws['A3'] = "1. RAKE TRANSPORT"
+    ws['A3'].font = Font(bold=True, size=12)
+    
+    # Transport Headers
+    transport_headers = ['Type', 'Account/Destination', 'QT (MT)', 'KM Distance', 'Rate (₹)', 'Total (₹)']
+    for col, header in enumerate(transport_headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Transport Data
+    row = 5
+    for item in transport_data:
+        ws.cell(row=row, column=1, value=item.get('dest_type', '')).border = border
+        ws.cell(row=row, column=2, value=item.get('dest_name', '')).border = border
+        ws.cell(row=row, column=3, value=item.get('quantity', 0)).border = border
+        ws.cell(row=row, column=4, value=item.get('distance', 0)).border = border
+        ws.cell(row=row, column=5, value=item.get('rate', 0)).border = border
+        ws.cell(row=row, column=6, value=item.get('total', 0)).border = border
+        row += 1
+    
+    # Transport Total
+    ws.cell(row=row, column=5, value="Transport Total:").font = Font(bold=True)
+    ws.cell(row=row, column=5).border = border
+    ws.cell(row=row, column=6, value=totals.get('transport_total', 0)).border = border
+    ws.cell(row=row, column=6).font = Font(bold=True)
+    row += 2
+    
+    # Rake Handling Section
+    ws.cell(row=row, column=1, value="2. RAKE HANDLING").font = Font(bold=True, size=12)
+    row += 1
+    
+    # Handling Headers
+    handling_headers = ['Handling Situation', 'QT (MT)', 'Rate (₹)', 'Total (₹)']
+    for col, header in enumerate(handling_headers, 1):
+        cell = ws.cell(row=row, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    row += 1
+    
+    # Handling Data
+    for item in handling_data:
+        ws.cell(row=row, column=1, value=item.get('situation', '')).border = border
+        ws.cell(row=row, column=2, value=item.get('quantity', 0)).border = border
+        ws.cell(row=row, column=3, value=item.get('rate', 0)).border = border
+        ws.cell(row=row, column=4, value=item.get('total', 0)).border = border
+        row += 1
+    
+    # Handling Total
+    ws.cell(row=row, column=3, value="Handling Total:").font = Font(bold=True)
+    ws.cell(row=row, column=3).border = border
+    ws.cell(row=row, column=4, value=totals.get('handling_total', 0)).border = border
+    ws.cell(row=row, column=4).font = Font(bold=True)
+    row += 2
+    
+    # Grand Total
+    ws.cell(row=row, column=1, value="GRAND TOTAL").font = Font(bold=True, size=14)
+    ws.cell(row=row, column=1).fill = total_fill
+    ws.cell(row=row, column=1).font = Font(bold=True, color="FFFFFF", size=14)
+    ws.merge_cells(f'A{row}:E{row}')
+    ws.cell(row=row, column=6, value=totals.get('grand_total', 0))
+    ws.cell(row=row, column=6).fill = total_fill
+    ws.cell(row=row, column=6).font = Font(bold=True, color="FFFFFF", size=14)
+    
+    # Adjust column widths
+    ws.column_dimensions['A'].width = 20
+    ws.column_dimensions['B'].width = 30
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 15
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'Rake_Bill_{rake_code}.xlsx'
+    )
+
+@app.route('/admin/logistic-bill/download-warehouse-excel', methods=['POST'])
+@login_required
+def admin_download_warehouse_excel():
+    """Download Warehouse Bill as Excel file"""
+    if current_user.role != 'Admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    data = request.get_json()
+    warehouse_name = data.get('warehouse_name', 'All Warehouses')
+    storage_data = data.get('storage_data', [])
+    transport_data = data.get('transport_data', [])
+    totals = data.get('totals', {})
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Warehouse Bill"
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="0EA5E9", end_color="0EA5E9", fill_type="solid")
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    total_fill = PatternFill(start_color="10B981", end_color="10B981", fill_type="solid")
+    
+    # Title
+    ws['A1'] = f"WAREHOUSE BILL - {warehouse_name}"
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:H1')
+    
+    # Storage Section
+    ws['A3'] = "1. STORAGE (Stock In)"
+    ws['A3'].font = Font(bold=True, size=12)
+    
+    # Storage Headers
+    storage_headers = ['Date', 'Company', 'Product', 'QT (MT)', 'Rate (₹)', 'Total (₹)']
+    for col, header in enumerate(storage_headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Storage Data
+    row = 5
+    for item in storage_data:
+        ws.cell(row=row, column=1, value=item.get('date', '')).border = border
+        ws.cell(row=row, column=2, value=item.get('company', '')).border = border
+        ws.cell(row=row, column=3, value=item.get('product', '')).border = border
+        ws.cell(row=row, column=4, value=item.get('quantity', 0)).border = border
+        ws.cell(row=row, column=5, value=item.get('rate', 0)).border = border
+        ws.cell(row=row, column=6, value=item.get('total', 0)).border = border
+        row += 1
+    
+    # Storage Total
+    ws.cell(row=row, column=5, value="Storage Total:").font = Font(bold=True)
+    ws.cell(row=row, column=5).border = border
+    ws.cell(row=row, column=6, value=totals.get('storage_total', 0)).border = border
+    ws.cell(row=row, column=6).font = Font(bold=True)
+    row += 2
+    
+    # Transportation Section
+    ws.cell(row=row, column=1, value="2. TRANSPORTATION (Stock Out - Builty Wise)").font = Font(bold=True, size=12)
+    row += 1
+    
+    # Transport Headers
+    transport_headers = ['Date', 'Truck', 'Account', 'Product', 'QT (MT)', 'KM', 'Rate (₹)', 'Total (₹)']
+    for col, header in enumerate(transport_headers, 1):
+        cell = ws.cell(row=row, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    row += 1
+    
+    # Transport Data
+    for item in transport_data:
+        ws.cell(row=row, column=1, value=item.get('date', '')).border = border
+        ws.cell(row=row, column=2, value=item.get('truck', '')).border = border
+        ws.cell(row=row, column=3, value=item.get('account', '')).border = border
+        ws.cell(row=row, column=4, value=item.get('product', '')).border = border
+        ws.cell(row=row, column=5, value=item.get('quantity', 0)).border = border
+        ws.cell(row=row, column=6, value=item.get('distance', 0)).border = border
+        ws.cell(row=row, column=7, value=item.get('rate', 0)).border = border
+        ws.cell(row=row, column=8, value=item.get('total', 0)).border = border
+        row += 1
+    
+    # Transport Total
+    ws.cell(row=row, column=7, value="Transport Total:").font = Font(bold=True)
+    ws.cell(row=row, column=7).border = border
+    ws.cell(row=row, column=8, value=totals.get('transport_total', 0)).border = border
+    ws.cell(row=row, column=8).font = Font(bold=True)
+    row += 2
+    
+    # Grand Total
+    ws.cell(row=row, column=1, value="GRAND TOTAL").font = Font(bold=True, size=14)
+    ws.cell(row=row, column=1).fill = total_fill
+    ws.cell(row=row, column=1).font = Font(bold=True, color="FFFFFF", size=14)
+    ws.merge_cells(f'A{row}:G{row}')
+    ws.cell(row=row, column=8, value=totals.get('grand_total', 0))
+    ws.cell(row=row, column=8).fill = total_fill
+    ws.cell(row=row, column=8).font = Font(bold=True, color="FFFFFF", size=14)
+    
+    # Adjust column widths
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 10
+    ws.column_dimensions['G'].width = 12
+    ws.column_dimensions['H'].width = 15
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'Warehouse_Bill_{warehouse_name.replace(" ", "_")}.xlsx'
+    )
+
 @app.route('/api/warehouse-account-stock/<int:warehouse_id>')
 @login_required
 def api_warehouse_account_stock(warehouse_id):
