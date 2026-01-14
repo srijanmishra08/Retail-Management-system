@@ -1455,7 +1455,20 @@ class Database:
         """Get loading slips created FROM rakes (not from warehouses) that haven't been converted to builty yet - for rakepoint users"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute('''
+        
+        # First get all warehouse names for exclusion
+        cursor.execute('SELECT warehouse_name FROM warehouses')
+        warehouse_names = [row[0] for row in cursor.fetchall()]
+        
+        # Build exclusion condition
+        if warehouse_names:
+            warehouse_exclusion = f"AND ls.loading_point_name NOT IN ({','.join(['?' for _ in warehouse_names])})"
+            params = warehouse_names
+        else:
+            warehouse_exclusion = ""
+            params = []
+        
+        query = f'''
             SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
                    ls.destination, 
                    COALESCE(a.account_name, w.warehouse_name) as destination_name,
@@ -1467,13 +1480,16 @@ class Database:
             LEFT JOIN accounts a ON ls.account_id = a.account_id
             LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
             LEFT JOIN trucks t ON ls.truck_id = t.truck_id
-            WHERE ls.builty_id IS NULL
-            AND (ls.loading_point_name NOT IN (SELECT warehouse_name FROM warehouses)
-                 OR ls.loading_point_name IS NULL)
+            WHERE (ls.builty_id IS NULL OR ls.builty_id = 0)
+            {warehouse_exclusion}
             ORDER BY ls.slip_id DESC
-        ''')
+        '''
+        
+        cursor.execute(query, params)
         slips = cursor.fetchall()
         self.close_connection(conn)
+        
+        print(f"DEBUG: Found {len(slips)} rakepoint loading slips without builty")
         return slips
     
     def get_all_loading_slips_with_status(self):
@@ -1505,12 +1521,28 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
+            # First check if slip exists and is not already linked
+            cursor.execute('SELECT slip_id, builty_id FROM loading_slips WHERE slip_id = ?', (slip_id,))
+            slip = cursor.fetchone()
+            
+            if not slip:
+                print(f"ERROR: Loading slip {slip_id} not found")
+                return False
+            
+            if slip[1] is not None and slip[1] != 0:
+                print(f"WARNING: Loading slip {slip_id} already linked to builty {slip[1]}")
+            
+            # Update the builty_id
             cursor.execute('''
                 UPDATE loading_slips 
                 SET builty_id = ? 
                 WHERE slip_id = ?
             ''', (builty_id, slip_id))
+            
+            rows_affected = cursor.rowcount
             conn.commit()
+            
+            print(f"DEBUG: Successfully linked loading slip {slip_id} to builty {builty_id}, rows affected: {rows_affected}")
             return True
         except Exception as e:
             print(f"Error linking loading slip to builty: {e}")

@@ -2554,9 +2554,13 @@ def rakepoint_create_builty():
         if builty_id:
             # Link the loading slip to this builty
             if loading_slip_id:
-                db.link_loading_slip_to_builty(int(loading_slip_id), builty_id)
-            
-            flash(f'Builty {builty_number} created successfully!', 'success')
+                link_success = db.link_loading_slip_to_builty(int(loading_slip_id), builty_id)
+                if link_success:
+                    flash(f'Builty {builty_number} created and linked to loading slip successfully!', 'success')
+                else:
+                    flash(f'Builty {builty_number} created but failed to link loading slip. Please contact admin.', 'warning')
+            else:
+                flash(f'Builty {builty_number} created successfully!', 'success')
             return redirect(url_for('rakepoint_dashboard'))
         else:
             flash('Error creating builty. Please try again.', 'error')
