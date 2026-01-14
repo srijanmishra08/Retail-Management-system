@@ -1452,12 +1452,12 @@ class Database:
         return slips
     
     def get_rakepoint_loading_slips(self):
-        """Get loading slips created FROM rakes (not from warehouses) that haven't been converted to builty yet - for rakepoint users"""
+        """Get loading slips created FROM rakes (not from warehouses) that haven't been converted to builty yet - for rakepoint users. Excludes loading slips from closed rakes."""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         try:
-            # Get loading slips that don't have a builty and are not from warehouses
+            # Get loading slips that don't have a builty, are not from warehouses, and are from active (not closed) rakes
             cursor.execute('''
                 SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
                        ls.destination, 
@@ -1470,13 +1470,15 @@ class Database:
                 LEFT JOIN accounts a ON ls.account_id = a.account_id
                 LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
                 LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+                LEFT JOIN rakes r ON ls.rake_code = r.rake_code
                 WHERE (ls.builty_id IS NULL OR ls.builty_id = 0)
                 AND ls.loading_point_name NOT IN (SELECT warehouse_name FROM warehouses WHERE warehouse_name IS NOT NULL)
+                AND (r.is_closed IS NULL OR r.is_closed = 0)
                 ORDER BY ls.slip_id DESC
             ''')
             
             slips = cursor.fetchall()
-            print(f"DEBUG: Found {len(slips)} rakepoint loading slips without builty")
+            print(f"DEBUG: Found {len(slips)} rakepoint loading slips without builty (from active rakes only)")
             return slips
         except Exception as e:
             print(f"ERROR in get_rakepoint_loading_slips: {e}")
