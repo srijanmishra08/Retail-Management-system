@@ -226,38 +226,38 @@ def admin_summary():
             'shortage': shortage
         })
     
-    # Get total summary (all accounts with dispatch quantities)
+    # Get total summary (all accounts with dispatch quantities) - use loading_slips
     total_account_summary = db.execute_custom_query('''
         SELECT a.account_name, a.account_type, 
-               SUM(b.quantity_mt) as total_quantity,
-               COUNT(DISTINCT b.rake_code) as rake_count,
-               COUNT(b.builty_id) as builty_count
-        FROM builty b
-        JOIN accounts a ON b.account_id = a.account_id
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN accounts a ON ls.account_id = a.account_id
         GROUP BY a.account_id, a.account_name, a.account_type
         ORDER BY total_quantity DESC
     ''')
     
-    # Get CGMF dispatch summary
+    # Get CGMF dispatch summary - use loading_slips
     cgmf_summary = db.execute_custom_query('''
         SELECT c.society_name, c.district, c.destination,
-               SUM(b.quantity_mt) as total_quantity,
-               COUNT(DISTINCT b.rake_code) as rake_count,
-               COUNT(b.builty_id) as builty_count
-        FROM builty b
-        JOIN cgmf c ON b.cgmf_id = c.cgmf_id
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
         GROUP BY c.cgmf_id, c.society_name, c.district
         ORDER BY total_quantity DESC
     ''')
     
-    # Get warehouse dispatch summary
+    # Get warehouse dispatch summary - use loading_slips
     warehouse_summary = db.execute_custom_query('''
         SELECT w.warehouse_name, w.location,
-               SUM(b.quantity_mt) as total_quantity,
-               COUNT(DISTINCT b.rake_code) as rake_count,
-               COUNT(b.builty_id) as builty_count
-        FROM builty b
-        JOIN warehouses w ON b.warehouse_id = w.warehouse_id
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
         GROUP BY w.warehouse_id, w.warehouse_name
         ORDER BY total_quantity DESC
     ''')
@@ -268,7 +268,7 @@ def admin_summary():
                          total_account_summary=total_account_summary,
                          cgmf_summary=cgmf_summary,
                          warehouse_summary=warehouse_summary,
-                         total_shortage=total_shortage)
+                         total_shortage=total_shortage or 0)
 
 @app.route('/admin/rake-details/<rake_code>')
 @login_required
@@ -357,7 +357,7 @@ def admin_download_rake_summary_excel():
     
     # Get all rakes with balance
     all_rakes = db.get_all_rakes()
-    total_shortage = db.get_total_shortage()
+    total_shortage = db.get_total_shortage() or 0
     
     wb = Workbook()
     ws = wb.active
@@ -677,6 +677,439 @@ def admin_download_rake_details_excel(rake_code):
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'rake_{rake_code}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/admin/download-total-summary-excel')
+@login_required
+def admin_download_total_summary_excel():
+    """Download complete total summary as Excel file"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    wb = Workbook()
+    
+    # === ACCOUNTS SHEET ===
+    ws_accounts = wb.active
+    ws_accounts.title = "Accounts Summary"
+    
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="0EA5E9", end_color="0EA5E9", fill_type="solid")
+    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    total_fill = PatternFill(start_color="22C55E", end_color="22C55E", fill_type="solid")
+    
+    ws_accounts['A1'] = "ACCOUNTS (DEALERS/RETAILERS) SUMMARY"
+    ws_accounts['A1'].font = Font(bold=True, size=14)
+    ws_accounts.merge_cells('A1:F1')
+    ws_accounts['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    acc_headers = ['#', 'Account Name', 'Type', 'Total Qty (MT)', 'Rakes', 'Loading Slips']
+    for col, header in enumerate(acc_headers, 1):
+        cell = ws_accounts.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+    
+    account_summary = db.execute_custom_query('''
+        SELECT a.account_name, a.account_type, 
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN accounts a ON ls.account_id = a.account_id
+        GROUP BY a.account_id, a.account_name, a.account_type
+        ORDER BY total_quantity DESC
+    ''')
+    
+    row = 5
+    total_qty = 0
+    for idx, item in enumerate(account_summary, 1):
+        ws_accounts.cell(row=row, column=1, value=idx).border = border
+        ws_accounts.cell(row=row, column=2, value=item[0]).border = border
+        ws_accounts.cell(row=row, column=3, value=item[1]).border = border
+        ws_accounts.cell(row=row, column=4, value=round(item[2], 2)).border = border
+        ws_accounts.cell(row=row, column=5, value=item[3]).border = border
+        ws_accounts.cell(row=row, column=6, value=item[4]).border = border
+        total_qty += item[2]
+        row += 1
+    
+    for col in range(1, 7):
+        ws_accounts.cell(row=row, column=col).fill = total_fill
+        ws_accounts.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws_accounts.cell(row=row, column=col).border = border
+    ws_accounts.cell(row=row, column=1, value="TOTAL")
+    ws_accounts.cell(row=row, column=4, value=round(total_qty, 2))
+    
+    ws_accounts.column_dimensions['A'].width = 5
+    ws_accounts.column_dimensions['B'].width = 30
+    ws_accounts.column_dimensions['C'].width = 12
+    ws_accounts.column_dimensions['D'].width = 15
+    ws_accounts.column_dimensions['E'].width = 10
+    ws_accounts.column_dimensions['F'].width = 15
+    
+    # === CGMF SHEET ===
+    ws_cgmf = wb.create_sheet("CGMF Summary")
+    ws_cgmf['A1'] = "CGMF (CG MARKFED) SUMMARY"
+    ws_cgmf['A1'].font = Font(bold=True, size=14)
+    ws_cgmf.merge_cells('A1:G1')
+    ws_cgmf['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    cgmf_headers = ['#', 'Society Name', 'District', 'Destination', 'Total Qty (MT)', 'Rakes', 'Loading Slips']
+    for col, header in enumerate(cgmf_headers, 1):
+        cell = ws_cgmf.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = PatternFill(start_color="22C55E", end_color="22C55E", fill_type="solid")
+        cell.border = border
+    
+    cgmf_summary = db.execute_custom_query('''
+        SELECT c.society_name, c.district, c.destination,
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
+        GROUP BY c.cgmf_id, c.society_name, c.district
+        ORDER BY total_quantity DESC
+    ''')
+    
+    row = 5
+    total_qty = 0
+    for idx, item in enumerate(cgmf_summary, 1):
+        ws_cgmf.cell(row=row, column=1, value=idx).border = border
+        ws_cgmf.cell(row=row, column=2, value=item[0]).border = border
+        ws_cgmf.cell(row=row, column=3, value=item[1]).border = border
+        ws_cgmf.cell(row=row, column=4, value=item[2]).border = border
+        ws_cgmf.cell(row=row, column=5, value=round(item[3], 2)).border = border
+        ws_cgmf.cell(row=row, column=6, value=item[4]).border = border
+        ws_cgmf.cell(row=row, column=7, value=item[5]).border = border
+        total_qty += item[3]
+        row += 1
+    
+    for col in range(1, 8):
+        ws_cgmf.cell(row=row, column=col).fill = total_fill
+        ws_cgmf.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws_cgmf.cell(row=row, column=col).border = border
+    ws_cgmf.cell(row=row, column=1, value="TOTAL")
+    ws_cgmf.cell(row=row, column=5, value=round(total_qty, 2))
+    
+    ws_cgmf.column_dimensions['A'].width = 5
+    ws_cgmf.column_dimensions['B'].width = 30
+    ws_cgmf.column_dimensions['C'].width = 15
+    ws_cgmf.column_dimensions['D'].width = 15
+    ws_cgmf.column_dimensions['E'].width = 15
+    ws_cgmf.column_dimensions['F'].width = 10
+    ws_cgmf.column_dimensions['G'].width = 15
+    
+    # === WAREHOUSE SHEET ===
+    ws_wh = wb.create_sheet("Warehouse Summary")
+    ws_wh['A1'] = "WAREHOUSE SUMMARY"
+    ws_wh['A1'].font = Font(bold=True, size=14)
+    ws_wh.merge_cells('A1:F1')
+    ws_wh['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    wh_headers = ['#', 'Warehouse Name', 'Location', 'Total Qty (MT)', 'Rakes', 'Loading Slips']
+    for col, header in enumerate(wh_headers, 1):
+        cell = ws_wh.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = PatternFill(start_color="F59E0B", end_color="F59E0B", fill_type="solid")
+        cell.border = border
+    
+    wh_summary = db.execute_custom_query('''
+        SELECT w.warehouse_name, w.location,
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        GROUP BY w.warehouse_id, w.warehouse_name
+        ORDER BY total_quantity DESC
+    ''')
+    
+    row = 5
+    total_qty = 0
+    for idx, item in enumerate(wh_summary, 1):
+        ws_wh.cell(row=row, column=1, value=idx).border = border
+        ws_wh.cell(row=row, column=2, value=item[0]).border = border
+        ws_wh.cell(row=row, column=3, value=item[1]).border = border
+        ws_wh.cell(row=row, column=4, value=round(item[2], 2)).border = border
+        ws_wh.cell(row=row, column=5, value=item[3]).border = border
+        ws_wh.cell(row=row, column=6, value=item[4]).border = border
+        total_qty += item[2]
+        row += 1
+    
+    for col in range(1, 7):
+        ws_wh.cell(row=row, column=col).fill = total_fill
+        ws_wh.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws_wh.cell(row=row, column=col).border = border
+    ws_wh.cell(row=row, column=1, value="TOTAL")
+    ws_wh.cell(row=row, column=4, value=round(total_qty, 2))
+    
+    ws_wh.column_dimensions['A'].width = 5
+    ws_wh.column_dimensions['B'].width = 25
+    ws_wh.column_dimensions['C'].width = 20
+    ws_wh.column_dimensions['D'].width = 15
+    ws_wh.column_dimensions['E'].width = 10
+    ws_wh.column_dimensions['F'].width = 15
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'total_summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/admin/download-accounts-summary-excel')
+@login_required
+def admin_download_accounts_summary_excel():
+    """Download accounts summary as Excel file"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Accounts Summary"
+    
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="0EA5E9", end_color="0EA5E9", fill_type="solid")
+    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    total_fill = PatternFill(start_color="22C55E", end_color="22C55E", fill_type="solid")
+    
+    ws['A1'] = "ACCOUNTS (DEALERS/RETAILERS) SUMMARY"
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:F1')
+    ws['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    headers = ['#', 'Account Name', 'Type', 'Total Qty (MT)', 'Rakes', 'Loading Slips']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+    
+    account_summary = db.execute_custom_query('''
+        SELECT a.account_name, a.account_type, 
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN accounts a ON ls.account_id = a.account_id
+        GROUP BY a.account_id, a.account_name, a.account_type
+        ORDER BY total_quantity DESC
+    ''')
+    
+    row = 5
+    total_qty = 0
+    for idx, item in enumerate(account_summary, 1):
+        ws.cell(row=row, column=1, value=idx).border = border
+        ws.cell(row=row, column=2, value=item[0]).border = border
+        ws.cell(row=row, column=3, value=item[1]).border = border
+        ws.cell(row=row, column=4, value=round(item[2], 2)).border = border
+        ws.cell(row=row, column=5, value=item[3]).border = border
+        ws.cell(row=row, column=6, value=item[4]).border = border
+        total_qty += item[2]
+        row += 1
+    
+    for col in range(1, 7):
+        ws.cell(row=row, column=col).fill = total_fill
+        ws.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws.cell(row=row, column=col).border = border
+    ws.cell(row=row, column=1, value="TOTAL")
+    ws.cell(row=row, column=4, value=round(total_qty, 2))
+    
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 30
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 15
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'accounts_summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/admin/download-cgmf-summary-excel')
+@login_required
+def admin_download_cgmf_summary_excel():
+    """Download CGMF summary as Excel file"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "CGMF Summary"
+    
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="22C55E", end_color="22C55E", fill_type="solid")
+    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    total_fill = PatternFill(start_color="16A34A", end_color="16A34A", fill_type="solid")
+    
+    ws['A1'] = "CGMF (CG MARKFED) SUMMARY"
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:G1')
+    ws['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    headers = ['#', 'Society Name', 'District', 'Destination', 'Total Qty (MT)', 'Rakes', 'Loading Slips']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+    
+    cgmf_summary = db.execute_custom_query('''
+        SELECT c.society_name, c.district, c.destination,
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
+        GROUP BY c.cgmf_id, c.society_name, c.district
+        ORDER BY total_quantity DESC
+    ''')
+    
+    row = 5
+    total_qty = 0
+    for idx, item in enumerate(cgmf_summary, 1):
+        ws.cell(row=row, column=1, value=idx).border = border
+        ws.cell(row=row, column=2, value=item[0]).border = border
+        ws.cell(row=row, column=3, value=item[1]).border = border
+        ws.cell(row=row, column=4, value=item[2]).border = border
+        ws.cell(row=row, column=5, value=round(item[3], 2)).border = border
+        ws.cell(row=row, column=6, value=item[4]).border = border
+        ws.cell(row=row, column=7, value=item[5]).border = border
+        total_qty += item[3]
+        row += 1
+    
+    for col in range(1, 8):
+        ws.cell(row=row, column=col).fill = total_fill
+        ws.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws.cell(row=row, column=col).border = border
+    ws.cell(row=row, column=1, value="TOTAL")
+    ws.cell(row=row, column=5, value=round(total_qty, 2))
+    
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 30
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 10
+    ws.column_dimensions['G'].width = 15
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'cgmf_summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/admin/download-warehouse-summary-excel')
+@login_required
+def admin_download_warehouse_summary_excel():
+    """Download warehouse summary as Excel file"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Warehouse Summary"
+    
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="F59E0B", end_color="F59E0B", fill_type="solid")
+    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    total_fill = PatternFill(start_color="22C55E", end_color="22C55E", fill_type="solid")
+    
+    ws['A1'] = "WAREHOUSE SUMMARY"
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:F1')
+    ws['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    headers = ['#', 'Warehouse Name', 'Location', 'Total Qty (MT)', 'Rakes', 'Loading Slips']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+    
+    wh_summary = db.execute_custom_query('''
+        SELECT w.warehouse_name, w.location,
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(DISTINCT ls.rake_code) as rake_count,
+               COUNT(ls.slip_id) as slip_count
+        FROM loading_slips ls
+        JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        GROUP BY w.warehouse_id, w.warehouse_name
+        ORDER BY total_quantity DESC
+    ''')
+    
+    row = 5
+    total_qty = 0
+    for idx, item in enumerate(wh_summary, 1):
+        ws.cell(row=row, column=1, value=idx).border = border
+        ws.cell(row=row, column=2, value=item[0]).border = border
+        ws.cell(row=row, column=3, value=item[1]).border = border
+        ws.cell(row=row, column=4, value=round(item[2], 2)).border = border
+        ws.cell(row=row, column=5, value=item[3]).border = border
+        ws.cell(row=row, column=6, value=item[4]).border = border
+        total_qty += item[2]
+        row += 1
+    
+    for col in range(1, 7):
+        ws.cell(row=row, column=col).fill = total_fill
+        ws.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws.cell(row=row, column=col).border = border
+    ws.cell(row=row, column=1, value="TOTAL")
+    ws.cell(row=row, column=4, value=round(total_qty, 2))
+    
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 25
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 15
+    
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'warehouse_summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @app.route('/admin/manage-accounts', methods=['GET', 'POST'])

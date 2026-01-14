@@ -131,6 +131,35 @@
 
 {% elif view_type == 'total' %}
 <!-- TOTAL SUMMARY VIEW -->
+
+<!-- Rake Filter Section -->
+<div class="card mb-4">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filter by Rake (Optional)</h5>
+    </div>
+    <div class="card-body">
+        <div class="row align-items-end">
+            <div class="col-md-6 mb-3">
+                <label for="rakeFilter" class="form-label fw-bold">Select Rake to View Summary</label>
+                <select class="form-select" id="rakeFilter" onchange="filterByRake()">
+                    <option value="">All Rakes (Combined Summary)</option>
+                    {% for rake in rakes %}
+                    <option value="{{ rake.rake_code }}">{{ rake.rake_code }} - {{ rake.company_name }} ({{ "%.2f"|format(rake.rr_quantity) }} MT)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 mb-3">
+                <a href="{{ url_for('admin_download_total_summary_excel') }}" class="btn btn-success" id="downloadAllBtn">
+                    <i class="bi bi-file-earmark-excel"></i> Download All Summary (Excel)
+                </a>
+                <a href="#" class="btn btn-primary d-none" id="downloadRakeBtn">
+                    <i class="bi bi-file-earmark-excel"></i> Download Rake Summary
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="card bg-primary text-white">
@@ -162,9 +191,9 @@
 <div class="card mb-4">
     <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-people-fill"></i> Accounts (Dealers/Retailers) Summary</h5>
-        <button class="btn btn-sm btn-light" onclick="exportTableToExcel('accountsTable', 'accounts_summary')">
-            <i class="bi bi-file-earmark-excel"></i> Export Excel
-        </button>
+        <a href="{{ url_for('admin_download_accounts_summary_excel') }}" class="btn btn-sm btn-light">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
+        </a>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -209,9 +238,9 @@
 <div class="card mb-4">
     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-building-check"></i> CGMF (CG Markfed) Summary</h5>
-        <button class="btn btn-sm btn-light" onclick="exportTableToExcel('cgmfTable', 'cgmf_summary')">
-            <i class="bi bi-file-earmark-excel"></i> Export Excel
-        </button>
+        <a href="{{ url_for('admin_download_cgmf_summary_excel') }}" class="btn btn-sm btn-light">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
+        </a>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -258,9 +287,9 @@
 <div class="card mb-4">
     <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-building"></i> Warehouses Summary</h5>
-        <button class="btn btn-sm btn-dark" onclick="exportTableToExcel('warehouseTable', 'warehouse_summary')">
-            <i class="bi bi-file-earmark-excel"></i> Export Excel
-        </button>
+        <a href="{{ url_for('admin_download_warehouse_summary_excel') }}" class="btn btn-sm btn-dark">
+            <i class="bi bi-file-earmark-excel"></i> Download Excel
+        </a>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -553,6 +582,27 @@ function showCGMFDetails() {
             });
     } else {
         document.getElementById('cgmfDetails').style.display = 'none';
+    }
+}
+
+// Filter by Rake function
+function filterByRake() {
+    var rakeCode = document.getElementById('rakeFilter').value;
+    var downloadAllBtn = document.getElementById('downloadAllBtn');
+    var downloadRakeBtn = document.getElementById('downloadRakeBtn');
+    
+    if (rakeCode) {
+        // Show rake-specific download button
+        downloadAllBtn.classList.add('d-none');
+        downloadRakeBtn.classList.remove('d-none');
+        downloadRakeBtn.href = '/admin/download-rake-details-excel/' + encodeURIComponent(rakeCode);
+        
+        // Redirect to rake details page
+        window.location.href = '/admin/rake-details/' + encodeURIComponent(rakeCode);
+    } else {
+        // Show all summary download button
+        downloadAllBtn.classList.remove('d-none');
+        downloadRakeBtn.classList.add('d-none');
     }
 }
 </script>
