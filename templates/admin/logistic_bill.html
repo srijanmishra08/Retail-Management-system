@@ -21,21 +21,35 @@
 <!-- BILL SUMMARY SECTION -->
 <div id="billSummarySection" style="display: none;">
     <div class="card mb-4">
-        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="bi bi-list-ul"></i> Bill Summary</h5>
-            <div class="d-flex gap-2">
-                <select class="form-select form-select-sm" id="summaryFilter" onchange="filterBillSummary()">
-                    <option value="all">All Rakes</option>
-                    {% for rake in rakes %}
-                    <option value="{{ rake[1] }}">{{ rake[1] }} - {{ rake[2] }}</option>
-                    {% endfor %}
-                </select>
-                <button class="btn btn-success btn-sm" onclick="downloadBillSummaryExcel()">
-                    <i class="bi bi-file-earmark-excel"></i> Download Excel
-                </button>
-                <button class="btn btn-info btn-sm" onclick="window.print()">
-                    <i class="bi bi-printer"></i> Print
-                </button>
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-3"><i class="bi bi-list-ul"></i> Bill Summary</h5>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label mb-1">Company Filter</label>
+                    <select class="form-select form-select-sm" id="companySummaryFilter" onchange="applyFilters()">
+                        <option value="all" {% if selected_company == 'all' %}selected{% endif %}>All Companies</option>
+                        {% for company in companies %}
+                        <option value="{{ company[1] }}" {% if selected_company == company[1] %}selected{% endif %}>{{ company[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label mb-1">Rake Filter</label>
+                    <select class="form-select form-select-sm" id="rakeSummaryFilter" onchange="applyFilters()">
+                        <option value="all" {% if selected_rake == 'all' %}selected{% endif %}>All Rakes</option>
+                        {% for rake in rakes %}
+                        <option value="{{ rake[1] }}" {% if selected_rake == rake[1] %}selected{% endif %}>{{ rake[1] }} - {{ rake[2] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 text-end align-self-end">
+                    <button class="btn btn-success btn-sm" onclick="downloadBillSummaryExcel()">
+                        <i class="bi bi-file-earmark-excel"></i> Download Excel
+                    </button>
+                    <button class="btn btn-info btn-sm" onclick="window.print()">
+                        <i class="bi bi-printer"></i> Print
+                    </button>
+                </div>
             </div>
         </div>
         <div class="card-body p-0">
@@ -57,15 +71,22 @@
                     <tbody id="billSummaryBody">
                         {% if bill_summary %}
                             {% for bill in bill_summary %}
-                            <tr data-rake="{{ bill.rake_code }}">
+                            <tr data-rake="{{ bill.rake_code }}" data-company="{{ bill.company_name }}">
                                 <td>{{ loop.index }}</td>
                                 <td><strong>{{ bill.rake_code }}</strong></td>
                                 <td>{{ bill.company_name }}</td>
                                 <td class="text-end">{{ "%.2f"|format(bill.total_stock) }}</td>
                                 <td>{{ bill.date }}</td>
                                 <td class="text-end text-primary"><strong>₹ {{ "%.2f"|format(bill.bill_amount or 0) }}</strong></td>
-                                <td class="text-end text-success">₹ {{ "%.2f"|format(bill.received_payment or 0) }}</td>
-                                <td class="text-end text-danger">₹ {{ "%.2f"|format((bill.bill_amount or 0) - (bill.received_payment or 0)) }}</td>
+                                <td class="text-end text-success">
+                                    <input type="number" 
+                                           class="form-control form-control-sm text-end received-input" 
+                                           value="{{ bill.received_payment or 0 }}" 
+                                           data-rake="{{ bill.rake_code }}"
+                                           onchange="updateReceivedAmount('{{ bill.rake_code }}', this.value)"
+                                           style="width: 120px; display: inline-block;">
+                                </td>
+                                <td class="text-end text-danger" id="left-{{ bill.rake_code }}">₹ {{ "%.2f"|format((bill.bill_amount or 0) - (bill.received_payment or 0)) }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
                                         <button class="btn btn-outline-primary" onclick="viewRakeBill('{{ bill.rake_code }}')" title="View">
@@ -78,13 +99,13 @@
                                 </td>
                             </tr>
                             {% endfor %}
-                            <tr class="table-primary fw-bold">
+                            <tr class="table-primary fw-bold" id="summary-total-row">
                                 <td colspan="3">TOTAL</td>
-                                <td class="text-end">{{ "%.2f"|format(bill_summary|sum(attribute='total_stock')) }} MT</td>
+                                <td class="text-end" id="total-stock">{{ "%.2f"|format(bill_summary|sum(attribute='total_stock')) }} MT</td>
                                 <td>-</td>
-                                <td class="text-end">₹ {{ "%.2f"|format(bill_summary|sum(attribute='bill_amount') or 0) }}</td>
-                                <td class="text-end">₹ {{ "%.2f"|format(bill_summary|sum(attribute='received_payment') or 0) }}</td>
-                                <td class="text-end">₹ {{ "%.2f"|format((bill_summary|sum(attribute='bill_amount') or 0) - (bill_summary|sum(attribute='received_payment') or 0)) }}</td>
+                                <td class="text-end" id="total-bill">₹ {{ "%.2f"|format(bill_summary|sum(attribute='bill_amount') or 0) }}</td>
+                                <td class="text-end" id="total-received">₹ {{ "%.2f"|format(bill_summary|sum(attribute='received_payment') or 0) }}</td>
+                                <td class="text-end" id="total-left">₹ {{ "%.2f"|format((bill_summary|sum(attribute='bill_amount') or 0) - (bill_summary|sum(attribute='received_payment') or 0)) }}</td>
                                 <td>-</td>
                             </tr>
                         {% else %}
@@ -367,6 +388,77 @@ function filterBillSummary() {
             row.style.display = 'none';
         }
     });
+}
+
+// New function for filtering with company and rake filters
+function applyFilters() {
+    const companyFilter = document.getElementById('companySummaryFilter').value;
+    const rakeFilter = document.getElementById('rakeSummaryFilter').value;
+    const rows = document.querySelectorAll('#billSummaryBody tr[data-rake]');
+    
+    let totalStock = 0, totalBill = 0, totalReceived = 0, totalLeft = 0;
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const rakeCode = row.dataset.rake;
+        const company = row.dataset.company;
+        
+        const showRow = (companyFilter === 'all' || company === companyFilter) && 
+                        (rakeFilter === 'all' || rakeCode === rakeFilter);
+        
+        if (showRow) {
+            row.style.display = '';
+            visibleCount++;
+            
+            // Accumulate totals for visible rows
+            const stock = parseFloat(row.cells[3].textContent) || 0;
+            const bill = parseFloat(row.cells[5].textContent.replace('₹', '').replace(/,/g, '')) || 0;
+            const received = parseFloat(row.querySelector('.received-input').value) || 0;
+            const left = parseFloat(row.cells[7].textContent.replace('₹', '').replace(/,/g, '')) || 0;
+            
+            totalStock += stock;
+            totalBill += bill;
+            totalReceived += received;
+            totalLeft += left;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update total row
+    document.getElementById('total-stock').textContent = totalStock.toFixed(2) + ' MT';
+    document.getElementById('total-bill').textContent = '₹ ' + totalBill.toFixed(2);
+    document.getElementById('total-received').textContent = '₹ ' + totalReceived.toFixed(2);
+    document.getElementById('total-left').textContent = '₹ ' + totalLeft.toFixed(2);
+    
+    // Update total row label based on filter
+    const totalRow = document.getElementById('summary-total-row');
+    if (rakeFilter !== 'all') {
+        totalRow.cells[0].textContent = 'TOTAL FOR SELECTED RAKE';
+    } else if (companyFilter !== 'all') {
+        totalRow.cells[0].textContent = 'TOTAL FOR SELECTED COMPANY';
+    } else {
+        totalRow.cells[0].textContent = 'TOTAL';
+    }
+}
+
+function updateReceivedAmount(rakeCode, receivedAmount) {
+    const row = document.querySelector(`tr[data-rake="${rakeCode}"]`);
+    if (!row) return;
+    
+    const billAmount = parseFloat(row.cells[5].textContent.replace('₹', '').replace(/,/g, '')) || 0;
+    const received = parseFloat(receivedAmount) || 0;
+    const left = billAmount - received;
+    
+    // Update left amount cell
+    const leftCell = document.getElementById(`left-${rakeCode}`);
+    leftCell.textContent = '₹ ' + left.toFixed(2);
+    
+    // Recalculate totals
+    applyFilters();
+    
+    // TODO: Save to backend via AJAX if needed
+    console.log(`Updated ${rakeCode}: Received ₹${received}, Left ₹${left}`);
 }
 
 function viewRakeBill(rakeCode) {

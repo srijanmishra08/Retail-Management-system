@@ -1628,8 +1628,13 @@ def admin_logistic_bill():
         warehouses = db.get_all_warehouses() or []
         storage_data = db.get_warehouse_storage_data() or []
         transport_data = db.get_warehouse_transport_data() or []
+        companies = db.get_all_companies() or []
         
-        # Get bill summary data for all rakes
+        # Get filter parameters
+        selected_company = request.args.get('company', 'all')
+        selected_rake = request.args.get('rake', 'all')
+        
+        # Get bill summary data for all rakes with total bill amounts
         bill_summary = []
         for rake in rakes:
             rake_code = rake[1]
@@ -1637,13 +1642,22 @@ def admin_logistic_bill():
             rr_quantity = rake[5] if len(rake) > 5 else 0
             date = rake[4] if len(rake) > 4 else ''
             
-            # For now, set bill_amount and received_payment to 0 (can be enhanced later to store actual values)
+            # Apply filters
+            if selected_company != 'all' and company_name != selected_company:
+                continue
+            if selected_rake != 'all' and rake_code != selected_rake:
+                continue
+            
+            # Calculate total bill amount from rake transport data
+            rake_transport = db.get_rake_transport_data(rake_code) or []
+            total_bill_amount = sum(item.get('total_freight', 0) for item in rake_transport)
+            
             bill_summary.append({
                 'rake_code': rake_code,
                 'company_name': company_name,
                 'total_stock': rr_quantity,
                 'date': date,
-                'bill_amount': 0,
+                'bill_amount': total_bill_amount,
                 'received_payment': 0
             })
     except Exception as e:
@@ -1653,6 +1667,9 @@ def admin_logistic_bill():
         storage_data = []
         transport_data = []
         bill_summary = []
+        companies = []
+        selected_company = 'all'
+        selected_rake = 'all'
         flash('Error loading some data. Please try again.', 'warning')
     
     return render_template('admin/logistic_bill.html',
@@ -1660,7 +1677,10 @@ def admin_logistic_bill():
                          warehouses=warehouses,
                          storage_data=storage_data,
                          transport_data=transport_data,
-                         bill_summary=bill_summary)
+                         bill_summary=bill_summary,
+                         companies=companies,
+                         selected_company=selected_company,
+                         selected_rake=selected_rake)
 
 @app.route('/admin/logistic-bill/rake-data/<rake_code>')
 @login_required
@@ -2492,7 +2512,7 @@ def rakepoint_create_builty():
     accounts = db.get_all_accounts()
     warehouses = db.get_all_warehouses()
     rakes = db.get_all_rakes()  # NEW: Get all rakes for selection
-    loading_slips = db.get_all_loading_slips()  # NEW: Get all loading slips for auto-fill
+    loading_slips = db.get_rakepoint_loading_slips()  # Get only rake loading slips (exclude warehouse ones)
     cgmf_list = db.get_all_cgmf()
     
     return render_template('rakepoint/create_builty.html', 

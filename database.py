@@ -1436,6 +1436,30 @@ class Database:
         self.close_connection(conn)
         return slips
     
+    def get_rakepoint_loading_slips(self):
+        """Get loading slips created FROM rakes (not from warehouses) that haven't been converted to builty yet - for rakepoint users"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
+                   ls.destination, 
+                   COALESCE(a.account_name, w.warehouse_name) as destination_name,
+                   ls.wagon_number, 
+                   ls.quantity_bags, ls.quantity_mt, t.truck_number,
+                   ls.goods_name, ls.truck_driver, ls.truck_owner,
+                   ls.mobile_number_1, ls.mobile_number_2
+            FROM loading_slips ls
+            LEFT JOIN accounts a ON ls.account_id = a.account_id
+            LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+            LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+            WHERE ls.builty_id IS NULL
+            AND ls.loading_point_name NOT IN (SELECT warehouse_name FROM warehouses)
+            ORDER BY ls.slip_id DESC
+        ''')
+        slips = cursor.fetchall()
+        self.close_connection(conn)
+        return slips
+    
     def get_all_loading_slips_with_status(self):
         """Get ALL loading slips (including those converted to builties) with status"""
         conn = self.get_connection()
