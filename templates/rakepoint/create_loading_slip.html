@@ -122,21 +122,17 @@
                     <i class="bi bi-info-circle"></i> <strong>Account Stock Tracking:</strong> Select whose stock is being stored in the warehouse
                 </div>
                 <div class="row">
-                    <div class="col-md-3 mb-3">
-                        <label for="warehouse_company" class="form-label">Company <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="warehouse_company" readonly>
-                        <small class="text-muted">Company sending the stock</small>
-                    </div>
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-4 mb-3">
                         <label for="warehouse_account_type" class="form-label">Account Type <span class="text-danger">*</span></label>
                         <select class="form-select" id="warehouse_account_type" name="warehouse_account_type" onchange="filterWarehouseAccounts()">
                             <option value="">-- Select Account Type --</option>
+                            <option value="Company">Company</option>
                             <option value="Dealer">Dealers</option>
-                            <option value="Payal">Payal (Company)</option>
+                            <option value="Payal">Payal</option>
                             <option value="Retailer">Retailers</option>
                         </select>
                     </div>
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-8 mb-3">
                         <label for="warehouse_account_id" class="form-label">Account <span class="text-danger">*</span></label>
                         <select class="form-select" id="warehouse_account_id" name="warehouse_account_id">
                             <option value="">-- First select account type --</option>
@@ -452,30 +448,29 @@ const allAccounts = [
     {% endfor %}
 ];
 
+// All companies data for filtering
+const allCompanies = [
+    {% for company in companies %}
+    { id: {{ company[0] }}, name: "{{ company[1] }}" },
+    {% endfor %}
+];
+
 // Show/hide warehouse account section based on destination type
 function toggleWarehouseAccountSection(destType) {
     const warehouseSection = document.getElementById('warehouse_account_section');
     const warehouseAccountType = document.getElementById('warehouse_account_type');
     const warehouseAccountId = document.getElementById('warehouse_account_id');
-    const warehouseCompany = document.getElementById('warehouse_company');
     
     if (destType === 'Warehouse') {
         warehouseSection.style.display = 'block';
         warehouseAccountType.required = true;
         warehouseAccountId.required = true;
-        
-        // Populate company from selected rake
-        const rakeSelect = document.getElementById('rake_code');
-        const selectedOption = rakeSelect.options[rakeSelect.selectedIndex];
-        const companyName = selectedOption.getAttribute('data-company');
-        warehouseCompany.value = companyName || '';
     } else {
         warehouseSection.style.display = 'none';
         warehouseAccountType.required = false;
         warehouseAccountId.required = false;
         warehouseAccountType.value = '';
         warehouseAccountId.innerHTML = '<option value="">-- First select account type --</option>';
-        warehouseCompany.value = '';
     }
 }
 
@@ -487,13 +482,32 @@ function filterWarehouseAccounts() {
     accountSelect.innerHTML = '<option value="">-- Select Account --</option>';
     
     if (selectedType) {
-        const filteredAccounts = allAccounts.filter(acc => acc.type === selectedType);
-        filteredAccounts.forEach(acc => {
-            const option = document.createElement('option');
-            option.value = acc.id;
-            option.textContent = acc.name + ' - ' + acc.type;
-            accountSelect.appendChild(option);
-        });
+        // Handle Company type separately  
+        if (selectedType === 'Company') {
+            allCompanies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.id;
+                option.textContent = company.name;
+                accountSelect.appendChild(option);
+            });
+            
+            if (allCompanies.length === 0) {
+                accountSelect.innerHTML = '<option value="">No companies found</option>';
+            }
+        } else {
+            // Filter regular accounts by type
+            const filteredAccounts = allAccounts.filter(acc => acc.type === selectedType);
+            filteredAccounts.forEach(acc => {
+                const option = document.createElement('option');
+                option.value = acc.id;
+                option.textContent = acc.name + ' - ' + acc.type;
+                accountSelect.appendChild(option);
+            });
+            
+            if (filteredAccounts.length === 0) {
+                accountSelect.innerHTML = '<option value="">No accounts found for this type</option>';
+            }
+        }
     }
 }
 

@@ -1636,6 +1636,8 @@ def admin_logistic_bill():
         
         # Get bill summary data for all rakes with total bill amounts
         bill_summary = []
+        saved_payments = {p['rake_code']: p for p in db.get_all_rake_bill_payments()}
+        
         for rake in rakes:
             rake_code = rake[1]
             company_name = rake[2]
@@ -1648,9 +1650,16 @@ def admin_logistic_bill():
             if selected_rake != 'all' and rake_code != selected_rake:
                 continue
             
-            # Calculate total bill amount from rake transport data
-            rake_transport = db.get_rake_transport_data(rake_code) or []
-            total_bill_amount = sum(item.get('total_freight', 0) for item in rake_transport)
+            # Get payment data from database if exists
+            payment_data = saved_payments.get(rake_code)
+            if payment_data:
+                total_bill_amount = payment_data['total_bill_amount']
+                received_payment = payment_data['received_amount']
+            else:
+                # Calculate total bill amount from rake transport data
+                rake_transport = db.get_rake_transport_data(rake_code) or []
+                total_bill_amount = sum(item.get('total_freight', 0) for item in rake_transport)
+                received_payment = 0
             
             bill_summary.append({
                 'rake_code': rake_code,
@@ -1658,7 +1667,7 @@ def admin_logistic_bill():
                 'total_stock': rr_quantity,
                 'date': date,
                 'bill_amount': total_bill_amount,
-                'received_payment': 0
+                'received_payment': received_payment
             })
     except Exception as e:
         print(f"Error loading logistic bill data: {e}")
@@ -2104,6 +2113,49 @@ def admin_download_bill_summary_excel():
         as_attachment=True,
         download_name=f'Bill_Summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
+
+@app.route('/admin/save-rake-bill-payment', methods=['POST'])
+@login_required
+def admin_save_rake_bill_payment():
+    """Save rake bill payment information"""
+    if current_user.role != 'Admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.get_json()
+        rake_code = data.get('rake_code')
+        total_bill_amount = float(data.get('total_bill_amount', 0))
+        received_amount = float(data.get('received_amount', 0))
+        
+        if not rake_code:
+            return jsonify({'success': False, 'error': 'Rake code is required'}), 400
+        
+        success = db.save_rake_bill_payment(rake_code, total_bill_amount, received_amount, current_user.username)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Payment saved successfully'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save payment'}), 500
+    except Exception as e:
+        print(f"Error saving rake bill payment: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/admin/get-rake-bill-payment/<rake_code>')
+@login_required
+def admin_get_rake_bill_payment(rake_code):
+    """Get rake bill payment information"""
+    if current_user.role != 'Admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        payment_data = db.get_rake_bill_payment(rake_code)
+        if payment_data:
+            return jsonify(payment_data)
+        else:
+            return jsonify({'error': 'No payment data found'}), 404
+    except Exception as e:
+        print(f"Error getting rake bill payment: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/warehouse-account-stock/<int:warehouse_id>')
 @login_required
@@ -2608,6 +2660,7 @@ def rakepoint_create_loading_slip():
                                      rakes=db.get_active_rakes(),
                                      accounts=db.get_all_accounts(),
                                      warehouses=db.get_all_warehouses(),
+                                     companies=db.get_all_companies(),
                                      cgmf_list=db.get_all_cgmf(),
                                      trucks=db.get_all_trucks(),
                                      builties=db.get_all_builties(),
@@ -2619,6 +2672,7 @@ def rakepoint_create_loading_slip():
     rakes = db.get_active_rakes()
     accounts = db.get_all_accounts()
     warehouses = db.get_all_warehouses()
+    companies = db.get_all_companies()
     cgmf_list = db.get_all_cgmf()
     trucks = db.get_all_trucks()
     builties = db.get_all_builties()
@@ -2627,6 +2681,7 @@ def rakepoint_create_loading_slip():
                          rakes=rakes,
                          accounts=accounts,
                          warehouses=warehouses,
+                         companies=companies,
                          cgmf_list=cgmf_list,
                          trucks=trucks,
                          builties=builties)

@@ -330,6 +330,21 @@ class Database:
             )
         ''')
         
+        # Rake Bill Payments table - stores received payments for each rake
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS rake_bill_payments (
+                payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rake_code TEXT NOT NULL UNIQUE,
+                total_bill_amount REAL DEFAULT 0,
+                received_amount REAL DEFAULT 0,
+                remaining_amount REAL DEFAULT 0,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_by TEXT,
+                FOREIGN KEY (rake_code) REFERENCES rakes(rake_code),
+                FOREIGN KEY (updated_by) REFERENCES users(username)
+            )
+        ''')
+        
         # Insert default users if not exist
         cursor.execute("SELECT COUNT(*) FROM users")
         if cursor.fetchone()[0] == 0:
@@ -1453,7 +1468,8 @@ class Database:
             LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
             LEFT JOIN trucks t ON ls.truck_id = t.truck_id
             WHERE ls.builty_id IS NULL
-            AND ls.loading_point_name NOT IN (SELECT warehouse_name FROM warehouses)
+            AND (ls.loading_point_name NOT IN (SELECT warehouse_name FROM warehouses)
+                 OR ls.loading_point_name IS NULL)
             ORDER BY ls.slip_id DESC
         ''')
         slips = cursor.fetchall()
@@ -2102,4 +2118,74 @@ class Database:
         
         self.close_connection(conn)
         return data
-
+    
+    # Rake Bill Payment functions
+    def save_rake_bill_payment(self, rake_code, total_bill_amount, received_amount, username):
+        """Save or update rake bill payment information"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            remaining_amount = total_bill_amount - received_amount
+            cursor.execute('''
+                INSERT INTO rake_bill_payments (rake_code, total_bill_amount, received_amount, remaining_amount, updated_by, last_updated)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(rake_code) DO UPDATE SET
+                    total_bill_amount = excluded.total_bill_amount,
+                    received_amount = excluded.received_amount,
+                    remaining_amount = excluded.remaining_amount,
+                    updated_by = excluded.updated_by,
+                    last_updated = CURRENT_TIMESTAMP
+            ''', (rake_code, total_bill_amount, received_amount, remaining_amount, username))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error saving rake bill payment: {e}")
+            conn.rollback()
+            return False
+        finally:
+            self.close_connection(conn)
+    
+    def get_rake_bill_payment(self, rake_code):
+        """Get rake bill payment information"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT rake_code, total_bill_amount, received_amount, remaining_amount, last_updated, updated_by
+            FROM rake_bill_payments
+            WHERE rake_code = ?
+        ''', (rake_code,))
+        result = cursor.fetchone()
+        self.close_connection(conn)
+        if result:
+            return {
+                'rake_code': result[0],
+                'total_bill_amount': result[1],
+                'received_amount': result[2],
+                'remaining_amount': result[3],
+                'last_updated': result[4],
+                'updated_by': result[5]
+            }
+        return None
+    
+    def get_all_rake_bill_payments(self):
+        """Get all rake bill payment records"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT rake_code, total_bill_amount, received_amount, remaining_amount, last_updated, updated_by
+            FROM rake_bill_payments
+            ORDER BY last_updated DESC
+        ''')
+        results = cursor.fetchall()
+        self.close_connection(conn)
+        payments = []
+        for row in results:
+            payments.append({
+                'rake_code': row[0],
+                'total_bill_amount': row[1],
+                'received_amount': row[2],
+                'remaining_amount': row[3],
+                'last_updated': row[4],
+                'updated_by': row[5]
+            })
+        return payments
