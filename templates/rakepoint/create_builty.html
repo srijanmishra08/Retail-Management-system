@@ -20,11 +20,14 @@
             <!-- STEP 1: Select Loading Slip -->
             <div class="alert alert-warning border-start border-4 border-warning">
                 <h5><i class="bi bi-receipt"></i> Step 1: Select Loading Slip</h5>
-                <p class="mb-0">All details will be auto-filled from the loading slip</p>
+                <p class="mb-0">All details will be auto-filled from the loading slip. Use the search box to filter loading slips.</p>
             </div>
             
             <div class="row mb-4">
                 <div class="col-md-12">
+                    <label for="loading_slip_search" class="form-label fw-bold">Search Loading Slip</label>
+                    <input type="text" class="form-control mb-2" id="loading_slip_search" placeholder="🔍 Type to search by Slip #, Rake Code, Truck No, Driver name...">
+                    
                     <label for="loading_slip_id" class="form-label fw-bold">Select Loading Slip <span class="text-danger">*</span></label>
                     <select class="form-select form-select-lg" id="loading_slip_id" name="loading_slip_id" required>
                         <option value="">-- Choose a Loading Slip --</option>
@@ -44,7 +47,8 @@
                                     data-driver="{{ slip[11] }}"
                                     data-owner="{{ slip[12] }}"
                                     data-mobile1="{{ slip[13] }}"
-                                    data-mobile2="{{ slip[14] }}">
+                                    data-mobile2="{{ slip[14] }}"
+                                    data-search-text="Slip #{{ slip[2] }} {{ slip[1] }} {{ slip[8] }} MT Truck: {{ slip[9] }} Driver: {{ slip[11] }}">
                                 Slip #{{ slip[2] }} | {{ slip[1] }} | {{ slip[8] }} MT | Truck: {{ slip[9] }} | Driver: {{ slip[11] }}
                             </option>
                             {% endfor %}
@@ -52,6 +56,7 @@
                             <option value="" disabled>⚠️ No loading slips available - Please create a loading slip first!</option>
                         {% endif %}
                     </select>
+                    <small class="text-muted">Type in the search box above to filter loading slips</small>
                 </div>
             </div>
 
@@ -244,6 +249,28 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error fetching LR number:', error);
         });
+    
+    // Store all original options for search functionality
+    var loadingSlipSelect = document.getElementById('loading_slip_id');
+    window.allLoadingSlipOptions = Array.from(loadingSlipSelect.options);
+});
+
+// Loading Slip Search functionality
+document.getElementById('loading_slip_search').addEventListener('input', function() {
+    var searchText = this.value.toLowerCase().trim();
+    var loadingSlipSelect = document.getElementById('loading_slip_id');
+    
+    // Clear current options except the first "Choose" option
+    loadingSlipSelect.innerHTML = '';
+    
+    // Add back filtered options
+    window.allLoadingSlipOptions.forEach(function(option) {
+        if (option.value === '' || 
+            (option.dataset.searchText && option.dataset.searchText.toLowerCase().includes(searchText)) ||
+            option.text.toLowerCase().includes(searchText)) {
+            loadingSlipSelect.appendChild(option.cloneNode(true));
+        }
+    });
 });
 
 // AUTO-FILL FROM LOADING SLIP - Show/hide sections and populate data

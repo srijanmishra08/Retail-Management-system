@@ -343,6 +343,342 @@ def admin_rake_details(rake_code):
                          total_to_warehouses=total_to_warehouses,
                          total_to_cgmf=total_to_cgmf)
 
+@app.route('/admin/download-rake-summary-excel')
+@login_required
+def admin_download_rake_summary_excel():
+    """Download all rakes summary as Excel file"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    # Get all rakes with balance
+    all_rakes = db.get_all_rakes()
+    total_shortage = db.get_total_shortage()
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rake Summary"
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    total_fill = PatternFill(start_color="22C55E", end_color="22C55E", fill_type="solid")
+    
+    # Title
+    ws['A1'] = "RAKE SUMMARY REPORT"
+    ws['A1'].font = Font(bold=True, size=16)
+    ws.merge_cells('A1:J1')
+    
+    ws['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    ws['A2'].font = Font(italic=True)
+    
+    # Headers
+    headers = ['Rake Code', 'Company', 'Product', 'Date', 'RR Quantity (MT)', 'Dispatched (MT)', 'Remaining (MT)', 'Shortage (MT)', 'Status', 'Rake Point']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Data
+    row = 5
+    total_rr = 0
+    total_dispatched = 0
+    total_remaining = 0
+    
+    for rake in all_rakes:
+        rake_code = rake[1]
+        balance = db.get_rake_balance(rake_code)
+        is_closed = rake[10] if len(rake) > 10 else 0
+        shortage = rake[12] if len(rake) > 12 else 0
+        
+        dispatched = balance['dispatched'] if balance else 0
+        remaining = balance['remaining'] if balance else rake[5]
+        status = 'Closed' if is_closed else ('Active' if remaining > 0 else 'Completed')
+        
+        total_rr += rake[5]
+        total_dispatched += dispatched
+        total_remaining += remaining
+        
+        ws.cell(row=row, column=1, value=rake[1]).border = border  # rake_code
+        ws.cell(row=row, column=2, value=rake[2]).border = border  # company_name
+        ws.cell(row=row, column=3, value=rake[6]).border = border  # product_name
+        ws.cell(row=row, column=4, value=rake[4]).border = border  # date
+        ws.cell(row=row, column=5, value=round(rake[5], 2)).border = border  # rr_quantity
+        ws.cell(row=row, column=6, value=round(dispatched, 2)).border = border
+        ws.cell(row=row, column=7, value=round(remaining, 2)).border = border
+        ws.cell(row=row, column=8, value=round(shortage, 2) if is_closed else '-').border = border
+        ws.cell(row=row, column=9, value=status).border = border
+        ws.cell(row=row, column=10, value=rake[8]).border = border  # rake_point_name
+        row += 1
+    
+    # Totals row
+    for col in range(1, 11):
+        ws.cell(row=row, column=col).fill = total_fill
+        ws.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws.cell(row=row, column=col).border = border
+    
+    ws.cell(row=row, column=1, value="GRAND TOTAL")
+    ws.cell(row=row, column=5, value=round(total_rr, 2))
+    ws.cell(row=row, column=6, value=round(total_dispatched, 2))
+    ws.cell(row=row, column=7, value=round(total_remaining, 2))
+    ws.cell(row=row, column=8, value=round(total_shortage, 2))
+    
+    # Adjust column widths
+    ws.column_dimensions['A'].width = 15
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 18
+    ws.column_dimensions['F'].width = 16
+    ws.column_dimensions['G'].width = 16
+    ws.column_dimensions['H'].width = 16
+    ws.column_dimensions['I'].width = 12
+    ws.column_dimensions['J'].width = 15
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'rake_summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/admin/download-rake-details-excel/<rake_code>')
+@login_required
+def admin_download_rake_details_excel(rake_code):
+    """Download individual rake details as Excel file"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    # Get rake basic info
+    rake_info = db.execute_custom_query('''
+        SELECT r.rake_code, r.company_name, r.product_name, r.date, 
+               r.rr_quantity, r.rake_point_name
+        FROM rakes r
+        WHERE r.rake_code = ?
+    ''', (rake_code,))
+    
+    if not rake_info:
+        flash('Rake not found', 'error')
+        return redirect(url_for('admin_summary'))
+    
+    rake_info = rake_info[0]
+    
+    # Get dispatches
+    account_dispatches = db.execute_custom_query('''
+        SELECT a.account_name, a.account_type, 
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(ls.slip_id) as slip_count,
+               GROUP_CONCAT('Slip#' || ls.slip_number || ' (' || ls.quantity_mt || ' MT)', ', ') as slip_details
+        FROM loading_slips ls
+        JOIN accounts a ON ls.account_id = a.account_id
+        WHERE ls.rake_code = ?
+        GROUP BY a.account_id, a.account_name, a.account_type
+        ORDER BY total_quantity DESC
+    ''', (rake_code,))
+    
+    warehouse_dispatches = db.execute_custom_query('''
+        SELECT w.warehouse_name, w.location,
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(ls.slip_id) as slip_count,
+               GROUP_CONCAT('Slip#' || ls.slip_number || ' (' || ls.quantity_mt || ' MT)', ', ') as slip_details
+        FROM loading_slips ls
+        JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        WHERE ls.rake_code = ?
+        GROUP BY w.warehouse_id, w.warehouse_name, w.location
+        ORDER BY total_quantity DESC
+    ''', (rake_code,))
+    
+    cgmf_dispatches = db.execute_custom_query('''
+        SELECT c.society_name, c.district, c.destination,
+               SUM(ls.quantity_mt) as total_quantity,
+               COUNT(ls.slip_id) as slip_count,
+               GROUP_CONCAT('Slip#' || ls.slip_number || ' (' || ls.quantity_mt || ' MT)', ', ') as slip_details
+        FROM loading_slips ls
+        JOIN cgmf c ON ls.cgmf_id = c.cgmf_id
+        WHERE ls.rake_code = ?
+        GROUP BY c.cgmf_id, c.society_name, c.district
+        ORDER BY total_quantity DESC
+    ''', (rake_code,))
+    
+    # Calculate totals
+    total_to_accounts = sum(row[2] for row in account_dispatches) if account_dispatches else 0
+    total_to_warehouses = sum(row[2] for row in warehouse_dispatches) if warehouse_dispatches else 0
+    total_to_cgmf = sum(row[3] for row in cgmf_dispatches) if cgmf_dispatches else 0
+    total_dispatched = total_to_accounts + total_to_warehouses + total_to_cgmf
+    remaining = rake_info[4] - total_dispatched
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Rake {rake_code}"
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    section_fill = PatternFill(start_color="0EA5E9", end_color="0EA5E9", fill_type="solid")
+    total_fill = PatternFill(start_color="22C55E", end_color="22C55E", fill_type="solid")
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Title
+    ws['A1'] = f"RAKE DETAILS - {rake_code}"
+    ws['A1'].font = Font(bold=True, size=16)
+    ws.merge_cells('A1:E1')
+    
+    # Rake Info
+    row = 3
+    ws.cell(row=row, column=1, value="Company:").font = Font(bold=True)
+    ws.cell(row=row, column=2, value=rake_info[1])
+    ws.cell(row=row, column=3, value="Product:").font = Font(bold=True)
+    ws.cell(row=row, column=4, value=rake_info[2])
+    row += 1
+    ws.cell(row=row, column=1, value="Date:").font = Font(bold=True)
+    ws.cell(row=row, column=2, value=rake_info[3])
+    ws.cell(row=row, column=3, value="RR Quantity:").font = Font(bold=True)
+    ws.cell(row=row, column=4, value=f"{rake_info[4]} MT")
+    row += 1
+    ws.cell(row=row, column=1, value="Rake Point:").font = Font(bold=True)
+    ws.cell(row=row, column=2, value=rake_info[5])
+    row += 2
+    
+    # Accounts Section
+    ws.cell(row=row, column=1, value="DISPATCHED TO ACCOUNTS").font = Font(bold=True, size=12)
+    ws.cell(row=row, column=1).fill = section_fill
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+    row += 1
+    
+    acc_headers = ['Account Name', 'Type', 'Quantity (MT)', 'Loading Slips', 'Details']
+    for col, header in enumerate(acc_headers, 1):
+        cell = ws.cell(row=row, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+    row += 1
+    
+    for acc in account_dispatches:
+        ws.cell(row=row, column=1, value=acc[0]).border = border
+        ws.cell(row=row, column=2, value=acc[1]).border = border
+        ws.cell(row=row, column=3, value=round(acc[2], 2)).border = border
+        ws.cell(row=row, column=4, value=acc[3]).border = border
+        ws.cell(row=row, column=5, value=acc[4][:50] + '...' if acc[4] and len(acc[4]) > 50 else acc[4] or '-').border = border
+        row += 1
+    
+    ws.cell(row=row, column=1, value="Total to Accounts:").font = Font(bold=True)
+    ws.cell(row=row, column=3, value=round(total_to_accounts, 2)).font = Font(bold=True)
+    row += 2
+    
+    # Warehouses Section
+    ws.cell(row=row, column=1, value="DISPATCHED TO WAREHOUSES").font = Font(bold=True, size=12)
+    ws.cell(row=row, column=1).fill = section_fill
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+    row += 1
+    
+    wh_headers = ['Warehouse Name', 'Location', 'Quantity (MT)', 'Loading Slips', 'Details']
+    for col, header in enumerate(wh_headers, 1):
+        cell = ws.cell(row=row, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+    row += 1
+    
+    for wh in warehouse_dispatches:
+        ws.cell(row=row, column=1, value=wh[0]).border = border
+        ws.cell(row=row, column=2, value=wh[1]).border = border
+        ws.cell(row=row, column=3, value=round(wh[2], 2)).border = border
+        ws.cell(row=row, column=4, value=wh[3]).border = border
+        ws.cell(row=row, column=5, value=wh[4][:50] + '...' if wh[4] and len(wh[4]) > 50 else wh[4] or '-').border = border
+        row += 1
+    
+    ws.cell(row=row, column=1, value="Total to Warehouses:").font = Font(bold=True)
+    ws.cell(row=row, column=3, value=round(total_to_warehouses, 2)).font = Font(bold=True)
+    row += 2
+    
+    # CGMF Section
+    if cgmf_dispatches:
+        ws.cell(row=row, column=1, value="DISPATCHED TO CGMF").font = Font(bold=True, size=12)
+        ws.cell(row=row, column=1).fill = section_fill
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        row += 1
+        
+        cgmf_headers = ['Society Name', 'District', 'Quantity (MT)', 'Loading Slips', 'Details']
+        for col, header in enumerate(cgmf_headers, 1):
+            cell = ws.cell(row=row, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+        row += 1
+        
+        for cgmf in cgmf_dispatches:
+            ws.cell(row=row, column=1, value=cgmf[0]).border = border
+            ws.cell(row=row, column=2, value=cgmf[1]).border = border
+            ws.cell(row=row, column=3, value=round(cgmf[3], 2)).border = border
+            ws.cell(row=row, column=4, value=cgmf[4]).border = border
+            ws.cell(row=row, column=5, value=cgmf[5][:50] + '...' if cgmf[5] and len(cgmf[5]) > 50 else cgmf[5] or '-').border = border
+            row += 1
+        
+        ws.cell(row=row, column=1, value="Total to CGMF:").font = Font(bold=True)
+        ws.cell(row=row, column=3, value=round(total_to_cgmf, 2)).font = Font(bold=True)
+        row += 2
+    
+    # Summary Section
+    ws.cell(row=row, column=1, value="SUMMARY").font = Font(bold=True, size=12)
+    ws.cell(row=row, column=1).fill = total_fill
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+    row += 1
+    
+    ws.cell(row=row, column=1, value="RR Quantity:").font = Font(bold=True)
+    ws.cell(row=row, column=2, value=f"{round(rake_info[4], 2)} MT")
+    row += 1
+    ws.cell(row=row, column=1, value="Total Dispatched:").font = Font(bold=True)
+    ws.cell(row=row, column=2, value=f"{round(total_dispatched, 2)} MT")
+    row += 1
+    ws.cell(row=row, column=1, value="Remaining:").font = Font(bold=True)
+    ws.cell(row=row, column=2, value=f"{round(remaining, 2)} MT")
+    
+    # Adjust column widths
+    ws.column_dimensions['A'].width = 25
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 35
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'rake_{rake_code}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
 @app.route('/admin/manage-accounts', methods=['GET', 'POST'])
 @login_required
 def admin_manage_accounts():
@@ -487,6 +823,80 @@ def admin_edit_account(account_id):
         flash(f'Account "{account_name}" updated successfully!', 'success')
     else:
         flash(f'Error updating account: {message}', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
+
+@app.route('/admin/edit-company/<int:company_id>', methods=['POST'])
+@login_required
+def admin_edit_company(company_id):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    company_name = request.form.get('company_name')
+    company_code = request.form.get('company_code', '')
+    contact_person = request.form.get('contact_person', '')
+    mobile = request.form.get('mobile', '')
+    address = request.form.get('address', '')
+    distance = request.form.get('distance', 0)
+    try:
+        distance = float(distance) if distance else 0
+    except ValueError:
+        distance = 0
+    
+    success, message = db.update_company(company_id, company_name, company_code, contact_person, mobile, address, distance)
+    
+    if success:
+        flash(f'Company "{company_name}" updated successfully!', 'success')
+    else:
+        flash(f'Error updating company: {message}', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
+
+@app.route('/admin/edit-employee/<int:employee_id>', methods=['POST'])
+@login_required
+def admin_edit_employee(employee_id):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    employee_name = request.form.get('employee_name')
+    employee_code = request.form.get('employee_code', '')
+    mobile = request.form.get('mobile', '')
+    designation = request.form.get('designation', '')
+    
+    success, message = db.update_employee(employee_id, employee_name, employee_code, mobile, designation)
+    
+    if success:
+        flash(f'Employee "{employee_name}" updated successfully!', 'success')
+    else:
+        flash(f'Error updating employee: {message}', 'error')
+    
+    return redirect(url_for('admin_manage_accounts'))
+
+@app.route('/admin/edit-cgmf/<int:cgmf_id>', methods=['POST'])
+@login_required
+def admin_edit_cgmf(cgmf_id):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    district = request.form.get('district')
+    destination = request.form.get('destination')
+    society_name = request.form.get('society_name')
+    contact = request.form.get('contact', '')
+    distance = request.form.get('distance', 0)
+    try:
+        distance = float(distance) if distance else 0
+    except ValueError:
+        distance = 0
+    
+    success, message = db.update_cgmf(cgmf_id, district, destination, society_name, contact, distance)
+    
+    if success:
+        flash(f'CGMF Society "{society_name}" updated successfully!', 'success')
+    else:
+        flash(f'Error updating CGMF: {message}', 'error')
     
     return redirect(url_for('admin_manage_accounts'))
 
@@ -1643,7 +2053,7 @@ def rakepoint_create_loading_slip():
             if request.form.get('action') == 'print':
                 # Store slip_id in session to open print in new window
                 return render_template('rakepoint/create_loading_slip.html', 
-                                     rakes=db.get_all_rakes(),
+                                     rakes=db.get_active_rakes(),
                                      accounts=db.get_all_accounts(),
                                      warehouses=db.get_all_warehouses(),
                                      cgmf_list=db.get_all_cgmf(),
@@ -1654,7 +2064,7 @@ def rakepoint_create_loading_slip():
         else:
             flash('Error creating loading slip', 'error')
     
-    rakes = db.get_all_rakes()
+    rakes = db.get_active_rakes()
     accounts = db.get_all_accounts()
     warehouses = db.get_all_warehouses()
     cgmf_list = db.get_all_cgmf()

@@ -581,6 +581,15 @@ class Database:
         self.close_connection(conn)
         return rakes
     
+    def get_active_rakes(self):
+        """Get only active (not closed) rakes"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM rakes WHERE is_closed = 0 ORDER BY created_at DESC')
+        rakes = cursor.fetchall()
+        self.close_connection(conn)
+        return rakes
+    
     def get_rake_by_code(self, rake_code):
         """Get rake by code"""
         conn = self.get_connection()
@@ -868,6 +877,60 @@ class Database:
             ''', (account_name, account_type, contact, address, distance, account_id))
             conn.commit()
             return True, "Account updated successfully"
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
+    def update_company(self, company_id, company_name, company_code, contact_person, mobile, address, distance=0):
+        """Update an existing company"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE companies 
+                SET company_name = ?, company_code = ?, contact_person = ?, mobile = ?, address = ?, distance = ?
+                WHERE company_id = ?
+            ''', (company_name, company_code, contact_person, mobile, address, distance, company_id))
+            conn.commit()
+            return True, "Company updated successfully"
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
+    def update_employee(self, employee_id, employee_name, employee_code, mobile, designation):
+        """Update an existing employee"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE employees 
+                SET employee_name = ?, employee_code = ?, mobile = ?, designation = ?
+                WHERE employee_id = ?
+            ''', (employee_name, employee_code, mobile, designation, employee_id))
+            conn.commit()
+            return True, "Employee updated successfully"
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            self.close_connection(conn)
+    
+    def update_cgmf(self, cgmf_id, district, destination, society_name, contact, distance=0):
+        """Update an existing CGMF society"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE cgmf 
+                SET district = ?, destination = ?, society_name = ?, contact = ?, distance = ?
+                WHERE cgmf_id = ?
+            ''', (district, destination, society_name, contact, distance, cgmf_id))
+            conn.commit()
+            return True, "CGMF updated successfully"
         except Exception as e:
             conn.rollback()
             return False, str(e)

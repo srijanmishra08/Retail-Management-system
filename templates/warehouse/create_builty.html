@@ -27,6 +27,9 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-12 mb-3">
+                            <label for="loading_slip_search" class="form-label">Search Loading Slip</label>
+                            <input type="text" class="form-control mb-2" id="loading_slip_search" placeholder="🔍 Type to search by Slip #, Goods, Bags, Truck No...">
+                            
                             <label for="loading_slip_id" class="form-label">Select Loading Slip <span class="text-danger">*</span></label>
                             <select class="form-select" id="loading_slip_id" name="loading_slip_id">
                                 <option value="">-- Choose a Loading Slip from Step 1 --</option>
@@ -38,12 +41,13 @@
                                         data-goods="{{ slip[10] }}"
                                         data-bags="{{ slip[7] }}"
                                         data-quantity="{{ slip[8] }}"
-                                        data-truck="{{ slip[9] }}">
+                                        data-truck="{{ slip[9] }}"
+                                        data-search-text="Slip #{{ slip[2] }} {{ slip[10] }} {{ slip[7] }} Bags {{ slip[8] }} MT Truck: {{ slip[9] }}">
                                     Slip #{{ slip[2] }} - {{ slip[10] }} - {{ slip[7] }} Bags ({{ "%.2f"|format(slip[8]) }} MT) - Truck: {{ slip[9] }}
                                 </option>
                                 {% endfor %}
                             </select>
-                            <small class="text-muted">Must select a loading slip created in Step 1. This will auto-fill all fields below.</small>
+                            <small class="text-muted">Use the search box above to filter loading slips. Must select a loading slip created in Step 1.</small>
                         </div>
                     </div>
                 </div>
@@ -191,6 +195,28 @@
 <script>
 // Set today's date as default
 document.getElementById('date').valueAsDate = new Date();
+
+// Store all original options for search functionality
+var loadingSlipSelect = document.getElementById('loading_slip_id');
+window.allLoadingSlipOptions = Array.from(loadingSlipSelect.options);
+
+// Loading Slip Search functionality
+document.getElementById('loading_slip_search').addEventListener('input', function() {
+    var searchText = this.value.toLowerCase().trim();
+    var loadingSlipSelect = document.getElementById('loading_slip_id');
+    
+    // Clear current options except the first "Choose" option
+    loadingSlipSelect.innerHTML = '';
+    
+    // Add back filtered options
+    window.allLoadingSlipOptions.forEach(function(option) {
+        if (option.value === '' || 
+            (option.dataset.searchText && option.dataset.searchText.toLowerCase().includes(searchText)) ||
+            option.text.toLowerCase().includes(searchText)) {
+            loadingSlipSelect.appendChild(option.cloneNode(true));
+        }
+    });
+});
 
 // Fetch next LR number on page load
 fetch('/api/next-lr-number')

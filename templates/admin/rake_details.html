@@ -215,8 +215,11 @@
     <a href="{{ url_for('admin_summary') }}" class="btn btn-secondary">
         <i class="bi bi-arrow-left"></i> Back to Summary
     </a>
-    <button class="btn btn-success" onclick="window.print()">
-        <i class="bi bi-printer"></i> Print Details
+    <a href="{{ url_for('admin_download_rake_details_excel', rake_code=rake_info[0]) }}" class="btn btn-success">
+        <i class="bi bi-file-earmark-excel"></i> Download Excel
+    </a>
+    <button class="btn btn-outline-primary" onclick="window.print()">
+        <i class="bi bi-printer"></i> Print Page
     </button>
 </div>
 {% endblock %}

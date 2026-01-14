@@ -190,6 +190,8 @@
                                 <th>Contact Person</th>
                                 <th>Mobile</th>
                                 <th>Address</th>
+                                <th>Distance (km)</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -201,6 +203,19 @@
                                 <td>{{ company[3] }}</td>
                                 <td>{{ company[4] }}</td>
                                 <td>{{ company[5] }}</td>
+                                <td>{{ company[6] if company[6] else '-' }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-warning me-1 edit-company-btn" title="Edit Company"
+                                            data-id="{{ company[0] }}"
+                                            data-name="{{ company[1] }}"
+                                            data-code="{{ company[2] or '' }}"
+                                            data-contact="{{ company[3] or '' }}"
+                                            data-mobile="{{ company[4] or '' }}"
+                                            data-address="{{ company[5] or '' }}"
+                                            data-distance="{{ company[6] or 0 }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -219,6 +234,7 @@
                                 <th>Code</th>
                                 <th>Mobile</th>
                                 <th>Designation</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -229,6 +245,16 @@
                                 <td><span class="badge bg-warning">{{ employee[2] }}</span></td>
                                 <td>{{ employee[3] }}</td>
                                 <td>{{ employee[4] }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-warning me-1 edit-employee-btn" title="Edit Employee"
+                                            data-id="{{ employee[0] }}"
+                                            data-name="{{ employee[1] }}"
+                                            data-code="{{ employee[2] or '' }}"
+                                            data-mobile="{{ employee[3] or '' }}"
+                                            data-designation="{{ employee[4] or '' }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -247,7 +273,9 @@
                                 <th>Destination</th>
                                 <th>Society Name</th>
                                 <th>Contact</th>
+                                <th>Distance (km)</th>
                                 <th>Created At</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -258,7 +286,19 @@
                                 <td>{{ cgmf[2] }}</td>
                                 <td><strong>{{ cgmf[3] }}</strong></td>
                                 <td>{{ cgmf[4] }}</td>
+                                <td>{{ cgmf[6] if cgmf[6] else '-' }}</td>
                                 <td>{{ cgmf[5] }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-warning me-1 edit-cgmf-btn" title="Edit CGMF"
+                                            data-id="{{ cgmf[0] }}"
+                                            data-district="{{ cgmf[1] }}"
+                                            data-destination="{{ cgmf[2] }}"
+                                            data-society="{{ cgmf[3] }}"
+                                            data-contact="{{ cgmf[4] or '' }}"
+                                            data-distance="{{ cgmf[6] or 0 }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -533,6 +573,173 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Company Modal -->
+<div class="modal fade" id="editCompanyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editCompanyForm">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Company</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_company_name" class="form-label">Company Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_company_name" name="company_name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_company_code" class="form-label">Company Code</label>
+                        <input type="text" class="form-control" id="edit_company_code" name="company_code">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_company_contact_person" class="form-label">Contact Person</label>
+                        <input type="text" class="form-control" id="edit_company_contact_person" name="contact_person">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_company_mobile" class="form-label">Mobile Number</label>
+                        <input type="text" class="form-control" id="edit_company_mobile" name="mobile">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_company_address" class="form-label">Address</label>
+                        <textarea class="form-control" id="edit_company_address" name="address" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_company_distance" class="form-label">Distance (km)</label>
+                        <input type="number" class="form-control" id="edit_company_distance" name="distance" step="0.1" min="0" placeholder="Distance from rakepoint in km">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Update Company</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Employee Modal -->
+<div class="modal fade" id="editEmployeeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editEmployeeForm">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Employee</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_employee_name" class="form-label">Employee Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_employee_name" name="employee_name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_employee_code" class="form-label">Employee Code</label>
+                        <input type="text" class="form-control" id="edit_employee_code" name="employee_code">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_employee_mobile" class="form-label">Mobile Number</label>
+                        <input type="text" class="form-control" id="edit_employee_mobile" name="mobile">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_employee_designation" class="form-label">Designation</label>
+                        <input type="text" class="form-control" id="edit_employee_designation" name="designation" placeholder="e.g., Warehouse Manager">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info">Update Employee</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit CGMF Modal -->
+<div class="modal fade" id="editCGMFModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editCGMFForm">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit CGMF Society</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_cgmf_district" class="form-label">District <span class="text-danger">*</span></label>
+                        <select class="form-select" id="edit_cgmf_district" name="district" required>
+                            <option value="">Select District</option>
+                            <option value="Balod">Balod</option>
+                            <option value="Baloda Bazar">Baloda Bazar</option>
+                            <option value="Balrampur">Balrampur</option>
+                            <option value="Bastar">Bastar</option>
+                            <option value="Bemetara">Bemetara</option>
+                            <option value="Bijapur">Bijapur</option>
+                            <option value="Bilaspur">Bilaspur</option>
+                            <option value="Dantewada">Dantewada</option>
+                            <option value="Dhamtari">Dhamtari</option>
+                            <option value="Durg">Durg</option>
+                            <option value="Gariaband">Gariaband</option>
+                            <option value="Gaurela-Pendra-Marwahi">Gaurela-Pendra-Marwahi</option>
+                            <option value="Janjgir-Champa">Janjgir-Champa</option>
+                            <option value="Jashpur">Jashpur</option>
+                            <option value="Kabirdham">Kabirdham</option>
+                            <option value="Kanker">Kanker</option>
+                            <option value="Khairagarh-Chhuikhadan-Gandai">Khairagarh-Chhuikhadan-Gandai</option>
+                            <option value="Kondagaon">Kondagaon</option>
+                            <option value="Korba">Korba</option>
+                            <option value="Koriya">Koriya</option>
+                            <option value="Mahasamund">Mahasamund</option>
+                            <option value="Manendragarh-Chirmiri-Bharatpur">Manendragarh-Chirmiri-Bharatpur</option>
+                            <option value="Mohla-Manpur-Ambagarh Chowki">Mohla-Manpur-Ambagarh Chowki</option>
+                            <option value="Mungeli">Mungeli</option>
+                            <option value="Narayanpur">Narayanpur</option>
+                            <option value="Raigarh">Raigarh</option>
+                            <option value="Raipur">Raipur</option>
+                            <option value="Rajnandgaon">Rajnandgaon</option>
+                            <option value="Sakti">Sakti</option>
+                            <option value="Sarangarh-Bilaigarh">Sarangarh-Bilaigarh</option>
+                            <option value="Sukma">Sukma</option>
+                            <option value="Surajpur">Surajpur</option>
+                            <option value="Surguja">Surguja</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_cgmf_destination" class="form-label">Destination <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_cgmf_destination" name="destination" required placeholder="e.g., Block/Town Name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_cgmf_society" class="form-label">Society Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_cgmf_society" name="society_name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_cgmf_contact" class="form-label">Contact Number</label>
+                        <input type="text" class="form-control" id="edit_cgmf_contact" name="contact">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_cgmf_distance" class="form-label">Distance (km)</label>
+                        <input type="number" class="form-control" id="edit_cgmf_distance" name="distance" step="0.1" min="0" placeholder="Distance from rakepoint in km">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Update CGMF</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -559,6 +766,69 @@ document.querySelectorAll('.edit-account-btn').forEach(function(btn) {
         
         // Show modal
         var modal = new bootstrap.Modal(document.getElementById('editAccountModal'));
+        modal.show();
+    });
+});
+
+// Handle edit company button clicks
+document.querySelectorAll('.edit-company-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var companyId = this.dataset.id;
+        
+        // Set form action
+        document.getElementById('editCompanyForm').action = '/admin/edit-company/' + companyId;
+        
+        // Populate form fields
+        document.getElementById('edit_company_name').value = this.dataset.name;
+        document.getElementById('edit_company_code').value = this.dataset.code;
+        document.getElementById('edit_company_contact_person').value = this.dataset.contact;
+        document.getElementById('edit_company_mobile').value = this.dataset.mobile;
+        document.getElementById('edit_company_address').value = this.dataset.address;
+        document.getElementById('edit_company_distance').value = this.dataset.distance != '0' ? this.dataset.distance : '';
+        
+        // Show modal
+        var modal = new bootstrap.Modal(document.getElementById('editCompanyModal'));
+        modal.show();
+    });
+});
+
+// Handle edit employee button clicks
+document.querySelectorAll('.edit-employee-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var employeeId = this.dataset.id;
+        
+        // Set form action
+        document.getElementById('editEmployeeForm').action = '/admin/edit-employee/' + employeeId;
+        
+        // Populate form fields
+        document.getElementById('edit_employee_name').value = this.dataset.name;
+        document.getElementById('edit_employee_code').value = this.dataset.code;
+        document.getElementById('edit_employee_mobile').value = this.dataset.mobile;
+        document.getElementById('edit_employee_designation').value = this.dataset.designation;
+        
+        // Show modal
+        var modal = new bootstrap.Modal(document.getElementById('editEmployeeModal'));
+        modal.show();
+    });
+});
+
+// Handle edit CGMF button clicks
+document.querySelectorAll('.edit-cgmf-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var cgmfId = this.dataset.id;
+        
+        // Set form action
+        document.getElementById('editCGMFForm').action = '/admin/edit-cgmf/' + cgmfId;
+        
+        // Populate form fields
+        document.getElementById('edit_cgmf_district').value = this.dataset.district;
+        document.getElementById('edit_cgmf_destination').value = this.dataset.destination;
+        document.getElementById('edit_cgmf_society').value = this.dataset.society;
+        document.getElementById('edit_cgmf_contact').value = this.dataset.contact;
+        document.getElementById('edit_cgmf_distance').value = this.dataset.distance != '0' ? this.dataset.distance : '';
+        
+        // Show modal
+        var modal = new bootstrap.Modal(document.getElementById('editCGMFModal'));
         modal.show();
     });
 });
