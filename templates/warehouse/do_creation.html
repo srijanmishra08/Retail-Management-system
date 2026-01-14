@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}DO Creation - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-file-earmark-spreadsheet"></i> DO Creation (Dispatch Order)</h4>
+        <small>Edit stock account and quantity for warehouse transfers</small>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> <strong>Info:</strong> This page allows you to edit the account details and quantity for stock that has been transferred to warehouses from rakes.
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Rake Code</th>
+                        <th>Slip #</th>
+                        <th>Warehouse</th>
+                        <th>Product</th>
+                        <th>Current Account</th>
+                        <th>Account Type</th>
+                        <th>Quantity (MT)</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if warehouse_stock_data %}
+                        {% for item in warehouse_stock_data %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ item[1] }}</strong></td>
+                            <td>{{ item[2] }}</td>
+                            <td>{{ item[7] }}</td>
+                            <td>{{ item[6] }}</td>
+                            <td>
+                                {% if item[9] %}
+                                    <span class="badge bg-info">{{ item[9] }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Not Assigned</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item[12] %}
+                                    <span class="badge bg-success">{{ item[12] }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ "%.2f"|format(item[4]) }}</td>
+                            <td>{{ item[5] }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="editDO({{ item[0] }}, '{{ item[1] }}', {{ item[4] }}, {{ item[11] if item[11] else 'null' }}, '{{ item[12] if item[12] else '' }}')" data-bs-toggle="modal" data-bs-target="#editDOModal">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No warehouse stock transfers found
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Edit DO Modal -->
+<div class="modal fade" id="editDOModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('warehouse_do_creation') }}">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Dispatch Order</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="loading_slip_id" name="loading_slip_id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Rake Code</label>
+                        <input type="text" class="form-control bg-light" id="rake_code_display" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="account_id" class="form-label fw-bold">Select Account <span class="text-danger">*</span></label>
+                        <select class="form-select" id="account_id" name="account_id" required>
+                            <option value="">-- Select Account --</option>
+                            <optgroup label="Dealers">
+                                {% for account in accounts %}
+                                    {% if account[2] == 'Dealer' %}
+                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="Payal (Company)">
+                                {% for account in accounts %}
+                                    {% if account[2] == 'Payal' %}
+                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="Retailers">
+                                {% for account in accounts %}
+                                    {% if account[2] == 'Retailer' %}
+                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label fw-bold">Quantity (MT) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" class="form-control" id="quantity" name="quantity" required placeholder="0.00">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="do_date" class="form-label fw-bold">DO Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="do_date" name="do_date" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label fw-bold">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Additional notes (optional)"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Update DO
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editDO(slipId, rakeCode, quantity, accountId, accountType) {
+    document.getElementById('loading_slip_id').value = slipId;
+    document.getElementById('rake_code_display').value = rakeCode;
+    document.getElementById('quantity').value = quantity;
+    
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('do_date').value = today;
+    
+    // Set account if exists
+    if (accountId) {
+        document.getElementById('account_id').value = accountId;
+    }
+}
+</script>
+{% endblock %}

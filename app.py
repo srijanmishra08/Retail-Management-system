@@ -1523,129 +1523,95 @@ def admin_warehouse_transactions():
 @app.route('/admin/warehouse-summary')
 @login_required
 def admin_warehouse_summary():
-    """Admin view of warehouse stock summary - same as warehouse balance page"""
+    """Admin view of warehouse stock summary - redesigned with detailed transaction view"""
     if current_user.role != 'Admin':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
     # Get filter parameters
     selected_warehouse = request.args.get('warehouse', 'all')
+    selected_company = request.args.get('company', 'all')
+    selected_product = request.args.get('product', 'all')
+    selected_account = request.args.get('account', 'all')
     date_filter = request.args.get('date_filter', 'all')
     start_date = request.args.get('start_date', '')
     end_date = request.args.get('end_date', '')
     
-    # Get all warehouses for dropdown
+    # Get all data for filters
     warehouses = db.get_all_warehouses()
+    companies = db.get_all_companies()
+    products = db.get_all_products()
+    accounts = db.get_all_accounts()
     
-    # Build date condition
-    date_condition = ""
-    date_params = []
+    # Build query conditions
+    conditions = ["1=1"]
+    params = []
     
+    if selected_warehouse != 'all':
+        conditions.append("w.warehouse_id = ?")
+        params.append(int(selected_warehouse))
+    
+    if selected_company != 'all':
+        conditions.append("c.company_id = ?")
+        params.append(int(selected_company))
+    
+    if selected_product != 'all':
+        conditions.append("p.product_id = ?")
+        params.append(int(selected_product))
+    
+    if selected_account != 'all':
+        conditions.append("a.account_id = ?")
+        params.append(int(selected_account))
+    
+    # Date filtering
     from datetime import datetime, timedelta
-    today = datetime.now().strftime('%Y-%m-%d')
-    
     if date_filter == 'today':
-        date_condition = " AND DATE(ws.date) = ?"
-        date_params = [today]
+        conditions.append("DATE(ws.date) = ?")
+        params.append(datetime.now().strftime('%Y-%m-%d'))
     elif date_filter == 'week':
         week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-        date_condition = " AND DATE(ws.date) >= ?"
-        date_params = [week_ago]
+        conditions.append("DATE(ws.date) >= ?")
+        params.append(week_ago)
     elif date_filter == 'month':
         month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-        date_condition = " AND DATE(ws.date) >= ?"
-        date_params = [month_ago]
+        conditions.append("DATE(ws.date) >= ?")
+        params.append(month_ago)
     elif date_filter == 'custom' and start_date and end_date:
-        date_condition = " AND DATE(ws.date) >= ? AND DATE(ws.date) <= ?"
-        date_params = [start_date, end_date]
+        conditions.append("DATE(ws.date) >= ? AND DATE(ws.date) <= ?")
+        params.extend([start_date, end_date])
     
-    # Get overall stock statistics
-    warehouse_balances = []
+    where_clause = " AND ".join(conditions)
     
-    # Build warehouse condition
-    if selected_warehouse != 'all':
-        try:
-            selected_warehouse_id = int(selected_warehouse)
-            warehouse_filter = [w for w in warehouses if w[0] == selected_warehouse_id]
-            warehouses_to_process = warehouse_filter
-        except:
-            warehouses_to_process = warehouses
-    else:
-        warehouses_to_process = warehouses
-    
-    for warehouse in warehouses_to_process:
-        # Get filtered balance
-        if date_condition:
-            result = db.execute_custom_query(f'''
-                SELECT 
-                    COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) as stock_in,
-                    COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) as stock_out
-                FROM warehouse_stock ws
-                WHERE warehouse_id = ? {date_condition}
-            ''', [warehouse[0]] + date_params)
-            if result:
-                stock_in = result[0][0] or 0
-                stock_out = result[0][1] or 0
-            else:
-                stock_in, stock_out = 0, 0
-        else:
-            balance = db.get_warehouse_balance_stock(warehouse[0])
-            stock_in = balance.get('stock_in', 0)
-            stock_out = balance.get('stock_out', 0)
-        
-        warehouse_balances.append([
-            warehouse[0],  # warehouse_id
-            warehouse[1],  # warehouse_name
-            warehouse[2],  # location
-            stock_in,
-            stock_out
-        ])
-    
-    # Calculate totals
-    total_stock_in = sum(w[3] for w in warehouse_balances)
-    total_stock_out = sum(w[4] for w in warehouse_balances)
-    total_balance = total_stock_in - total_stock_out
-    
-    # Get recent transactions for the filtered scope
-    if selected_warehouse != 'all':
-        wh_cond = "ws.warehouse_id = ?"
-        wh_params = [int(selected_warehouse)]
-    else:
-        wh_cond = "1=1"
-        wh_params = []
-    
-    recent_transactions = db.execute_custom_query(f'''
-        SELECT ws.date, ws.transaction_type, ws.quantity_mt, w.warehouse_name,
-               COALESCE(b.builty_number, 'Direct Entry') as builty_number,
-               ws.notes
+    # Get detailed warehouse stock transactions
+    warehouse_transactions = db.execute_custom_query(f'''
+        SELECT ws.date, c.company_name, p.product_name, a.account_name, 
+               ws.quantity_mt, w.warehouse_name, ws.transaction_type
         FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
-        LEFT JOIN builty b ON ws.builty_id = b.builty_id
-        WHERE {wh_cond} {date_condition}
-        ORDER BY ws.date DESC, ws.created_at DESC
-        LIMIT 20
-    ''', wh_params + date_params)
+        LEFT JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+        LEFT JOIN companies c ON ws.company_id = c.company_id
+        LEFT JOIN products p ON ws.product_id = p.product_id
+        LEFT JOIN accounts a ON ws.account_id = a.account_id
+        WHERE {where_clause} AND ws.transaction_type = 'IN'
+        ORDER BY ws.date DESC, ws.stock_id DESC
+    ''', params)
     
-    # Get selected warehouse name for display
-    selected_warehouse_name = "All Warehouses"
-    if selected_warehouse != 'all':
-        for wh in warehouses:
-            if wh[0] == int(selected_warehouse):
-                selected_warehouse_name = wh[1]
-                break
+    # Calculate total
+    total_quantity = sum(txn[4] for txn in warehouse_transactions) if warehouse_transactions else 0
     
     return render_template('admin/warehouse_summary.html',
-                         warehouse_balances=warehouse_balances,
-                         total_stock_in=total_stock_in,
-                         total_stock_out=total_stock_out,
-                         total_balance=total_balance,
+                         warehouse_transactions=warehouse_transactions,
+                         total_quantity=total_quantity,
                          warehouses=warehouses,
+                         companies=companies,
+                         products=products,
+                         accounts=accounts,
                          selected_warehouse=selected_warehouse,
-                         selected_warehouse_name=selected_warehouse_name,
+                         selected_company=selected_company,
+                         selected_product=selected_product,
+                         selected_account=selected_account,
                          date_filter=date_filter,
                          start_date=start_date,
-                         end_date=end_date,
-                         recent_transactions=recent_transactions)
+                         end_date=end_date)
 
 # ========== Logistic Bill Routes ==========
 
@@ -1662,19 +1628,39 @@ def admin_logistic_bill():
         warehouses = db.get_all_warehouses() or []
         storage_data = db.get_warehouse_storage_data() or []
         transport_data = db.get_warehouse_transport_data() or []
+        
+        # Get bill summary data for all rakes
+        bill_summary = []
+        for rake in rakes:
+            rake_code = rake[1]
+            company_name = rake[2]
+            rr_quantity = rake[5] if len(rake) > 5 else 0
+            date = rake[4] if len(rake) > 4 else ''
+            
+            # For now, set bill_amount and received_payment to 0 (can be enhanced later to store actual values)
+            bill_summary.append({
+                'rake_code': rake_code,
+                'company_name': company_name,
+                'total_stock': rr_quantity,
+                'date': date,
+                'bill_amount': 0,
+                'received_payment': 0
+            })
     except Exception as e:
         print(f"Error loading logistic bill data: {e}")
         rakes = []
         warehouses = []
         storage_data = []
         transport_data = []
+        bill_summary = []
         flash('Error loading some data. Please try again.', 'warning')
     
     return render_template('admin/logistic_bill.html',
                          rakes=rakes,
                          warehouses=warehouses,
                          storage_data=storage_data,
-                         transport_data=transport_data)
+                         transport_data=transport_data,
+                         bill_summary=bill_summary)
 
 @app.route('/admin/logistic-bill/rake-data/<rake_code>')
 @login_required
@@ -1990,6 +1976,113 @@ def admin_download_warehouse_excel():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'Warehouse_Bill_{warehouse_name.replace(" ", "_")}.xlsx'
+    )
+
+@app.route('/admin/download-bill-summary-excel')
+@login_required
+def admin_download_bill_summary_excel():
+    """Download Bill Summary as Excel file"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from io import BytesIO
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bill Summary"
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    total_fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
+    
+    # Title
+    ws['A1'] = "BILL SUMMARY"
+    ws['A1'].font = Font(bold=True, size=14)
+    ws.merge_cells('A1:H1')
+    ws['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    # Headers
+    headers = ['#', 'Rake', 'Company', 'Total Stock (MT)', 'Date', 'Bill Amount (₹)', 'Received (₹)', 'Left (₹)']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Get rakes data
+    rakes = db.get_all_rakes() or []
+    
+    row = 5
+    total_stock = 0
+    total_bill = 0
+    total_received = 0
+    
+    for idx, rake in enumerate(rakes, 1):
+        rake_code = rake[1]
+        company_name = rake[2]
+        rr_quantity = rake[5] if len(rake) > 5 else 0
+        date = rake[4] if len(rake) > 4 else ''
+        bill_amount = 0
+        received_payment = 0
+        left = bill_amount - received_payment
+        
+        ws.cell(row=row, column=1, value=idx).border = border
+        ws.cell(row=row, column=2, value=rake_code).border = border
+        ws.cell(row=row, column=3, value=company_name).border = border
+        ws.cell(row=row, column=4, value=round(rr_quantity, 2)).border = border
+        ws.cell(row=row, column=5, value=str(date)).border = border
+        ws.cell(row=row, column=6, value=round(bill_amount, 2)).border = border
+        ws.cell(row=row, column=7, value=round(received_payment, 2)).border = border
+        ws.cell(row=row, column=8, value=round(left, 2)).border = border
+        
+        total_stock += rr_quantity
+        total_bill += bill_amount
+        total_received += received_payment
+        row += 1
+    
+    # Total row
+    for col in range(1, 9):
+        ws.cell(row=row, column=col).fill = total_fill
+        ws.cell(row=row, column=col).font = Font(bold=True, color="FFFFFF")
+        ws.cell(row=row, column=col).border = border
+    
+    ws.cell(row=row, column=1, value="TOTAL")
+    ws.cell(row=row, column=4, value=round(total_stock, 2))
+    ws.cell(row=row, column=6, value=round(total_bill, 2))
+    ws.cell(row=row, column=7, value=round(total_received, 2))
+    ws.cell(row=row, column=8, value=round(total_bill - total_received, 2))
+    
+    # Adjust column widths
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['C'].width = 25
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['G'].width = 15
+    ws.column_dimensions['H'].width = 15
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'Bill_Summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
 @app.route('/api/warehouse-account-stock/<int:warehouse_id>')
@@ -2433,6 +2526,11 @@ def rakepoint_create_loading_slip():
         mobile_number_2 = request.form.get('mobile_number_2', '')
         truck_details = request.form.get('truck_details', '')
         sub_head = request.form.get('sub_head', '')  # Sub head for Payal accounts
+        warehouse_account_type = request.form.get('warehouse_account_type', '')  # Account type for warehouse stock
+        warehouse_account_id = request.form.get('warehouse_account_id', '')  # Account ID for warehouse stock
+        
+        # Convert warehouse_account_id to int if provided
+        warehouse_account_id = int(warehouse_account_id) if warehouse_account_id else None
         
         # CRITICAL: Check rake quantity balance before creating loading slip
         rake_balance = db.get_rake_balance(rake_code)
@@ -2479,7 +2577,8 @@ def rakepoint_create_loading_slip():
         slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
                                       account_id, warehouse_id, quantity_in_bags, quantity_in_mt, truck_id, 
                                       wagon_number, goods_name, truck_driver, truck_owner,
-                                      mobile_number_1, mobile_number_2, truck_details, None, cgmf_id, sub_head)
+                                      mobile_number_1, mobile_number_2, truck_details, None, cgmf_id, sub_head,
+                                      warehouse_account_id, warehouse_account_type)
         
         if slip_id:
             flash(f'Loading slip #{serial_number} created successfully!', 'success')
@@ -3446,7 +3545,7 @@ def warehouse_create_builty():
     # GET request
     warehouses = db.get_all_warehouses()
     accounts = db.get_all_accounts()
-    loading_slips = db.get_all_loading_slips()  # Only unlinked loading slips
+    loading_slips = db.get_warehouse_loading_slips()  # Only loading slips created from warehouses
     cgmf_list = db.get_all_cgmf()
     
     return render_template('warehouse/create_builty.html',
@@ -3713,6 +3812,58 @@ def warehouse_balance(warehouse_id):
                          warehouse=warehouse,
                          balance=balance,
                          transactions=transactions)
+
+@app.route('/warehouse/do-creation', methods=['GET', 'POST'])
+@login_required
+def warehouse_do_creation():
+    """Dispatch Order (DO) Creation - Edit stock account and quantity"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        loading_slip_id = request.form.get('loading_slip_id')
+        new_account_id = request.form.get('account_id')
+        new_quantity = float(request.form.get('quantity'))
+        do_date = request.form.get('do_date')
+        notes = request.form.get('notes', '')
+        
+        # Update the loading slip with new account and quantity
+        try:
+            db.execute_custom_query('''
+                UPDATE loading_slips 
+                SET warehouse_account_id = ?, quantity_mt = ?
+                WHERE slip_id = ?
+            ''', (new_account_id, new_quantity, loading_slip_id))
+            
+            flash('Dispatch Order updated successfully!', 'success')
+            return redirect(url_for('warehouse_do_creation'))
+        except Exception as e:
+            print(f"Error updating DO: {e}")
+            flash('Error updating dispatch order', 'error')
+    
+    # GET request - fetch all warehouse loading slips with account info
+    warehouse_stock_data = db.execute_custom_query('''
+        SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.destination,
+               ls.quantity_mt, ls.created_at, ls.goods_name,
+               w.warehouse_name, w.warehouse_id,
+               a.account_name, a.account_type, a.account_id as current_account_id,
+               ls.warehouse_account_type
+        FROM loading_slips ls
+        LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+        LEFT JOIN accounts a ON ls.warehouse_account_id = a.account_id
+        WHERE ls.warehouse_id IS NOT NULL
+        AND ls.builty_id IS NULL
+        ORDER BY ls.created_at DESC
+    ''')
+    
+    accounts = db.get_all_accounts()
+    warehouses = db.get_all_warehouses()
+    
+    return render_template('warehouse/do_creation.html',
+                         warehouse_stock_data=warehouse_stock_data,
+                         accounts=accounts,
+                         warehouses=warehouses)
 
 @app.route('/warehouse/all-builties')
 @login_required

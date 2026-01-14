@@ -116,6 +116,31 @@
                 </div>
             </div>
             
+            <!-- Warehouse Account Type Section (shown only when warehouse is selected) -->
+            <div id="warehouse_account_section" style="display: none;">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> <strong>Account Stock Tracking:</strong> Select whose stock is being stored in the warehouse
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="warehouse_account_type" class="form-label">Account Type <span class="text-danger">*</span></label>
+                        <select class="form-select" id="warehouse_account_type" name="warehouse_account_type" onchange="filterWarehouseAccounts()">
+                            <option value="">-- Select Account Type --</option>
+                            <option value="Dealer">Dealers</option>
+                            <option value="Payal">Payal (Company)</option>
+                            <option value="Retailer">Retailers</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label for="warehouse_account_id" class="form-label">Account <span class="text-danger">*</span></label>
+                        <select class="form-select" id="warehouse_account_id" name="warehouse_account_id">
+                            <option value="">-- First select account type --</option>
+                        </select>
+                        <small class="text-muted">Select the account whose stock will be stored in the warehouse</small>
+                    </div>
+                </div>
+            </div>
+            
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <label for="quantity_in_bags" class="form-label">Quantity in Bags <span class="text-danger">*</span></label>
@@ -409,8 +434,55 @@ accountOptions.forEach(function(option) {
         
         // Toggle sub head for Payal accounts
         toggleSubHead(type);
+        
+        // Show/hide warehouse account section
+        toggleWarehouseAccountSection(type);
     });
 });
+
+// All accounts data for filtering
+const allAccounts = [
+    {% for account in accounts %}
+    { id: {{ account[0] }}, name: "{{ account[1] }}", type: "{{ account[2] }}" },
+    {% endfor %}
+];
+
+// Show/hide warehouse account section based on destination type
+function toggleWarehouseAccountSection(destType) {
+    const warehouseSection = document.getElementById('warehouse_account_section');
+    const warehouseAccountType = document.getElementById('warehouse_account_type');
+    const warehouseAccountId = document.getElementById('warehouse_account_id');
+    
+    if (destType === 'Warehouse') {
+        warehouseSection.style.display = 'block';
+        warehouseAccountType.required = true;
+        warehouseAccountId.required = true;
+    } else {
+        warehouseSection.style.display = 'none';
+        warehouseAccountType.required = false;
+        warehouseAccountId.required = false;
+        warehouseAccountType.value = '';
+        warehouseAccountId.innerHTML = '<option value="">-- First select account type --</option>';
+    }
+}
+
+// Filter accounts by type for warehouse account selection
+function filterWarehouseAccounts() {
+    const selectedType = document.getElementById('warehouse_account_type').value;
+    const accountSelect = document.getElementById('warehouse_account_id');
+    
+    accountSelect.innerHTML = '<option value="">-- Select Account --</option>';
+    
+    if (selectedType) {
+        const filteredAccounts = allAccounts.filter(acc => acc.type === selectedType);
+        filteredAccounts.forEach(acc => {
+            const option = document.createElement('option');
+            option.value = acc.id;
+            option.textContent = acc.name + ' - ' + acc.type;
+            accountSelect.appendChild(option);
+        });
+    }
+}
 
 // Toggle Sub Head field based on account type
 function toggleSubHead(accountType) {
@@ -441,6 +513,7 @@ window.addEventListener('load', function() {
         document.getElementById('rake-balance-alert').style.display = 'none';
         document.getElementById('account_search').value = '';
         document.getElementById('account').value = '';
+        document.getElementById('warehouse_account_section').style.display = 'none';
         currentRakeBalance = null;
     }, 500);
 });

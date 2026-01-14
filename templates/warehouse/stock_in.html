@@ -83,13 +83,9 @@
             <div id="truck_section" style="display:none;">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="truck_number" class="form-label">Truck Number</label>
-                        <select class="form-select" id="truck_number" name="truck_number">
-                            <option value="">Select Truck</option>
-                            {% for truck in trucks %}
-                            <option value="{{ truck[0] }}">{{ truck[1] }} - {{ truck[2] }}</option>
-                            {% endfor %}
-                        </select>
+                        <label for="truck_number" class="form-label">Truck Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="truck_number" name="truck_number" placeholder="Enter truck number (e.g., CG10-1234)">
+                        <small class="form-text text-muted">Type the truck number manually</small>
                     </div>
                 </div>
             </div>

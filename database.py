@@ -511,6 +511,22 @@ class Database:
                 cursor.execute("ALTER TABLE cgmf ADD COLUMN distance REAL DEFAULT 0")
                 print("Migration: Added distance column to cgmf table")
         
+        # Migration: Add warehouse_account_id column to loading_slips table for tracking whose stock is stored in warehouse
+        try:
+            cursor.execute("SELECT warehouse_account_id FROM loading_slips LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'warehouse_account_id' in str(e).lower():
+                cursor.execute("ALTER TABLE loading_slips ADD COLUMN warehouse_account_id INTEGER REFERENCES accounts(account_id)")
+                print("Migration: Added warehouse_account_id column to loading_slips table")
+        
+        # Migration: Add warehouse_account_type column to loading_slips table
+        try:
+            cursor.execute("SELECT warehouse_account_type FROM loading_slips LIMIT 1")
+        except (sqlite3.OperationalError, ValueError, Exception) as e:
+            if 'no such column' in str(e).lower() or 'warehouse_account_type' in str(e).lower():
+                cursor.execute("ALTER TABLE loading_slips ADD COLUMN warehouse_account_type TEXT")
+                print("Migration: Added warehouse_account_type column to loading_slips table")
+        
         conn.commit()
         self.close_connection(conn)
         print("Database initialized successfully!")
@@ -1322,7 +1338,7 @@ class Database:
     
     def add_loading_slip(self, rake_code, slip_number, loading_point_name, destination,
                         account_id, warehouse_id, quantity_bags, quantity_mt, truck_id, wagon_number, 
-                        goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id=None, cgmf_id=None, sub_head=None):
+                        goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id=None, cgmf_id=None, sub_head=None, warehouse_account_id=None, warehouse_account_type=None):
         """Add new loading slip with complete truck and goods details - supports accounts, warehouses, and CGMF"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1331,11 +1347,13 @@ class Database:
                 INSERT INTO loading_slips (rake_code, slip_number, loading_point_name, destination,
                                           account_id, warehouse_id, cgmf_id, quantity_bags, quantity_mt, truck_id, 
                                           wagon_number, goods_name, truck_driver, truck_owner,
-                                          mobile_number_1, mobile_number_2, truck_details, builty_id, sub_head)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                          mobile_number_1, mobile_number_2, truck_details, builty_id, sub_head,
+                                          warehouse_account_id, warehouse_account_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (rake_code, slip_number, loading_point_name, destination, account_id, warehouse_id, cgmf_id,
                   quantity_bags, quantity_mt, truck_id, wagon_number, goods_name,
-                  truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id, sub_head))
+                  truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id, sub_head,
+                  warehouse_account_id, warehouse_account_type))
             
             conn.commit()
             
@@ -1388,6 +1406,30 @@ class Database:
             LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
             LEFT JOIN trucks t ON ls.truck_id = t.truck_id
             WHERE ls.builty_id IS NULL
+            ORDER BY ls.slip_id DESC
+        ''')
+        slips = cursor.fetchall()
+        self.close_connection(conn)
+        return slips
+    
+    def get_warehouse_loading_slips(self):
+        """Get loading slips created FROM warehouses (not from rakes) that haven't been converted to builty yet"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
+                   ls.destination, 
+                   COALESCE(a.account_name, w.warehouse_name) as destination_name,
+                   ls.wagon_number, 
+                   ls.quantity_bags, ls.quantity_mt, t.truck_number,
+                   ls.goods_name, ls.truck_driver, ls.truck_owner,
+                   ls.mobile_number_1, ls.mobile_number_2
+            FROM loading_slips ls
+            LEFT JOIN accounts a ON ls.account_id = a.account_id
+            LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+            LEFT JOIN trucks t ON ls.truck_id = t.truck_id
+            WHERE ls.builty_id IS NULL
+            AND ls.loading_point_name IN (SELECT warehouse_name FROM warehouses)
             ORDER BY ls.slip_id DESC
         ''')
         slips = cursor.fetchall()

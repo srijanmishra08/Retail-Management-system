@@ -228,6 +228,9 @@
                 <a class="nav-link {% if 'warehouse_stock_in' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_stock_in') }}">
                     <i class="bi bi-box-arrow-in-down"></i> Stock IN
                 </a>
+                <a class="nav-link {% if 'warehouse_do_creation' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_do_creation') }}">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> DO Creation
+                </a>
                 <div class="px-3 py-2 text-white-50 small"><strong>Stock OUT (2 Steps)</strong></div>
                 <a class="nav-link {% if 'warehouse_create_loading_slip' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_create_loading_slip') }}">
                     <i class="bi bi-receipt"></i> Create Loading Slip

@@ -6,12 +6,99 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-truck"></i> Logistic Bill</h2>
     <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-primary" id="billSummaryBtn" onclick="showBillType('summary')">
+            <i class="bi bi-list-ul"></i> Bill Summary
+        </button>
         <button type="button" class="btn btn-primary active" id="rakeBillBtn" onclick="showBillType('rake')">
             <i class="bi bi-train-freight-front"></i> Rake Bill
         </button>
         <button type="button" class="btn btn-outline-primary" id="warehouseBillBtn" onclick="showBillType('warehouse')">
             <i class="bi bi-building"></i> Warehouse Bill
         </button>
+    </div>
+</div>
+
+<!-- BILL SUMMARY SECTION -->
+<div id="billSummarySection" style="display: none;">
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-list-ul"></i> Bill Summary</h5>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" id="summaryFilter" onchange="filterBillSummary()">
+                    <option value="all">All Rakes</option>
+                    {% for rake in rakes %}
+                    <option value="{{ rake[1] }}">{{ rake[1] }} - {{ rake[2] }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-success btn-sm" onclick="downloadBillSummaryExcel()">
+                    <i class="bi bi-file-earmark-excel"></i> Download Excel
+                </button>
+                <button class="btn btn-info btn-sm" onclick="window.print()">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0" id="billSummaryTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Rake</th>
+                            <th>Company</th>
+                            <th>Total Stock (MT)</th>
+                            <th>Date</th>
+                            <th>Bill Amount (₹)</th>
+                            <th>Received (₹)</th>
+                            <th>Left (₹)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="billSummaryBody">
+                        {% if bill_summary %}
+                            {% for bill in bill_summary %}
+                            <tr data-rake="{{ bill.rake_code }}">
+                                <td>{{ loop.index }}</td>
+                                <td><strong>{{ bill.rake_code }}</strong></td>
+                                <td>{{ bill.company_name }}</td>
+                                <td class="text-end">{{ "%.2f"|format(bill.total_stock) }}</td>
+                                <td>{{ bill.date }}</td>
+                                <td class="text-end text-primary"><strong>₹ {{ "%.2f"|format(bill.bill_amount or 0) }}</strong></td>
+                                <td class="text-end text-success">₹ {{ "%.2f"|format(bill.received_payment or 0) }}</td>
+                                <td class="text-end text-danger">₹ {{ "%.2f"|format((bill.bill_amount or 0) - (bill.received_payment or 0)) }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="viewRakeBill('{{ bill.rake_code }}')" title="View">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="downloadSingleBill('{{ bill.rake_code }}')" title="Download">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="table-primary fw-bold">
+                                <td colspan="3">TOTAL</td>
+                                <td class="text-end">{{ "%.2f"|format(bill_summary|sum(attribute='total_stock')) }} MT</td>
+                                <td>-</td>
+                                <td class="text-end">₹ {{ "%.2f"|format(bill_summary|sum(attribute='bill_amount') or 0) }}</td>
+                                <td class="text-end">₹ {{ "%.2f"|format(bill_summary|sum(attribute='received_payment') or 0) }}</td>
+                                <td class="text-end">₹ {{ "%.2f"|format((bill_summary|sum(attribute='bill_amount') or 0) - (bill_summary|sum(attribute='received_payment') or 0)) }}</td>
+                                <td>-</td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                    No bill data available
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -240,25 +327,61 @@ let warehouseStorageData = [];
 let warehouseTransportData = [];
 
 function showBillType(type) {
-    if (type === 'rake') {
+    // Hide all sections first
+    document.getElementById('billSummarySection').style.display = 'none';
+    document.getElementById('rakeBillSection').style.display = 'none';
+    document.getElementById('warehouseBillSection').style.display = 'none';
+    
+    // Reset all buttons
+    document.getElementById('billSummaryBtn').classList.remove('active', 'btn-primary');
+    document.getElementById('billSummaryBtn').classList.add('btn-outline-primary');
+    document.getElementById('rakeBillBtn').classList.remove('active', 'btn-primary');
+    document.getElementById('rakeBillBtn').classList.add('btn-outline-primary');
+    document.getElementById('warehouseBillBtn').classList.remove('active', 'btn-primary');
+    document.getElementById('warehouseBillBtn').classList.add('btn-outline-primary');
+    
+    // Show selected section and activate button
+    if (type === 'summary') {
+        document.getElementById('billSummarySection').style.display = 'block';
+        document.getElementById('billSummaryBtn').classList.add('active', 'btn-primary');
+        document.getElementById('billSummaryBtn').classList.remove('btn-outline-primary');
+    } else if (type === 'rake') {
         document.getElementById('rakeBillSection').style.display = 'block';
-        document.getElementById('warehouseBillSection').style.display = 'none';
-        document.getElementById('rakeBillBtn').classList.add('active');
+        document.getElementById('rakeBillBtn').classList.add('active', 'btn-primary');
         document.getElementById('rakeBillBtn').classList.remove('btn-outline-primary');
-        document.getElementById('rakeBillBtn').classList.add('btn-primary');
-        document.getElementById('warehouseBillBtn').classList.remove('active');
-        document.getElementById('warehouseBillBtn').classList.add('btn-outline-primary');
-        document.getElementById('warehouseBillBtn').classList.remove('btn-primary');
     } else {
-        document.getElementById('rakeBillSection').style.display = 'none';
         document.getElementById('warehouseBillSection').style.display = 'block';
-        document.getElementById('warehouseBillBtn').classList.add('active');
+        document.getElementById('warehouseBillBtn').classList.add('active', 'btn-primary');
         document.getElementById('warehouseBillBtn').classList.remove('btn-outline-primary');
-        document.getElementById('warehouseBillBtn').classList.add('btn-primary');
-        document.getElementById('rakeBillBtn').classList.remove('active');
-        document.getElementById('rakeBillBtn').classList.add('btn-outline-primary');
-        document.getElementById('rakeBillBtn').classList.remove('btn-primary');
     }
+}
+
+function filterBillSummary() {
+    const filterValue = document.getElementById('summaryFilter').value;
+    const rows = document.querySelectorAll('#billSummaryBody tr[data-rake]');
+    
+    rows.forEach(row => {
+        if (filterValue === 'all' || row.dataset.rake === filterValue) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function viewRakeBill(rakeCode) {
+    // Switch to rake bill section and select the rake
+    showBillType('rake');
+    document.getElementById('rakeSelect').value = rakeCode;
+    loadRakeData();
+}
+
+function downloadSingleBill(rakeCode) {
+    window.location.href = '/admin/download-rake-details-excel/' + encodeURIComponent(rakeCode);
+}
+
+function downloadBillSummaryExcel() {
+    window.location.href = '/admin/download-bill-summary-excel';
 }
 
 function loadRakeData() {
