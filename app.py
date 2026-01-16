@@ -96,34 +96,14 @@ def admin_dashboard():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    stats = db.get_admin_dashboard_stats()
-    all_rakes = db.get_all_rakes()
+    # Use optimized single-query method for stats
+    stats = db.get_dashboard_stats_optimized()
     
     # Get total shortage from closed rakes
     total_shortage = db.get_total_shortage()
     
-    # Enrich recent rakes with dispatched and remaining quantities
-    recent_rakes = []
-    for rake in all_rakes[:5]:
-        rake_code = rake[1]
-        balance = db.get_rake_balance(rake_code)
-        # Check if rake is closed (index 10 is is_closed after migration)
-        is_closed = rake[10] if len(rake) > 10 else 0
-        shortage = rake[12] if len(rake) > 12 else 0  # Index 12 is shortage after migration
-        recent_rakes.append({
-            'rake_code': rake[1],
-            'company_name': rake[2],
-            'company_code': rake[3],
-            'date': rake[4],
-            'rr_quantity': rake[5],
-            'product_name': rake[6],
-            'product_code': rake[7],
-            'rake_point_name': rake[8],
-            'dispatched': balance['dispatched'] if balance else 0,
-            'remaining': balance['remaining'] if balance else rake[5],
-            'is_closed': is_closed,
-            'shortage': shortage
-        })
+    # Use optimized method - single query for all rakes with balances (limit 5)
+    recent_rakes = db.get_rakes_with_balances(limit=5)
     
     return render_template('admin/dashboard.html', stats=stats, recent_rakes=recent_rakes, total_shortage=total_shortage)
 
@@ -202,29 +182,8 @@ def admin_summary():
     # Get total shortage from closed rakes
     total_shortage = db.get_total_shortage()
     
-    # Get all rakes with enriched data (like dashboard)
-    all_rakes = db.get_all_rakes()
-    rakes_with_balance = []
-    for rake in all_rakes:
-        rake_code = rake[1]
-        balance = db.get_rake_balance(rake_code)
-        # Check if rake is closed (index 10 is is_closed after migration)
-        is_closed = rake[10] if len(rake) > 10 else 0
-        shortage = rake[12] if len(rake) > 12 else 0  # Index 12 is shortage after migration
-        rakes_with_balance.append({
-            'rake_code': rake[1],
-            'company_name': rake[2],
-            'company_code': rake[3],
-            'date': rake[4],
-            'rr_quantity': rake[5],
-            'product_name': rake[6],
-            'product_code': rake[7],
-            'rake_point_name': rake[8],
-            'dispatched': balance['dispatched'] if balance else 0,
-            'remaining': balance['remaining'] if balance else rake[5],
-            'is_closed': is_closed,
-            'shortage': shortage
-        })
+    # Use optimized method - single query instead of N+1
+    rakes_with_balance = db.get_rakes_with_balances()
     
     # Get total summary (all accounts with dispatch quantities) - use loading_slips
     total_account_summary = db.execute_custom_query('''
@@ -1618,7 +1577,7 @@ def admin_warehouse_summary():
 @app.route('/admin/logistic-bill')
 @login_required
 def admin_logistic_bill():
-    """Logistic Bill page with Rake Bill and Warehouse Bill sections"""
+    """Logistic Bill page with Rake Bill and Warehouse Bill sections - OPTIMIZED"""
     if current_user.role != 'Admin':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
@@ -1626,49 +1585,19 @@ def admin_logistic_bill():
     try:
         rakes = db.get_all_rakes() or []
         warehouses = db.get_all_warehouses() or []
-        storage_data = db.get_warehouse_storage_data() or []
-        transport_data = db.get_warehouse_transport_data() or []
         companies = db.get_all_companies() or []
         
         # Get filter parameters
         selected_company = request.args.get('company', 'all')
         selected_rake = request.args.get('rake', 'all')
         
-        # Get bill summary data for all rakes with total bill amounts
-        bill_summary = []
-        saved_payments = {p['rake_code']: p for p in db.get_all_rake_bill_payments()}
+        # Use optimized single-query method for bill summary
+        bill_summary = db.get_logistic_bill_summary_optimized(selected_company, selected_rake)
         
-        for rake in rakes:
-            rake_code = rake[1]
-            company_name = rake[2]
-            rr_quantity = rake[5] if len(rake) > 5 else 0
-            date = rake[4] if len(rake) > 4 else ''
-            
-            # Apply filters
-            if selected_company != 'all' and company_name != selected_company:
-                continue
-            if selected_rake != 'all' and rake_code != selected_rake:
-                continue
-            
-            # Get payment data from database if exists
-            payment_data = saved_payments.get(rake_code)
-            if payment_data:
-                total_bill_amount = payment_data['total_bill_amount']
-                received_payment = payment_data['received_amount']
-            else:
-                # Calculate total bill amount from rake transport data
-                rake_transport = db.get_rake_transport_data(rake_code) or []
-                total_bill_amount = sum(item.get('total_freight', 0) for item in rake_transport)
-                received_payment = 0
-            
-            bill_summary.append({
-                'rake_code': rake_code,
-                'company_name': company_name,
-                'total_stock': rr_quantity,
-                'date': date,
-                'bill_amount': total_bill_amount,
-                'received_payment': received_payment
-            })
+        # Storage and transport data will be loaded via AJAX to reduce initial load time
+        storage_data = []
+        transport_data = []
+        
     except Exception as e:
         print(f"Error loading logistic bill data: {e}")
         rakes = []
@@ -2426,7 +2355,6 @@ def rakepoint_dashboard():
     # Get all data
     all_builties = db.get_all_builties()
     all_loading_slips = db.get_all_loading_slips_with_status()
-    all_rakes = db.get_all_rakes()
     
     # Recent builties (last 10)
     recent_builties = all_builties[:10]
@@ -2435,25 +2363,17 @@ def rakepoint_dashboard():
     total_builties = len(all_builties)
     total_loading_slips = len(all_loading_slips)
     
-    # Count active rakes (rakes with remaining quantity > 0)
-    active_rakes = 0
-    for rake in all_rakes:
-        rake_code = rake[1]
-        balance = db.get_rake_balance(rake_code)
-        if balance and balance['remaining'] > 0:
-            active_rakes += 1
+    # Use optimized single-query method instead of loop
+    active_rakes = db.count_active_rakes_optimized()
     
-    # Today's builties (created today)
+    # Today's builties - do this in Python (more efficient)
     today = datetime.now().date()
-    today_builties = 0
-    for builty in all_builties:
-        builty_date_str = builty[3]  # date field
-        try:
-            builty_date = datetime.strptime(builty_date_str, '%Y-%m-%d').date()
-            if builty_date == today:
-                today_builties += 1
-        except:
-            pass
+    today_str = str(today)
+    today_builties = sum(1 for builty in all_builties 
+                        if builty[3] and builty[3][:10] == today_str)
+    
+    # Use optimized method for rakes with balances
+    all_rakes = db.get_rakes_with_balances()
     
     return render_template('rakepoint/dashboard.html', 
                          recent_builties=recent_builties,
@@ -3038,13 +2958,17 @@ def warehouse_dashboard():
         return redirect(url_for('index'))
     
     warehouses = db.get_all_warehouses()
-    warehouse_stats = []
     
+    # Use batch query instead of loop - single query for all warehouse balances
+    all_balances = db.get_all_warehouse_balances()
+    
+    warehouse_stats = []
     total_stock_in = 0
     total_stock_out = 0
     
     for warehouse in warehouses:
-        balance = db.get_warehouse_balance_stock(warehouse[0])
+        wh_id = warehouse[0]
+        balance = all_balances.get(wh_id, {'stock_in': 0, 'stock_out': 0, 'balance': 0})
         warehouse_stats.append({
             'warehouse': warehouse,
             'stock_in': balance['stock_in'],
@@ -3054,27 +2978,11 @@ def warehouse_dashboard():
         total_stock_in += balance['stock_in']
         total_stock_out += balance['stock_out']
     
-    # Get recent stock movements (last 10)
-    recent_movements = db.execute_custom_query('''
-        SELECT ws.date, ws.transaction_type, b.builty_number, w.warehouse_name, ws.quantity_mt
-        FROM warehouse_stock ws
-        JOIN builty b ON ws.builty_id = b.builty_id
-        JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
-        ORDER BY ws.date DESC, ws.stock_id DESC
-        LIMIT 10
-    ''')
+    # Use optimized method for recent movements
+    recent_movements = db.get_recent_warehouse_movements(limit=10)
     
-    # Get additional stats for info section
-    account_count = len(db.get_all_accounts())
-    builty_count = len(db.get_all_builties())
-    
-    # Today's stock IN
-    today_stock_in_result = db.execute_custom_query('''
-        SELECT COALESCE(SUM(quantity_mt), 0)
-        FROM warehouse_stock
-        WHERE transaction_type = 'IN' AND date = date('now')
-    ''')
-    today_stock_in = today_stock_in_result[0][0] if today_stock_in_result else 0
+    # Use optimized method for dashboard stats
+    stats = db.get_warehouse_dashboard_stats()
     
     return render_template('warehouse/dashboard.html', 
                          warehouse_stats=warehouse_stats,
@@ -3082,9 +2990,9 @@ def warehouse_dashboard():
                          total_stock_out=total_stock_out,
                          warehouse_count=len(warehouses),
                          recent_movements=recent_movements,
-                         account_count=account_count,
-                         builty_count=builty_count,
-                         today_stock_in=today_stock_in)
+                         account_count=stats['account_count'],
+                         builty_count=stats['builty_count'],
+                         today_stock_in=stats['today_stock_in'])
 
 @app.route('/warehouse/stock-in', methods=['GET', 'POST'])
 @login_required
