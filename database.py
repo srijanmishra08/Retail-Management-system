@@ -50,6 +50,7 @@ _cache = SimpleCache(ttl=30)
 
 class Database:
     _cloud_connection = None  # Reusable connection for cloud database
+    _connection_time = None   # Track when connection was created
     
     def __init__(self, db_name='fims.db'):
         self.db_name = db_name
@@ -70,15 +71,27 @@ class Database:
         else:
             print("💾 Using Local SQLite Database")
     
+    @classmethod
+    def reset_cloud_connection(cls):
+        """Reset the cloud connection - call when connection is stale"""
+        cls._cloud_connection = None
+        cls._connection_time = None
+    
     def get_connection(self):
         """Get database connection - reuse connection for cloud to reduce latency"""
         if self.use_cloud:
+            # Check if connection is too old (older than 60 seconds) - Vercel serverless can have stale connections
+            if Database._connection_time and (time.time() - Database._connection_time > 60):
+                print("[DEBUG] Connection too old, resetting...")
+                Database.reset_cloud_connection()
+            
             # Reuse connection for cloud database to avoid TCP/TLS overhead
             if Database._cloud_connection is None:
                 Database._cloud_connection = libsql.connect(
                     self.turso_url,
                     auth_token=self.turso_token
                 )
+                Database._connection_time = time.time()
             return Database._cloud_connection
         else:
             # Use local SQLite database
@@ -98,7 +111,7 @@ class Database:
         """Clear all cached data - call after write operations"""
         _cache.clear()
     
-    def execute_custom_query(self, query, params=None):
+    def execute_custom_query(self, query, params=None, _retry=True):
         """Execute a custom SQL query and return results"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -119,7 +132,15 @@ class Database:
                 return cursor.rowcount
         except Exception as e:
             print(f"Error executing query: {e}")
-            conn.rollback()
+            # Reset connection and retry once if this is a cloud connection error
+            if self.use_cloud and _retry:
+                print("[DEBUG] Retrying with fresh connection...")
+                Database.reset_cloud_connection()
+                return self.execute_custom_query(query, params, _retry=False)
+            try:
+                conn.rollback()
+            except:
+                pass
             return None
         finally:
             self.close_connection(conn)
@@ -777,7 +798,7 @@ class Database:
         _cache.set(cache_key, results)
         return results
     
-    def get_rakes_with_balances(self, limit=None):
+    def get_rakes_with_balances(self, limit=None, _retry=True):
         """Get all rakes with their balances in a single optimized query"""
         cache_key = f'rakes_with_balances_{limit}'
         cached = _cache.get(cache_key)
@@ -789,47 +810,56 @@ class Database:
         
         limit_clause = f"LIMIT {limit}" if limit else ""
         
-        cursor.execute(f'''
-            SELECT r.rake_id, r.rake_code, r.company_name, r.company_code,
-                   r.date, r.rr_quantity, r.product_name, r.product_code,
-                   r.rake_point_name, r.builty_head, r.is_closed, r.closed_at, r.shortage,
-                   COALESCE(SUM(ls.quantity_mt), 0) as dispatched
-            FROM rakes r
-            LEFT JOIN loading_slips ls ON r.rake_code = ls.rake_code
-            GROUP BY r.rake_id, r.rake_code, r.company_name, r.company_code,
-                     r.date, r.rr_quantity, r.product_name, r.product_code,
-                     r.rake_point_name, r.builty_head, r.is_closed, r.closed_at, r.shortage
-            ORDER BY r.rake_id DESC
-            {limit_clause}
-        ''')
-        
-        results = []
-        for row in cursor.fetchall():
-            rr_quantity = row[5] or 0
-            dispatched = row[13] or 0
-            results.append({
-                'rake_id': row[0],
-                'rake_code': row[1],
-                'company_name': row[2],
-                'company_code': row[3],
-                'date': row[4],
-                'rr_quantity': rr_quantity,
-                'product_name': row[6],
-                'product_code': row[7],
-                'rake_point_name': row[8],
-                'builty_head': row[9],
-                'is_closed': row[10] or 0,
-                'closed_at': row[11],
-                'shortage': row[12] or 0,
-                'dispatched': dispatched,
-                'remaining': rr_quantity - dispatched
-            })
-        
-        self.close_connection(conn)
-        _cache.set(cache_key, results)
+        try:
+            cursor.execute(f'''
+                SELECT r.rake_id, r.rake_code, r.company_name, r.company_code,
+                       r.date, r.rr_quantity, r.product_name, r.product_code,
+                       r.rake_point_name, r.builty_head, r.is_closed, r.closed_at, r.shortage,
+                       COALESCE(SUM(ls.quantity_mt), 0) as dispatched
+                FROM rakes r
+                LEFT JOIN loading_slips ls ON r.rake_code = ls.rake_code
+                GROUP BY r.rake_id, r.rake_code, r.company_name, r.company_code,
+                         r.date, r.rr_quantity, r.product_name, r.product_code,
+                         r.rake_point_name, r.builty_head, r.is_closed, r.closed_at, r.shortage
+                ORDER BY r.rake_id DESC
+                {limit_clause}
+            ''')
+            
+            results = []
+            for row in cursor.fetchall():
+                rr_quantity = row[5] or 0
+                dispatched = row[13] or 0
+                results.append({
+                    'rake_id': row[0],
+                    'rake_code': row[1],
+                    'company_name': row[2],
+                    'company_code': row[3],
+                    'date': row[4],
+                    'rr_quantity': rr_quantity,
+                    'product_name': row[6],
+                    'product_code': row[7],
+                    'rake_point_name': row[8],
+                    'builty_head': row[9],
+                    'is_closed': row[10] or 0,
+                    'closed_at': row[11],
+                    'shortage': row[12] or 0,
+                    'dispatched': dispatched,
+                    'remaining': rr_quantity - dispatched
+                })
+            
+            self.close_connection(conn)
+            _cache.set(cache_key, results)
+            return results
+        except Exception as e:
+            print(f"Error in get_rakes_with_balances: {e}")
+            if self.use_cloud and _retry:
+                print("[DEBUG] Retrying get_rakes_with_balances with fresh connection...")
+                Database.reset_cloud_connection()
+                return self.get_rakes_with_balances(limit, _retry=False)
+            return []
         return results
     
-    def get_dashboard_stats_optimized(self):
+    def get_dashboard_stats_optimized(self, _retry=True):
         """Get all admin dashboard stats in a SINGLE query"""
         cache_key = 'admin_dashboard_stats_optimized'
         cached = _cache.get(cache_key)
@@ -839,46 +869,61 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Single query for all counts and stats
-        cursor.execute('''
-            SELECT 
-                (SELECT COUNT(*) FROM rakes) as total_rakes,
-                (SELECT COUNT(*) FROM rakes WHERE is_closed = 0 OR is_closed IS NULL) as active_rakes,
-                (SELECT COUNT(*) FROM builty) as total_builties,
-                (SELECT COUNT(*) FROM loading_slips) as total_loading_slips,
-                (SELECT COUNT(*) FROM accounts) as total_accounts,
-                (SELECT COUNT(*) FROM warehouses) as total_warehouses,
-                (SELECT COALESCE(SUM(rr_quantity), 0) FROM rakes) as total_stock,
-                (SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips) as total_dispatched,
-                (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock) as total_stock_in,
-                (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock) as total_stock_out,
-                (SELECT COUNT(*) FROM ebills) as total_ebills,
-                (SELECT COALESCE(SUM(amount), 0) FROM ebills) as total_ebill_amount
-        ''')
-        
-        row = cursor.fetchone()
-        total_stock_in = row[8] or 0
-        total_stock_out = row[9] or 0
-        
-        stats = {
-            'total_rakes': row[0] or 0,
-            'active_rakes': row[1] or 0,
-            'total_builties': row[2] or 0,
-            'total_loading_slips': row[3] or 0,
-            'total_accounts': row[4] or 0,
-            'total_warehouses': row[5] or 0,
-            'total_stock': row[6] or 0,
-            'total_dispatched': row[7] or 0,
-            'total_stock_in': total_stock_in,
-            'total_stock_out': total_stock_out,
-            'balance_stock': total_stock_in - total_stock_out,
-            'total_ebills': row[10] or 0,
-            'total_ebill_amount': row[11] or 0
-        }
-        
-        self.close_connection(conn)
-        _cache.set(cache_key, stats)
-        return stats
+        try:
+            # Single query for all counts and stats
+            cursor.execute('''
+                SELECT 
+                    (SELECT COUNT(*) FROM rakes) as total_rakes,
+                    (SELECT COUNT(*) FROM rakes WHERE is_closed = 0 OR is_closed IS NULL) as active_rakes,
+                    (SELECT COUNT(*) FROM builty) as total_builties,
+                    (SELECT COUNT(*) FROM loading_slips) as total_loading_slips,
+                    (SELECT COUNT(*) FROM accounts) as total_accounts,
+                    (SELECT COUNT(*) FROM warehouses) as total_warehouses,
+                    (SELECT COALESCE(SUM(rr_quantity), 0) FROM rakes) as total_stock,
+                    (SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips) as total_dispatched,
+                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock) as total_stock_in,
+                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock) as total_stock_out,
+                    (SELECT COUNT(*) FROM ebills) as total_ebills,
+                    (SELECT COALESCE(SUM(amount), 0) FROM ebills) as total_ebill_amount
+            ''')
+            
+            row = cursor.fetchone()
+            total_stock_in = row[8] or 0
+            total_stock_out = row[9] or 0
+            
+            stats = {
+                'total_rakes': row[0] or 0,
+                'active_rakes': row[1] or 0,
+                'total_builties': row[2] or 0,
+                'total_loading_slips': row[3] or 0,
+                'total_accounts': row[4] or 0,
+                'total_warehouses': row[5] or 0,
+                'total_stock': row[6] or 0,
+                'total_dispatched': row[7] or 0,
+                'total_stock_in': total_stock_in,
+                'total_stock_out': total_stock_out,
+                'balance_stock': total_stock_in - total_stock_out,
+                'total_ebills': row[10] or 0,
+                'total_ebill_amount': row[11] or 0
+            }
+            
+            self.close_connection(conn)
+            _cache.set(cache_key, stats)
+            return stats
+        except Exception as e:
+            print(f"Error in get_dashboard_stats_optimized: {e}")
+            if self.use_cloud and _retry:
+                print("[DEBUG] Retrying get_dashboard_stats_optimized with fresh connection...")
+                Database.reset_cloud_connection()
+                return self.get_dashboard_stats_optimized(_retry=False)
+            # Return default stats on error
+            return {
+                'total_rakes': 0, 'active_rakes': 0, 'total_builties': 0,
+                'total_loading_slips': 0, 'total_accounts': 0, 'total_warehouses': 0,
+                'total_stock': 0, 'total_dispatched': 0, 'total_stock_in': 0,
+                'total_stock_out': 0, 'balance_stock': 0, 'total_ebills': 0,
+                'total_ebill_amount': 0
+            }
     
     def count_active_rakes_optimized(self):
         """Count active rakes (with remaining stock) in a single query instead of loop"""
