@@ -158,7 +158,7 @@ def admin_add_rake():
     companies = db.get_all_companies()
     return render_template('admin/add_rake.html', products=products, companies=companies)
 
-@app.route('/admin/close-rake/<rake_code>', methods=['POST'])
+@app.route('/admin/close-rake/<path:rake_code>', methods=['POST'])
 @login_required
 def admin_close_rake(rake_code):
     if current_user.role != 'Admin':
@@ -174,7 +174,7 @@ def admin_close_rake(rake_code):
     
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/admin/reopen-rake/<rake_code>', methods=['POST'])
+@app.route('/admin/reopen-rake/<path:rake_code>', methods=['POST'])
 @login_required
 def admin_reopen_rake(rake_code):
     if current_user.role != 'Admin':
@@ -270,7 +270,7 @@ def admin_summary():
                          warehouse_summary=warehouse_summary,
                          total_shortage=total_shortage or 0)
 
-@app.route('/admin/rake-details/<rake_code>')
+@app.route('/admin/rake-details/<path:rake_code>')
 @login_required
 def admin_rake_details(rake_code):
     """View detailed dispatch information for a specific rake"""
@@ -459,7 +459,7 @@ def admin_download_rake_summary_excel():
         download_name=f'rake_summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
-@app.route('/admin/download-rake-details-excel/<rake_code>')
+@app.route('/admin/download-rake-details-excel/<path:rake_code>')
 @login_required
 def admin_download_rake_details_excel(rake_code):
     """Download individual rake details as Excel file"""
@@ -1691,7 +1691,7 @@ def admin_logistic_bill():
                          selected_company=selected_company,
                          selected_rake=selected_rake)
 
-@app.route('/admin/logistic-bill/rake-data/<rake_code>')
+@app.route('/admin/logistic-bill/rake-data/<path:rake_code>')
 @login_required
 def admin_logistic_bill_rake_data(rake_code):
     """API to get rake transport data for logistic bill"""
@@ -2140,7 +2140,7 @@ def admin_save_rake_bill_payment():
         print(f"Error saving rake bill payment: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/admin/get-rake-bill-payment/<rake_code>')
+@app.route('/admin/get-rake-bill-payment/<path:rake_code>')
 @login_required
 def admin_get_rake_bill_payment(rake_code):
     """Get rake bill payment information"""
@@ -2690,7 +2690,7 @@ def rakepoint_create_loading_slip():
                          trucks=trucks,
                          builties=builties)
 
-@app.route('/api/rake-balance/<rake_code>')
+@app.route('/api/rake-balance/<path:rake_code>')
 @login_required
 def get_rake_balance_api(rake_code):
     """API endpoint to get rake balance"""
@@ -2703,7 +2703,7 @@ def get_rake_balance_api(rake_code):
     else:
         return jsonify({'error': 'Rake not found'}), 404
 
-@app.route('/api/next-serial-number/<rake_code>')
+@app.route('/api/next-serial-number/<path:rake_code>')
 @login_required
 def get_next_serial_number_api(rake_code):
     """API endpoint to get next serial number for rake"""
@@ -2950,7 +2950,7 @@ def rakepoint_print_builty(builty_id):
     
     return render_template('print_builty.html', builty=builty_dict)
 
-@app.route('/rakepoint/loading-slips/<rake_code>')
+@app.route('/rakepoint/loading-slips/<path:rake_code>')
 @login_required
 def rakepoint_view_loading_slips(rake_code):
     if current_user.role != 'RakePoint':
