@@ -1626,6 +1626,11 @@ class Database:
             ''', (truck_number, driver_name, driver_mobile, owner_name, owner_mobile))
             truck_id = cursor.lastrowid
             conn.commit()
+            
+            # Reset connection after write to ensure subsequent operations see the new truck
+            if self.use_cloud:
+                Database.reset_cloud_connection()
+            
             return truck_id
         except Exception as e:
             print(f"Error adding truck: {e}")
@@ -1682,6 +1687,11 @@ class Database:
                 cursor.execute('SELECT builty_id FROM builty WHERE builty_number = ? ORDER BY builty_id DESC LIMIT 1', (builty_number,))
                 result = cursor.fetchone()
                 builty_id = result[0] if result else None
+            
+            # CRITICAL: Invalidate cache and reset connection after write
+            self.invalidate_cache()
+            if self.use_cloud:
+                Database.reset_cloud_connection()
             
             return builty_id
         except Exception as e:
@@ -1783,6 +1793,10 @@ class Database:
             
             # CRITICAL: Invalidate cache after successful write
             self.invalidate_cache()
+            
+            # CRITICAL: Reset cloud connection after write to ensure subsequent reads see the new data
+            if self.use_cloud:
+                Database.reset_cloud_connection()
             
             return slip_id
         except Exception as e:
@@ -2078,6 +2092,9 @@ class Database:
             
             conn.commit()
             self.invalidate_cache()  # Clear cache after update
+            # Reset cloud connection after write to ensure subsequent reads see the new data
+            if self.use_cloud:
+                Database.reset_cloud_connection()
             return True, "Loading slip updated successfully"
         except Exception as e:
             print(f"Error updating loading slip: {e}")
@@ -2143,6 +2160,9 @@ class Database:
             
             conn.commit()
             self.invalidate_cache()  # Clear cache after update
+            # Reset cloud connection after write to ensure subsequent reads see the new data
+            if self.use_cloud:
+                Database.reset_cloud_connection()
             return True, "Builty updated successfully"
         except Exception as e:
             print(f"Error updating builty: {e}")
@@ -2174,6 +2194,12 @@ class Database:
             
             stock_id = cursor.lastrowid
             conn.commit()
+            
+            # CRITICAL: Invalidate cache and reset connection after write
+            self.invalidate_cache()
+            if self.use_cloud:
+                Database.reset_cloud_connection()
+            
             return stock_id
         except Exception as e:
             print(f"Error adding stock in: {e}")
@@ -2196,6 +2222,12 @@ class Database:
             
             stock_id = cursor.lastrowid
             conn.commit()
+            
+            # CRITICAL: Invalidate cache and reset connection after write
+            self.invalidate_cache()
+            if self.use_cloud:
+                Database.reset_cloud_connection()
+            
             return stock_id
         except Exception as e:
             print(f"Error adding stock out: {e}")
