@@ -65,7 +65,7 @@
                                 </a>
                                 <button type="button" class="btn btn-sm btn-warning ms-1" 
                                         title="Edit Builty"
-                                        onclick="openEditBuiltyModal({{ builty[0] }}, '{{ builty[10] if builty[10] else '' }}', {{ builty[12] }}, {{ builty[13] }}, {{ builty[15] if builty[15] else 0 }}, {{ builty[16] if builty[16] else 0 }}, {{ builty[17] if builty[17] else 0 }}, {{ builty[18] if builty[18] else 0 }})">
+                                        onclick="openEditBuiltyModal({{ builty[0] }}, '{{ builty[10] if builty[10] else '' }}', {{ builty[12] }}, {{ builty[13] }}, {{ builty[15] if builty[15] else 0 }}, {{ builty[16] if builty[16] else 0 }}, {{ builty[17] if builty[17] else 0 }}, {{ builty[18] if builty[18] else 0 }}, '{{ builty[3] if builty[3] else '' }}')">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-danger ms-1" 
@@ -207,6 +207,13 @@
                             <input type="number" step="0.01" class="form-control" id="edit_to_pay" name="to_pay">
                         </div>
                     </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit_builty_date" class="form-label">Builty Date</label>
+                            <input type="date" class="form-control" id="edit_builty_date" name="date">
+                            <small class="text-muted">Leave empty to keep current date</small>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -247,7 +254,7 @@
     }
     
     // Edit builty modal
-    function openEditBuiltyModal(builtyId, unloadingPoint, bags, mt, rate, freight, advance, toPay) {
+    function openEditBuiltyModal(builtyId, unloadingPoint, bags, mt, rate, freight, advance, toPay, dateStr) {
         document.getElementById('editBuiltyForm').action = '/admin/edit-builty/' + builtyId;
         document.getElementById('edit_unloading_point').value = unloadingPoint || '';
         document.getElementById('edit_number_of_bags').value = bags;
@@ -256,6 +263,14 @@
         document.getElementById('edit_total_freight').value = freight;
         document.getElementById('edit_advance').value = advance;
         document.getElementById('edit_to_pay').value = toPay;
+        
+        // Set date field if provided (take first 10 chars for YYYY-MM-DD)
+        const dateField = document.getElementById('edit_builty_date');
+        if (dateStr && dateStr.length >= 10) {
+            dateField.value = dateStr.substring(0, 10);
+        } else {
+            dateField.value = '';
+        }
         
         // Reset to manual entry by default with current unloading point
         document.getElementById('edit_unloading_type').value = 'manual';

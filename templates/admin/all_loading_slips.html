@@ -66,7 +66,7 @@
                                 </a>
                                 <button type="button" class="btn btn-sm btn-warning ms-1" 
                                         title="Edit Loading Slip"
-                                        onclick="openEditSlipModal({{ slip[0] }}, '{{ slip[4] }}', {{ slip[6] }}, {{ slip[7] }}, '{{ slip[12] }}')">
+                                        onclick="openEditSlipModal({{ slip[0] }}, '{{ slip[4] }}', {{ slip[6] }}, {{ slip[7] }}, '{{ slip[12] }}', '{{ slip[11] if slip[11] else '' }}')">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-danger ms-1" 
@@ -189,6 +189,11 @@
                         <label for="edit_goods_name" class="form-label">Goods Name</label>
                         <input type="text" class="form-control" id="edit_goods_name" name="goods_name" required>
                     </div>
+                    <div class="mb-3">
+                        <label for="edit_date" class="form-label">Date</label>
+                        <input type="datetime-local" class="form-control" id="edit_date" name="date">
+                        <small class="text-muted">Leave empty to keep current date</small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -240,12 +245,21 @@
     }
     
     // Edit loading slip modal
-    function openEditSlipModal(slipId, destination, bags, mt, goods) {
+    function openEditSlipModal(slipId, destination, bags, mt, goods, dateStr) {
         document.getElementById('editSlipForm').action = '/admin/edit-loading-slip/' + slipId;
         document.getElementById('edit_destination').value = destination;
         document.getElementById('edit_quantity_bags').value = bags;
         document.getElementById('edit_quantity_mt').value = mt;
         document.getElementById('edit_goods_name').value = goods;
+        
+        // Set date field if provided (convert to datetime-local format)
+        const dateField = document.getElementById('edit_date');
+        if (dateStr && dateStr.length >= 16) {
+            // Convert from "2026-01-17 10:30:00" to "2026-01-17T10:30"
+            dateField.value = dateStr.replace(' ', 'T').substring(0, 16);
+        } else {
+            dateField.value = '';
+        }
         
         // Reset to manual entry by default with current destination
         document.getElementById('edit_destination_type').value = 'manual';

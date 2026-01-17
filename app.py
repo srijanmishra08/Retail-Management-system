@@ -1400,8 +1400,9 @@ def admin_edit_loading_slip(slip_id):
     quantity_bags = int(request.form.get('quantity_bags', 0))
     quantity_mt = float(request.form.get('quantity_mt', 0))
     goods_name = request.form.get('goods_name')
+    date = request.form.get('date') or None  # New date field
     
-    success, message = db.update_loading_slip(slip_id, destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id)
+    success, message = db.update_loading_slip(slip_id, destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id, date)
     
     if success:
         flash(message, 'success')
@@ -1430,8 +1431,9 @@ def admin_edit_builty(builty_id):
     total_freight = float(request.form.get('total_freight', 0))
     advance = float(request.form.get('advance', 0))
     to_pay = float(request.form.get('to_pay', 0))
+    date = request.form.get('date') or None  # New date field
     
-    success, message = db.update_builty(builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id, warehouse_id, cgmf_id)
+    success, message = db.update_builty(builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id, warehouse_id, cgmf_id, date)
     
     if success:
         flash(message, 'success')
@@ -2577,18 +2579,13 @@ def rakepoint_create_loading_slip():
                                       warehouse_account_id, warehouse_account_type)
         
         if slip_id:
+            # CRITICAL: Invalidate cache after successful write to prevent stale data
+            db.invalidate_cache()
+            
             flash(f'Loading slip #{serial_number} created successfully!', 'success')
             if request.form.get('action') == 'print':
-                # Store slip_id in session to open print in new window
-                return render_template('rakepoint/create_loading_slip.html', 
-                                     rakes=db.get_active_rakes(),
-                                     accounts=db.get_all_accounts(),
-                                     warehouses=db.get_all_warehouses(),
-                                     companies=db.get_all_companies(),
-                                     cgmf_list=db.get_all_cgmf(),
-                                     trucks=db.get_all_trucks(),
-                                     builties=db.get_all_builties(),
-                                     print_slip_id=slip_id)
+                # Use redirect with print flag to prevent form resubmission on refresh
+                return redirect(url_for('rakepoint_create_loading_slip', print_slip=slip_id))
             return redirect(url_for('rakepoint_dashboard'))
         else:
             flash('Error creating loading slip', 'error')
@@ -2601,6 +2598,9 @@ def rakepoint_create_loading_slip():
     trucks = db.get_all_trucks()
     builties = db.get_all_builties()
     
+    # Check if we need to print a slip (from POST redirect)
+    print_slip_id = request.args.get('print_slip', type=int)
+    
     return render_template('rakepoint/create_loading_slip.html', 
                          rakes=rakes,
                          accounts=accounts,
@@ -2608,7 +2608,8 @@ def rakepoint_create_loading_slip():
                          companies=companies,
                          cgmf_list=cgmf_list,
                          trucks=trucks,
-                         builties=builties)
+                         builties=builties,
+                         print_slip_id=print_slip_id)
 
 @app.route('/api/rake-balance/<path:rake_code>')
 @login_required
@@ -3239,16 +3240,13 @@ def warehouse_create_loading_slip():
                                       mobile_number_1, mobile_number_2, truck_details, None, cgmf_id)
         
         if slip_id:
+            # CRITICAL: Invalidate cache after successful write to prevent stale data
+            db.invalidate_cache()
+            
             flash(f'Loading slip #{serial_number} created successfully!', 'success')
             if request.form.get('action') == 'print':
-                # Return to form with print_slip_id to open print in new window
-                return render_template('warehouse/create_loading_slip.html',
-                                     warehouses=db.get_all_warehouses(),
-                                     accounts=db.get_all_accounts(),
-                                     cgmf_list=db.get_all_cgmf(),
-                                     trucks=db.get_all_trucks(),
-                                     products=db.get_all_products(),
-                                     print_slip_id=slip_id)
+                # Use redirect to prevent form resubmission on refresh
+                return redirect(url_for('warehouse_create_loading_slip', print_slip=slip_id))
             return redirect(url_for('warehouse_dashboard'))
         else:
             flash('Error creating loading slip', 'error')
@@ -3259,12 +3257,16 @@ def warehouse_create_loading_slip():
     trucks = db.get_all_trucks()
     products = db.get_all_products()
     
+    # Check if we need to print a slip (from POST redirect)
+    print_slip_id = request.args.get('print_slip', type=int)
+    
     return render_template('warehouse/create_loading_slip.html',
                          warehouses=warehouses,
                          accounts=accounts,
                          cgmf_list=cgmf_list,
                          trucks=trucks,
-                         products=products)
+                         products=products,
+                         print_slip_id=print_slip_id)
 
 @app.route('/warehouse/loading-slips')
 @login_required

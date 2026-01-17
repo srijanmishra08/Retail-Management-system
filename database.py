@@ -1781,6 +1781,9 @@ class Database:
                 result = cursor.fetchone()
                 slip_id = result[0] if result else None
             
+            # CRITICAL: Invalidate cache after successful write
+            self.invalidate_cache()
+            
             return slip_id
         except Exception as e:
             print(f"Error adding loading slip: {e}")
@@ -2032,7 +2035,7 @@ class Database:
         self.close_connection(conn)
         return slip
     
-    def update_loading_slip(self, slip_id, destination, quantity_bags, quantity_mt, goods_name, account_id=None, warehouse_id=None, cgmf_id=None):
+    def update_loading_slip(self, slip_id, destination, quantity_bags, quantity_mt, goods_name, account_id=None, warehouse_id=None, cgmf_id=None, date=None):
         """Update loading slip details"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -2043,22 +2046,38 @@ class Database:
             if not old_slip:
                 return False, "Loading slip not found"
             
-            # Update with account/warehouse/cgmf IDs if provided
-            if account_id or warehouse_id or cgmf_id:
-                cursor.execute('''
-                    UPDATE loading_slips 
-                    SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?,
-                        account_id = ?, warehouse_id = ?, cgmf_id = ?
-                    WHERE slip_id = ?
-                ''', (destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id, slip_id))
+            # Update with account/warehouse/cgmf IDs and date if provided
+            if date:
+                if account_id or warehouse_id or cgmf_id:
+                    cursor.execute('''
+                        UPDATE loading_slips 
+                        SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?,
+                            account_id = ?, warehouse_id = ?, cgmf_id = ?, created_at = ?
+                        WHERE slip_id = ?
+                    ''', (destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id, date, slip_id))
+                else:
+                    cursor.execute('''
+                        UPDATE loading_slips 
+                        SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?, created_at = ?
+                        WHERE slip_id = ?
+                    ''', (destination, quantity_bags, quantity_mt, goods_name, date, slip_id))
             else:
-                cursor.execute('''
-                    UPDATE loading_slips 
-                    SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?
-                    WHERE slip_id = ?
-                ''', (destination, quantity_bags, quantity_mt, goods_name, slip_id))
+                if account_id or warehouse_id or cgmf_id:
+                    cursor.execute('''
+                        UPDATE loading_slips 
+                        SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?,
+                            account_id = ?, warehouse_id = ?, cgmf_id = ?
+                        WHERE slip_id = ?
+                    ''', (destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id, slip_id))
+                else:
+                    cursor.execute('''
+                        UPDATE loading_slips 
+                        SET destination = ?, quantity_bags = ?, quantity_mt = ?, goods_name = ?
+                        WHERE slip_id = ?
+                    ''', (destination, quantity_bags, quantity_mt, goods_name, slip_id))
             
             conn.commit()
+            self.invalidate_cache()  # Clear cache after update
             return True, "Loading slip updated successfully"
         except Exception as e:
             print(f"Error updating loading slip: {e}")
@@ -2067,7 +2086,7 @@ class Database:
         finally:
             self.close_connection(conn)
     
-    def update_builty(self, builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id=None, warehouse_id=None, cgmf_id=None):
+    def update_builty(self, builty_id, unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id=None, warehouse_id=None, cgmf_id=None, date=None):
         """Update builty details"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -2080,22 +2099,39 @@ class Database:
             old_quantity = old_builty[13]  # quantity_mt
             quantity_diff = quantity_mt - old_quantity
             
-            # Update builty with account/warehouse/cgmf IDs if provided
-            if account_id or warehouse_id or cgmf_id:
-                cursor.execute('''
-                    UPDATE builty 
-                    SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
-                        rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?,
-                        account_id = ?, warehouse_id = ?, cgmf_id = ?
-                    WHERE builty_id = ?
-                ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id, warehouse_id, cgmf_id, builty_id))
+            # Update builty with account/warehouse/cgmf IDs and date if provided
+            if date:
+                if account_id or warehouse_id or cgmf_id:
+                    cursor.execute('''
+                        UPDATE builty 
+                        SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
+                            rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?,
+                            account_id = ?, warehouse_id = ?, cgmf_id = ?, date = ?
+                        WHERE builty_id = ?
+                    ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id, warehouse_id, cgmf_id, date, builty_id))
+                else:
+                    cursor.execute('''
+                        UPDATE builty 
+                        SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
+                            rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?, date = ?
+                        WHERE builty_id = ?
+                    ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, date, builty_id))
             else:
-                cursor.execute('''
-                    UPDATE builty 
-                    SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
-                        rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?
-                    WHERE builty_id = ?
-                ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, builty_id))
+                if account_id or warehouse_id or cgmf_id:
+                    cursor.execute('''
+                        UPDATE builty 
+                        SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
+                            rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?,
+                            account_id = ?, warehouse_id = ?, cgmf_id = ?
+                        WHERE builty_id = ?
+                    ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, account_id, warehouse_id, cgmf_id, builty_id))
+                else:
+                    cursor.execute('''
+                        UPDATE builty 
+                        SET unloading_point = ?, number_of_bags = ?, quantity_mt = ?, 
+                            rate_per_mt = ?, total_freight = ?, advance = ?, to_pay = ?
+                        WHERE builty_id = ?
+                    ''', (unloading_point, number_of_bags, quantity_mt, rate_per_mt, total_freight, advance, to_pay, builty_id))
             
             # Update warehouse stock if there was a quantity change
             if quantity_diff != 0:
@@ -2106,6 +2142,7 @@ class Database:
                 ''', (quantity_diff, builty_id))
             
             conn.commit()
+            self.invalidate_cache()  # Clear cache after update
             return True, "Builty updated successfully"
         except Exception as e:
             print(f"Error updating builty: {e}")
