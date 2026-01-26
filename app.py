@@ -6,6 +6,7 @@ Role-based application with specific dashboards
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from urllib.parse import unquote
 from datetime import datetime, timedelta
 import os
 from database import Database
@@ -145,6 +146,9 @@ def admin_close_rake(rake_code):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
+    
     success, result = db.close_rake(rake_code)
     
     if success:
@@ -160,6 +164,9 @@ def admin_reopen_rake(rake_code):
     if current_user.role != 'Admin':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
+    
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
     
     success = db.reopen_rake(rake_code)
     
