@@ -244,6 +244,9 @@ def admin_rake_details(rake_code):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
+    
     # Get rake basic info
     rake_info = db.execute_custom_query('''
         SELECT r.rake_code, r.company_name, r.product_name, r.date, 
@@ -432,6 +435,9 @@ def admin_download_rake_details_excel(rake_code):
     if current_user.role != 'Admin':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
+    
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
     
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -1636,6 +1642,9 @@ def admin_logistic_bill_rake_data(rake_code):
     if current_user.role != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
     
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
+    
     try:
         data = db.get_rake_transport_data(rake_code)
     except Exception as e:
@@ -2084,6 +2093,9 @@ def admin_get_rake_bill_payment(rake_code):
     """Get rake bill payment information"""
     if current_user.role != 'Admin':
         return jsonify({'error': 'Unauthorized'}), 403
+    
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
     
     try:
         payment_data = db.get_rake_bill_payment(rake_code)
@@ -2625,6 +2637,9 @@ def get_rake_balance_api(rake_code):
     if current_user.role != 'RakePoint':
         return jsonify({'error': 'Unauthorized'}), 403
     
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
+    
     balance = db.get_rake_balance(rake_code)
     if balance:
         return jsonify(balance)
@@ -2637,6 +2652,9 @@ def get_next_serial_number_api(rake_code):
     """API endpoint to get next serial number for rake"""
     if current_user.role != 'RakePoint':
         return jsonify({'error': 'Unauthorized'}), 403
+    
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
     
     next_serial = db.get_next_serial_number_for_rake(rake_code)
     return jsonify({'next_serial': next_serial})
@@ -2884,6 +2902,9 @@ def rakepoint_view_loading_slips(rake_code):
     if current_user.role != 'RakePoint':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
+    
+    # URL decode the rake_code to handle special characters like &, spaces, etc.
+    rake_code = unquote(rake_code)
     
     rake = db.get_rake_by_code(rake_code)
     slips = db.get_loading_slips_by_rake(rake_code)
