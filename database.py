@@ -1103,6 +1103,10 @@ class Database:
             
             conn.commit()
             self.close_connection(conn)
+            # Invalidate cache and reset cloud connection after write
+            self.invalidate_cache()
+            if self.use_cloud:
+                Database.reset_cloud_connection()
             return True, shortage
         except Exception as e:
             conn.rollback()
@@ -1135,6 +1139,10 @@ class Database:
             
             conn.commit()
             self.close_connection(conn)
+            # Invalidate cache and reset cloud connection after write
+            self.invalidate_cache()
+            if self.use_cloud:
+                Database.reset_cloud_connection()
             return True, "Rake reopened successfully"
         except Exception as e:
             conn.rollback()
