@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Allotment - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('warehouse_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="row">
+    <!-- Stock Allotment Form -->
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-arrow-left-right"></i> Stock Allotment</h5>
+                <small>Transfer stock from one account to another</small>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('warehouse_do_creation') }}" id="allotmentForm">
+                    <!-- Warehouse Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-building"></i> Warehouse <span class="text-danger">*</span></label>
+                        <select name="warehouse_id" id="warehouse_id" class="form-select" required onchange="updateAvailableStock()">
+                            <option value="">-- Select Warehouse --</option>
+                            {% for wh in warehouses %}
+                            <option value="{{ wh[0] }}">{{ wh[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Product Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-box-seam"></i> Product <span class="text-danger">*</span></label>
+                        <select name="product_id" id="product_id" class="form-select" required onchange="updateAvailableStock()">
+                            <option value="">-- Select Product --</option>
+                            {% for p in products %}
+                            <option value="{{ p[0] }}">{{ p[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Company Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-briefcase"></i> Company</label>
+                        <select name="company_id" id="company_id" class="form-select" onchange="updateAvailableStock()">
+                            <option value="">-- All Companies --</option>
+                            {% for c in companies %}
+                            <option value="{{ c[0] }}">{{ c[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- FROM Account Type -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-danger"><i class="bi bi-box-arrow-right"></i> FROM (Source) <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select name="from_account_type" id="from_account_type" class="form-select" style="max-width: 120px;" onchange="updateFromAccountOptions()">
+                                <option value="company">Company</option>
+                                <option value="account">Account</option>
+                                <option value="cgmf">CGMF</option>
+                            </select>
+                            <select name="from_account" id="from_account" class="form-select border-danger" required onchange="updateAvailableQty()">
+                                <option value="">-- Select Source --</option>
+                            </select>
+                        </div>
+                        <div class="form-text" id="availableQtyDisplay">
+                            <span class="text-muted">Select warehouse, product and source to see available stock</span>
+                        </div>
+                    </div>
+
+                    <!-- TO Account Type -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-success"><i class="bi bi-box-arrow-in-right"></i> TO (Destination) <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select name="to_account_type" id="to_account_type" class="form-select" style="max-width: 120px;" onchange="updateToAccountOptions()">
+                                <option value="account">Account</option>
+                                <option value="company">Company</option>
+                                <option value="cgmf">CGMF</option>
+                            </select>
+                            <select name="to_account" id="to_account" class="form-select border-success" required>
+                                <option value="">-- Select Destination --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Quantity -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-calculator"></i> Quantity (MT) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" name="quantity" id="quantity" class="form-control form-control-lg text-center" required placeholder="0.00">
+                    </div>
+
+                    <!-- Date -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-calendar3"></i> Allotment Date <span class="text-danger">*</span></label>
+                        <input type="date" name="allotment_date" id="allotment_date" class="form-control" required>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-sticky"></i> Notes</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-check2-circle"></i> Process Allotment
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Stock & History -->
+    <div class="col-md-7">
+        <!-- Available Stock Summary -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-box-seam"></i> Available Stock by Account</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0" id="availableStockTable">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Product</th>
+                                <th>Company</th>
+                                <th>Account/CGMF</th>
+                                <th>Warehouse</th>
+                                <th class="text-end">Balance (MT)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if available_stock %}
+                                {% for stock in available_stock %}
+                                <tr>
+                                    <td>{{ stock[1] or 'N/A' }}</td>
+                                    <td>{{ stock[3] or 'N/A' }}</td>
+                                    <td>
+                                        {% if stock[5] %}
+                                            <span class="badge bg-info">{{ stock[5] }} ({{ stock[6] }})</span>
+                                        {% elif stock[11] %}
+                                            <span class="badge bg-warning text-dark">{{ stock[11] }} (CGMF)</span>
+                                        {% elif stock[3] %}
+                                            <span class="badge bg-primary">{{ stock[3] }} (Company)</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ stock[8] or 'N/A' }}</td>
+                                    <td class="text-end fw-bold text-success">{{ "%.2f"|format(stock[9]) }}</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                onclick="selectStock({{ stock[0] }}, {{ stock[2] or 'null' }}, {{ stock[4] or 'null' }}, {{ stock[7] }}, {{ stock[9] }}, {{ stock[10] or 'null' }})">
+                                            <i class="bi bi-arrow-right"></i> Select
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox"></i> No stock available
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Allotment History -->
+        <div class="card shadow">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Allotments</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Date</th>
+                                <th>Product</th>
+                                <th>Entity</th>
+                                <th>Type</th>
+                                <th class="text-end">QT (MT)</th>
+                                <th>Warehouse</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if allotment_history %}
+                                {% for txn in allotment_history %}
+                                <tr>
+                                    <td>{{ txn[0]|format_date if txn[0] else 'N/A' }}</td>
+                                    <td>{{ txn[1] or 'N/A' }}</td>
+                                    <td>{{ txn[3] or 'N/A' }}</td>
+                                    <td>
+                                        {% if txn[5] == 'IN' %}
+                                            <span class="badge bg-success">IN</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">OUT</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">{{ "%.2f"|format(txn[4]) }}</td>
+                                    <td>{{ txn[6] or 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox"></i> No allotments yet
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8f9fa;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Set today's date as default
+document.getElementById('allotment_date').value = new Date().toISOString().split('T')[0];
+
+// Data for dropdowns
+const companies = [
+    {% for c in companies %}
+    { id: {{ c[0] }}, name: "{{ c[1] }}", code: "{{ c[2] or '' }}" },
+    {% endfor %}
+];
+
+const accounts = [
+    {% for acc in accounts %}
+    { id: {{ acc[0] }}, name: "{{ acc[1] }}", type: "{{ acc[2] }}" },
+    {% endfor %}
+];
+
+const cgmfList = [
+    {% for cg in cgmf_list %}
+    { id: {{ cg[0] }}, name: "{{ cg[1] }}", district: "{{ cg[2] or '' }}", destination: "{{ cg[3] or '' }}" },
+    {% endfor %}
+];
+
+// Store available stock data for quick lookup
+const availableStock = [
+    {% for stock in available_stock %}
+    {
+        product_id: {{ stock[0] }},
+        product_name: "{{ stock[1] or 'N/A' }}",
+        company_id: {{ stock[2] or 'null' }},
+        company_name: "{{ stock[3] or 'N/A' }}",
+        account_id: {{ stock[4] or 'null' }},
+        account_name: "{{ stock[5] or 'N/A' }}",
+        account_type: "{{ stock[6] or '' }}",
+        warehouse_id: {{ stock[7] }},
+        warehouse_name: "{{ stock[8] or 'N/A' }}",
+        balance: {{ stock[9] }},
+        cgmf_id: {{ stock[10] or 'null' }},
+        cgmf_name: "{{ stock[11] or '' }}"
+    },
+    {% endfor %}
+];
+
+// Initialize dropdowns on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateFromAccountOptions();
+    updateToAccountOptions();
+});
+
+function updateFromAccountOptions() {
+    const type = document.getElementById('from_account_type').value;
+    const select = document.getElementById('from_account');
+    select.innerHTML = '<option value="">-- Select Source --</option>';
+    
+    if (type === 'company') {
+        companies.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${c.name} (${c.code})</option>`;
+        });
+    } else if (type === 'cgmf') {
+        cgmfList.forEach(cg => {
+            select.innerHTML += `<option value="${cg.id}">${cg.name} - ${cg.district}</option>`;
+        });
+    } else {
+        // Group accounts by type
+        const types = ['Payal', 'Dealer', 'Retailer', 'Farmer', 'Other'];
+        types.forEach(accType => {
+            const filtered = accounts.filter(a => a.type === accType);
+            if (filtered.length > 0) {
+                select.innerHTML += `<optgroup label="${accType}">`;
+                filtered.forEach(a => {
+                    select.innerHTML += `<option value="${a.id}">${a.name}</option>`;
+                });
+                select.innerHTML += '</optgroup>';
+            }
+        });
+        // Add any accounts not in standard types
+        const otherAccounts = accounts.filter(a => !types.includes(a.type));
+        if (otherAccounts.length > 0) {
+            select.innerHTML += '<optgroup label="Other">';
+            otherAccounts.forEach(a => {
+                select.innerHTML += `<option value="${a.id}">${a.name} (${a.type})</option>`;
+            });
+            select.innerHTML += '</optgroup>';
+        }
+    }
+    updateAvailableQty();
+}
+
+function updateToAccountOptions() {
+    const type = document.getElementById('to_account_type').value;
+    const select = document.getElementById('to_account');
+    select.innerHTML = '<option value="">-- Select Destination --</option>';
+    
+    if (type === 'company') {
+        companies.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${c.name} (${c.code})</option>`;
+        });
+    } else if (type === 'cgmf') {
+        cgmfList.forEach(cg => {
+            select.innerHTML += `<option value="${cg.id}">${cg.name} - ${cg.district}</option>`;
+        });
+    } else {
+        // Group accounts by type
+        const types = ['Payal', 'Dealer', 'Retailer', 'Farmer', 'Other'];
+        types.forEach(accType => {
+            const filtered = accounts.filter(a => a.type === accType);
+            if (filtered.length > 0) {
+                select.innerHTML += `<optgroup label="${accType}">`;
+                filtered.forEach(a => {
+                    select.innerHTML += `<option value="${a.id}">${a.name}</option>`;
+                });
+                select.innerHTML += '</optgroup>';
+            }
+        });
+        // Add any accounts not in standard types
+        const otherAccounts = accounts.filter(a => !types.includes(a.type));
+        if (otherAccounts.length > 0) {
+            select.innerHTML += '<optgroup label="Other">';
+            otherAccounts.forEach(a => {
+                select.innerHTML += `<option value="${a.id}">${a.name} (${a.type})</option>`;
+            });
+            select.innerHTML += '</optgroup>';
+        }
+    }
+}
+
+function selectStock(productId, companyId, accountId, warehouseId, balance, cgmfId) {
+    // Set form values
+    document.getElementById('warehouse_id').value = warehouseId;
+    document.getElementById('product_id').value = productId;
+    if (companyId) {
+        document.getElementById('company_id').value = companyId;
+    }
+    
+    // Determine source type and set dropdown
+    if (cgmfId) {
+        document.getElementById('from_account_type').value = 'cgmf';
+        updateFromAccountOptions();
+        document.getElementById('from_account').value = cgmfId;
+    } else if (accountId) {
+        document.getElementById('from_account_type').value = 'account';
+        updateFromAccountOptions();
+        document.getElementById('from_account').value = accountId;
+    } else if (companyId) {
+        document.getElementById('from_account_type').value = 'company';
+        updateFromAccountOptions();
+        document.getElementById('from_account').value = companyId;
+    }
+    
+    // Update available qty display
+    document.getElementById('availableQtyDisplay').innerHTML = 
+        `<span class="text-success fw-bold">Available: ${balance.toFixed(2)} MT</span>`;
+    
+    // Set max quantity
+    document.getElementById('quantity').max = balance;
+}
+
+function updateAvailableStock() {
+    updateAvailableQty();
+}
+
+function updateAvailableQty() {
+    const warehouseId = document.getElementById('warehouse_id').value;
+    const productId = document.getElementById('product_id').value;
+    const companyId = document.getElementById('company_id').value;
+    const fromAccountId = document.getElementById('from_account').value;
+    const fromAccountType = document.getElementById('from_account_type').value;
+    
+    if (!warehouseId || !productId || !fromAccountId) {
+        document.getElementById('availableQtyDisplay').innerHTML = 
+            '<span class="text-muted">Select warehouse, product and source to see available stock</span>';
+        return;
+    }
+    
+    // Find matching stock based on type
+    let match;
+    if (fromAccountType === 'account') {
+        match = availableStock.find(s => 
+            s.warehouse_id == warehouseId && 
+            s.product_id == productId && 
+            s.account_id == fromAccountId
+        );
+    } else if (fromAccountType === 'company') {
+        match = availableStock.find(s => 
+            s.warehouse_id == warehouseId && 
+            s.product_id == productId && 
+            s.company_id == fromAccountId &&
+            !s.account_id && !s.cgmf_id
+        );
+    } else if (fromAccountType === 'cgmf') {
+        match = availableStock.find(s => 
+            s.warehouse_id == warehouseId && 
+            s.product_id == productId && 
+            s.cgmf_id == fromAccountId
+        );
+    }
+    
+    if (match) {
+        document.getElementById('availableQtyDisplay').innerHTML = 
+            `<span class="text-success fw-bold">Available: ${match.balance.toFixed(2)} MT</span>`;
+        document.getElementById('quantity').max = match.balance;
+    } else {
+        document.getElementById('availableQtyDisplay').innerHTML = 
+            '<span class="text-warning">No stock available for this selection</span>';
+        document.getElementById('quantity').max = 0;
+    }
+}
+
+// Form validation
+document.getElementById('allotmentForm').addEventListener('submit', function(e) {
+    const fromAccount = document.getElementById('from_account').value;
+    const toAccount = document.getElementById('to_account').value;
+    const fromType = document.getElementById('from_account_type').value;
+    const toType = document.getElementById('to_account_type').value;
+    
+    if (fromAccount === toAccount && fromType === toType) {
+        e.preventDefault();
+        alert('FROM and TO cannot be the same!');
+        return false;
+    }
+});
+</script>
+{% endblock %}

@@ -76,7 +76,7 @@
                         <td>{{ "%.2f"|format(stock[3]) }} MT</td>
                         <td>{{ "%.2f"|format(stock[4]) }} MT</td>
                         <td><strong>{{ "%.2f"|format(stock[5]) }} MT</strong></td>
-                        <td>{{ stock[6] }}</td>
+                        <td>{{ stock[6]|format_date if stock[6] else '-' }}</td>
                         <td>{{ stock[8] if stock[8] else '-' }}</td>
                     </tr>
                     {% endfor %}

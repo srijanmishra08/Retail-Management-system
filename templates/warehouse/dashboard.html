@@ -44,6 +44,49 @@
 
 <div class="row">
     <div class="col-md-8">
+        <!-- Current Stock by Account -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-people"></i> Current Stock by Account/Company/CGMF</h5>
+                <a href="{{ url_for('warehouse_do_creation') }}" class="btn btn-sm btn-light">
+                    <i class="bi bi-arrow-left-right"></i> Stock Allotment
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Warehouse</th>
+                                <th>Entity</th>
+                                <th>Type</th>
+                                <th class="text-end">Balance (MT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if account_stock %}
+                                {% for stock in account_stock %}
+                                <tr>
+                                    <td>{{ stock[1] }}</td>
+                                    <td><strong>{{ stock[3] }}</strong></td>
+                                    <td><span class="badge bg-{{ 'primary' if stock[4] == 'Company' else ('warning text-dark' if stock[4] == 'CGMF' else ('info' if stock[4] == 'Payal' else ('success' if stock[4] == 'Dealer' else 'secondary'))) }}">{{ stock[4] }}</span></td>
+                                    <td class="text-end fw-bold text-success">{{ "%.2f"|format(stock[5]) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-3">
+                                        <i class="bi bi-inbox"></i> No stock assigned yet
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Stock Movements -->
         <div class="card">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Stock Movements</h5>

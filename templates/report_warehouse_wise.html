@@ -44,7 +44,7 @@
                         <td>{{ "%.2f"|format(stock[3]) }} MT</td>
                         <td>{{ "%.2f"|format(stock[4]) }} MT</td>
                         <td><strong>{{ "%.2f"|format(stock[5]) }} MT</strong></td>
-                        <td>{{ stock[6] }}</td>
+                        <td>{{ stock[6]|format_date if stock[6] else '-' }}</td>
                         <td>{{ ((datetime.now().date() - datetime.strptime(stock[6], '%Y-%m-%d').date()).days) if stock[6] else 0 }} days</td>
                     </tr>
                     {% endfor %}

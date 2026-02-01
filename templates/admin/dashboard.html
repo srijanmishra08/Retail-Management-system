@@ -6,13 +6,13 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-speedometer2"></i> Admin Dashboard</h2>
     <div class="text-muted">
-        <i class="bi bi-calendar3"></i> {{ datetime.now().strftime('%B %d, %Y') }}
+        <i class="bi bi-calendar3"></i> {{ datetime.now().strftime('%d-%m-%y') }}
     </div>
 </div>
 
 <!-- Statistics Cards -->
 <div class="row mb-4">
-    <div class="col-md-4">
+    <div class="col-md-6">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-primary bg-opacity-10 text-primary">
@@ -26,80 +26,7 @@
         </div>
     </div>
     
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-success bg-opacity-10 text-success">
-                    <i class="bi bi-file-text"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Total Builties</div>
-                    <h3 class="mb-0">{{ stats.total_builties }}</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-warning bg-opacity-10 text-warning">
-                    <i class="bi bi-boxes"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Balance Stock</div>
-                    <h3 class="mb-0">{{ "%.2f"|format(stats.balance_stock) }} MT</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Warehouse Stock Summary -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-success bg-opacity-10 text-success">
-                    <i class="bi bi-arrow-down-circle"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Total Warehouse Stock IN</div>
-                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in) }} MT</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
-                    <i class="bi bi-arrow-up-circle"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Total Warehouse Stock OUT</div>
-                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_out) }} MT</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
-                    <i class="bi bi-box-seam"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Net Warehouse Balance</div>
-                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in - stats.total_stock_out) }} MT</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3">
+    <div class="col-md-6">
         <div class="stat-card">
             <div class="d-flex align-items-center">
                 <div class="stat-icon bg-danger bg-opacity-10 text-danger">
@@ -113,6 +40,84 @@
         </div>
     </div>
 </div>
+
+<!-- Warehouse Stock Summary -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-success bg-opacity-10 text-success">
+                    <i class="bi bi-arrow-down-circle"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Total Warehouse Stock IN</div>
+                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in) }} MT</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                    <i class="bi bi-arrow-up-circle"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Total Warehouse Stock OUT</div>
+                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_out) }} MT</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="d-flex align-items-center">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="ms-3 flex-grow-1">
+                    <div class="text-muted small">Net Warehouse Balance</div>
+                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in - stats.total_stock_out) }} MT</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Day-wise Warehouse Stock -->
+{% if daywise_stock %}
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-calendar-day"></i> Day-wise Warehouse Stock (Last 7 Days)</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Date</th>
+                        <th class="text-end text-success">Stock IN (MT)</th>
+                        <th class="text-end text-danger">Stock OUT (MT)</th>
+                        <th class="text-end text-primary">Net (MT)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in daywise_stock %}
+                    <tr>
+                        <td>{{ day.date|format_date }}</td>
+                        <td class="text-end text-success">{{ "%.2f"|format(day.stock_in) }}</td>
+                        <td class="text-end text-danger">{{ "%.2f"|format(day.stock_out) }}</td>
+                        <td class="text-end text-primary"><strong>{{ "%.2f"|format(day.stock_in - day.stock_out) }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Quick Actions -->
 <div class="row mb-4">
@@ -258,7 +263,9 @@
                         <th>Product</th>
                         <th>Date</th>
                         <th>RR Quantity</th>
-                        <th>Qty Dispatched</th>
+                        <th>Loading Slip QT</th>
+                        <th>Builty QT</th>
+                        <th class="text-warning">Trucks Loading</th>
                         <th>Remaining</th>
                         <th>Shortage</th>
                         <th>Status</th>
@@ -272,9 +279,27 @@
                         <td><strong>{{ rake.rake_code }}</strong></td>
                         <td>{{ rake.company_name }}</td>
                         <td>{{ rake.product_name }}</td>
-                        <td>{{ rake.date }}</td>
+                        <td>{{ rake.date|format_date }}</td>
                         <td>{{ "%.2f"|format(rake.rr_quantity|float) }} MT</td>
                         <td class="text-primary"><strong>{{ "%.2f"|format(rake.dispatched|float) }} MT</strong></td>
+                        <td class="text-info">
+                            <strong>{{ "%.2f"|format(rake.builty_total|float) }} MT</strong>
+                            {% if rake.builty_total > rake.dispatched %}
+                                <i class="bi bi-exclamation-triangle text-danger" title="Builty QT exceeds Loading Slip QT - Data inconsistency!"></i>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set trucks_loading = rake.dispatched - rake.builty_total %}
+                            {% if trucks_loading > 0 %}
+                                <span class="text-warning"><strong>{{ "%.2f"|format(trucks_loading|float) }} MT</strong></span>
+                                <i class="bi bi-truck text-warning" title="Stock in transit on trucks"></i>
+                            {% elif trucks_loading < 0 %}
+                                <span class="text-danger"><strong>{{ "%.2f"|format(trucks_loading|float) }} MT</strong></span>
+                                <i class="bi bi-exclamation-circle text-danger" title="Negative! More builties than loading slips"></i>
+                            {% else %}
+                                <span class="text-muted">0.00 MT</span>
+                            {% endif %}
+                        </td>
                         <td class="text-success"><strong>{{ "%.2f"|format(rake.remaining|float) }} MT</strong></td>
                         <td>
                             {% if rake.is_closed %}

@@ -67,7 +67,7 @@
                             {% if recent_builties %}
                                 {% for builty in recent_builties %}
                                 <tr>
-                                    <td>{{ builty[3] }}</td>
+                                    <td>{{ builty[3]|format_date }}</td>
                                     <td><strong>{{ builty[1] }}</strong></td>
                                     <td><strong>{{ builty[26] if builty[26] else 'N/A' }}</strong></td>
                                     <td>{{ builty[11] }}</td>

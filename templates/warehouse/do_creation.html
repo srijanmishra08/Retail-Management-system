@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}DO Creation - FIMS{% endblock %}
+{% block title %}Stock Allotment - FIMS{% endblock %}
 
 {% block content %}
 <div class="mb-4">
@@ -9,165 +9,376 @@
     </a>
 </div>
 
-<div class="card">
-    <div class="card-header bg-primary text-white">
-        <h4 class="mb-0"><i class="bi bi-file-earmark-spreadsheet"></i> DO Creation (Dispatch Order)</h4>
-        <small>Edit stock account and quantity for warehouse transfers</small>
-    </div>
-    <div class="card-body">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i> <strong>Info:</strong> This page allows you to edit the account details and quantity for stock that has been transferred to warehouses from rakes.
+<div class="row">
+    <!-- Stock Allotment Form -->
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-arrow-left-right"></i> Stock Allotment</h5>
+                <small>Reassign stock from one account to another</small>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info py-2">
+                    <i class="bi bi-info-circle"></i> Transfer existing warehouse stock between accounts
+                </div>
+                
+                <form method="POST" action="{{ url_for('warehouse_do_creation') }}" id="allotmentForm">
+                    <!-- Warehouse Selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-building"></i> Warehouse <span class="text-danger">*</span></label>
+                        <select name="warehouse_id" id="warehouse_id" class="form-select" required onchange="filterAccountsByWarehouse()">
+                            <option value="">-- Select Warehouse --</option>
+                            {% for wh in warehouses %}
+                            <option value="{{ wh[0] }}">{{ wh[1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <!-- FROM Account -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-danger"><i class="bi bi-box-arrow-right"></i> FROM Account <span class="text-danger">*</span></label>
+                        <select name="from_account" id="from_account" class="form-select border-danger" required onchange="updateAvailableQty()">
+                            <option value="">-- First select a warehouse --</option>
+                        </select>
+                        <div class="form-text" id="availableQtyDisplay">
+                            <span class="text-muted">Select warehouse and account to see available stock</span>
+                        </div>
+                    </div>
+
+                    <!-- TO Account -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-success"><i class="bi bi-box-arrow-in-right"></i> TO Account <span class="text-danger">*</span></label>
+                        <select name="to_account" id="to_account" class="form-select border-success" required>
+                            <option value="">-- Select Destination --</option>
+                            {% if companies %}
+                            <optgroup label="🏢 Company">
+                                {% for company in companies %}
+                                <option value="COMPANY:{{ company[0] }}">{{ company[1] }} ({{ company[2] if company[2] else 'Company' }})</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% if cgmf_list %}
+                            <optgroup label="🏛️ CGMF">
+                                {% for cgmf in cgmf_list %}
+                                <option value="CGMF:{{ cgmf[0] }}">{{ cgmf[1] }} - {{ cgmf[2] }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% for acc_type in ['Payal', 'Dealer', 'Retailer'] %}
+                            <optgroup label="👤 {{ acc_type }}">
+                                {% for account in accounts %}
+                                    {% if account[2] == acc_type %}
+                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <!-- Quantity -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-calculator"></i> Quantity (MT) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" name="quantity" id="quantity" class="form-control form-control-lg text-center" required placeholder="0.00">
+                    </div>
+
+                    <!-- Date -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-calendar3"></i> Allotment Date <span class="text-danger">*</span></label>
+                        <input type="date" name="allotment_date" id="allotment_date" class="form-control" required>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-sticky"></i> Notes</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Optional notes"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-check2-circle"></i> Process Allotment
+                    </button>
+                </form>
+            </div>
         </div>
-        
-        <div class="table-responsive">
-            <table class="table table-hover table-striped">
-                <thead class="table-dark">
-                    <tr>
-                        <th>#</th>
-                        <th>Rake Code</th>
-                        <th>Slip #</th>
-                        <th>Warehouse</th>
-                        <th>Product</th>
-                        <th>Current Account</th>
-                        <th>Account Type</th>
-                        <th>Quantity (MT)</th>
-                        <th>Date</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if warehouse_stock_data %}
-                        {% for item in warehouse_stock_data %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td><strong>{{ item[1] }}</strong></td>
-                            <td>{{ item[2] }}</td>
-                            <td>{{ item[7] }}</td>
-                            <td>{{ item[6] }}</td>
-                            <td>
-                                {% if item[9] %}
-                                    <span class="badge bg-info">{{ item[9] }}</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Not Assigned</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if item[12] %}
-                                    <span class="badge bg-success">{{ item[12] }}</span>
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">{{ "%.2f"|format(item[4]) }}</td>
-                            <td>{{ item[5] }}</td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" onclick="editDO({{ item[0] }}, '{{ item[1] }}', {{ item[4] }}, {{ item[11] if item[11] else 'null' }}, '{{ item[12] if item[12] else '' }}')" data-bs-toggle="modal" data-bs-target="#editDOModal">
-                                    <i class="bi bi-pencil"></i> Edit
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="10" class="text-center text-muted py-4">
-                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                                No warehouse stock transfers found
-                            </td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
+    </div>
+
+    <!-- Current Stock by Account & History -->
+    <div class="col-md-7">
+        <!-- Current Stock by Account -->
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-people"></i> Current Stock by Account</h5>
+                <small>Accounts with stock available for allotment</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0" id="accountStockTable">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Warehouse</th>
+                                <th>Account</th>
+                                <th>Type</th>
+                                <th class="text-end">Balance (MT)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if account_stock %}
+                                {% for stock in account_stock %}
+                                <tr data-warehouse="{{ stock[0] }}">
+                                    <td>{{ stock[1] }}</td>
+                                    <td><strong>{{ stock[3] }}</strong></td>
+                                    <td><span class="badge bg-{{ 'primary' if stock[4] == 'Company' else ('warning text-dark' if stock[4] == 'CGMF' else ('info' if stock[4] == 'Payal' else ('success' if stock[4] == 'Dealer' else 'secondary'))) }}">{{ stock[4] }}</span></td>
+                                    <td class="text-end fw-bold text-success">{{ "%.2f"|format(stock[5]) }}</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                onclick="selectFromAccount({{ stock[0] }}, {{ stock[2] }}, {{ stock[5] }}, '{{ stock[4] }}')">
+                                            <i class="bi bi-arrow-right"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox"></i> No stock assigned to any account yet
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Allotment History -->
+        <div class="card shadow">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Allotments</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Date</th>
+                                <th>Account</th>
+                                <th>Type</th>
+                                <th class="text-end">QT (MT)</th>
+                                <th>Warehouse</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if allotment_history %}
+                                {% for txn in allotment_history %}
+                                <tr>
+                                    <td>{{ txn[0]|format_date if txn[0] else 'N/A' }}</td>
+                                    <td>{{ txn[1] or 'N/A' }}</td>
+                                    <td>
+                                        {% if txn[4] == 'IN' %}
+                                            <span class="badge bg-success">IN</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">OUT</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">{{ "%.2f"|format(txn[3]) }}</td>
+                                    <td>{{ txn[5] or 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox"></i> No allotments yet
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Edit DO Modal -->
-<div class="modal fade" id="editDOModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{{ url_for('warehouse_do_creation') }}">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Dispatch Order</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="loading_slip_id" name="loading_slip_id">
-                    
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Rake Code</label>
-                        <input type="text" class="form-control bg-light" id="rake_code_display" readonly>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="account_id" class="form-label fw-bold">Select Account <span class="text-danger">*</span></label>
-                        <select class="form-select" id="account_id" name="account_id" required>
-                            <option value="">-- Select Account --</option>
-                            <optgroup label="Dealers">
-                                {% for account in accounts %}
-                                    {% if account[2] == 'Dealer' %}
-                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            </optgroup>
-                            <optgroup label="Payal (Company)">
-                                {% for account in accounts %}
-                                    {% if account[2] == 'Payal' %}
-                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            </optgroup>
-                            <optgroup label="Retailers">
-                                {% for account in accounts %}
-                                    {% if account[2] == 'Retailer' %}
-                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            </optgroup>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="quantity" class="form-label fw-bold">Quantity (MT) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" class="form-control" id="quantity" name="quantity" required placeholder="0.00">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="do_date" class="form-label fw-bold">DO Date <span class="text-danger">*</span></label>
-                        <input type="date" class="form-control" id="do_date" name="do_date" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="notes" class="form-label fw-bold">Notes</label>
-                        <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Additional notes (optional)"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-circle"></i> Update DO
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<style>
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8f9fa;
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function editDO(slipId, rakeCode, quantity, accountId, accountType) {
-    document.getElementById('loading_slip_id').value = slipId;
-    document.getElementById('rake_code_display').value = rakeCode;
-    document.getElementById('quantity').value = quantity;
+// Set today's date as default
+document.getElementById('allotment_date').value = new Date().toISOString().split('T')[0];
+
+// Account stock data (includes Accounts, CGMF, and Companies)
+const accountStock = [
+    {% for stock in account_stock %}
+    {
+        warehouse_id: {{ stock[0] }},
+        warehouse_name: "{{ stock[1] }}",
+        entity_id: {{ stock[2] }},
+        entity_name: "{{ stock[3] }}",
+        entity_type: "{{ stock[4] }}",
+        balance: {{ stock[5] }}
+    },
+    {% endfor %}
+];
+
+// All accounts for TO dropdown
+const allAccounts = [
+    {% for acc in accounts %}
+    { id: {{ acc[0] }}, name: "{{ acc[1] }}", type: "{{ acc[2] }}" },
+    {% endfor %}
+];
+
+function filterAccountsByWarehouse() {
+    const warehouseId = document.getElementById('warehouse_id').value;
+    const fromSelect = document.getElementById('from_account');
     
-    // Set today's date as default
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('do_date').value = today;
+    // Clear and rebuild FROM dropdown
+    fromSelect.innerHTML = '<option value="">-- Select Source Account --</option>';
     
-    // Set account if exists
-    if (accountId) {
-        document.getElementById('account_id').value = accountId;
+    if (!warehouseId) {
+        fromSelect.innerHTML = '<option value="">-- First select a warehouse --</option>';
+        document.getElementById('availableQtyDisplay').innerHTML = 
+            '<span class="text-muted">Select warehouse and account to see available stock</span>';
+        return;
+    }
+    
+    // Filter entities that have stock in selected warehouse
+    const filtered = accountStock.filter(s => s.warehouse_id == warehouseId);
+    
+    if (filtered.length === 0) {
+        fromSelect.innerHTML = '<option value="">-- No accounts with stock in this warehouse --</option>';
+        return;
+    }
+    
+    // Group by entity type
+    const groups = {
+        'Company': { label: '🏢 Company', items: [] },
+        'CGMF': { label: '🏛️ CGMF', items: [] },
+        'Payal': { label: '👤 Payal', items: [] },
+        'Dealer': { label: '🏪 Dealer', items: [] },
+        'Retailer': { label: '🛒 Retailer', items: [] }
+    };
+    
+    filtered.forEach(s => {
+        if (groups[s.entity_type]) {
+            groups[s.entity_type].items.push(s);
+        } else {
+            // Handle unknown types
+            if (!groups['Other']) {
+                groups['Other'] = { label: '📦 Other', items: [] };
+            }
+            groups['Other'].items.push(s);
+        }
+    });
+    
+    // Build dropdown with groups
+    Object.entries(groups).forEach(([type, group]) => {
+        if (group.items.length > 0) {
+            fromSelect.innerHTML += `<optgroup label="${group.label}">`;
+            group.items.forEach(s => {
+                // Use appropriate prefix for entity type
+                let valuePrefix = '';
+                if (s.entity_type === 'CGMF') valuePrefix = 'CGMF:';
+                else if (s.entity_type === 'Company') valuePrefix = 'COMPANY:';
+                // Regular accounts use plain ID
+                
+                fromSelect.innerHTML += `<option value="${valuePrefix}${s.entity_id}" data-balance="${s.balance}">${s.entity_name} (${s.balance.toFixed(2)} MT)</option>`;
+            });
+            fromSelect.innerHTML += '</optgroup>';
+        }
+    });
+}
+
+function updateAvailableQty() {
+    const warehouseId = document.getElementById('warehouse_id').value;
+    const fromAccountVal = document.getElementById('from_account').value;
+    
+    if (!warehouseId || !fromAccountVal) {
+        document.getElementById('availableQtyDisplay').innerHTML = 
+            '<span class="text-muted">Select warehouse and account to see available stock</span>';
+        return;
+    }
+    
+    // Parse entity type and ID from value
+    let entityType = 'Account';
+    let entityId = fromAccountVal;
+    if (fromAccountVal.startsWith('CGMF:')) {
+        entityType = 'CGMF';
+        entityId = fromAccountVal.replace('CGMF:', '');
+    } else if (fromAccountVal.startsWith('COMPANY:')) {
+        entityType = 'Company';
+        entityId = fromAccountVal.replace('COMPANY:', '');
+    }
+    
+    // Find matching stock
+    const match = accountStock.find(s => {
+        if (s.warehouse_id != warehouseId) return false;
+        if (s.entity_type === entityType || 
+            (entityType === 'Account' && ['Payal', 'Dealer', 'Retailer'].includes(s.entity_type))) {
+            return s.entity_id == entityId;
+        }
+        return false;
+    });
+    
+    if (match) {
+        document.getElementById('availableQtyDisplay').innerHTML = 
+            `<span class="text-success fw-bold"><i class="bi bi-check-circle"></i> Available: ${match.balance.toFixed(2)} MT</span>`;
+        document.getElementById('quantity').max = match.balance;
+        document.getElementById('quantity').placeholder = `Max: ${match.balance.toFixed(2)}`;
+    } else {
+        document.getElementById('availableQtyDisplay').innerHTML = 
+            '<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> No stock available</span>';
+        document.getElementById('quantity').max = 0;
     }
 }
+
+function selectFromAccount(warehouseId, entityId, balance, entityType) {
+    // Set warehouse
+    document.getElementById('warehouse_id').value = warehouseId;
+    filterAccountsByWarehouse();
+    
+    // Determine value with prefix
+    let value = entityId;
+    if (entityType === 'CGMF') value = 'CGMF:' + entityId;
+    else if (entityType === 'Company') value = 'COMPANY:' + entityId;
+    
+    // Set account after dropdown is populated
+    setTimeout(() => {
+        document.getElementById('from_account').value = value;
+        updateAvailableQty();
+    }, 100);
+}
+
+// Form validation
+document.getElementById('allotmentForm').addEventListener('submit', function(e) {
+    const fromAccount = document.getElementById('from_account').value;
+    const toAccount = document.getElementById('to_account').value;
+    
+    if (fromAccount === toAccount) {
+        e.preventDefault();
+        alert('FROM and TO accounts cannot be the same!');
+        return false;
+    }
+    
+    const qty = parseFloat(document.getElementById('quantity').value);
+    const max = parseFloat(document.getElementById('quantity').max);
+    if (qty > max) {
+        e.preventDefault();
+        alert(`Quantity cannot exceed available stock (${max.toFixed(2)} MT)`);
+        return false;
+    }
+});
 </script>
 {% endblock %}

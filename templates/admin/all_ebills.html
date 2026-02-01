@@ -37,7 +37,7 @@
                         <tr>
                             <td>{{ ebill[0] }}</td>
                             <td><strong>{{ ebill[1] }}</strong></td>
-                            <td>{{ ebill[3][:10] if ebill[3] else 'N/A' }}</td>
+                            <td>{{ ebill[3]|format_date if ebill[3] else 'N/A' }}</td>
                             <td>{{ ebill[6] }}</td>
                             <td>{{ ebill[9] }}</td>
                             <td>{{ ebill[11] }}</td>
@@ -65,7 +65,7 @@
                                     <span class="badge bg-secondary">No Eway</span>
                                 {% endif %}
                             </td>
-                            <td>{{ ebill[5][:16] if ebill[5] else 'N/A' }}</td>
+                            <td>{{ ebill[5]|format_date if ebill[5] else 'N/A' }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

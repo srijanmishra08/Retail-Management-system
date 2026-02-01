@@ -134,14 +134,16 @@
             
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label for="account_id" class="form-label">Account / CGMF <span class="text-danger">*</span></label>
+                    <label for="account_id" class="form-label">Account / Company / CGMF <span class="text-danger">*</span></label>
                     <select class="form-select" id="account_id" name="account_id" required onchange="toggleSubHead()">
-                        <option value="">-- Select Account/CGMF --</option>
-                        <optgroup label="👥 Accounts (Dealers/Retailers)">
-                            {% for account in accounts %}
-                            <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }} - {{ account[2] }}</option>
+                        <option value="">-- Select Account/Company/CGMF --</option>
+                        {% if companies %}
+                        <optgroup label="🏢 Company">
+                            {% for company in companies %}
+                            <option value="COMPANY:{{ company[0] }}" data-type="Company">{{ company[1] }} ({{ company[2] if company[2] else 'Company' }})</option>
                             {% endfor %}
                         </optgroup>
+                        {% endif %}
                         {% if cgmf_list %}
                         <optgroup label="🏛️ CGMF (CG Markfed)">
                             {% for cgmf in cgmf_list %}
@@ -149,6 +151,27 @@
                             {% endfor %}
                         </optgroup>
                         {% endif %}
+                        <optgroup label="👤 Payal">
+                            {% for account in accounts %}
+                                {% if account[2] == 'Payal' %}
+                            <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="👥 Dealer">
+                            {% for account in accounts %}
+                                {% if account[2] == 'Dealer' %}
+                            <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="🛒 Retailer">
+                            {% for account in accounts %}
+                                {% if account[2] == 'Retailer' %}
+                            <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </optgroup>
                     </select>
                     <small class="form-text text-muted">Select the account or CGMF society this stock belongs to</small>
                 </div>

@@ -37,7 +37,7 @@
                         {% for ebill in ebills %}
                         <tr>
                             <td><strong>{{ ebill[1] }}</strong></td>
-                            <td>{{ ebill[3][:10] if ebill[3] else 'N/A' }}</td>
+                            <td>{{ ebill[3]|format_date if ebill[3] else 'N/A' }}</td>
                             <td>{{ ebill[6] }}</td>
                             <td>{{ ebill[9] if ebill[9] else 'N/A' }}</td>
                             <td>{{ ebill[10] if ebill[10] else 'N/A' }}</td>

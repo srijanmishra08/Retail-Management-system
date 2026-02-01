@@ -34,7 +34,7 @@
                         {% for builty in builties %}
                         <tr>
                             <td><strong>{{ builty[1] }}</strong></td>
-                            <td>{{ builty[3][:10] if builty[3] else 'N/A' }}</td>
+                            <td>{{ builty[3]|format_date if builty[3] else 'N/A' }}</td>
                             <td>{{ builty[19] if builty[19] else 'N/A' }}</td>
                             <td>{{ builty[11] }}</td>
                             <td>{{ builty[12] }}</td>

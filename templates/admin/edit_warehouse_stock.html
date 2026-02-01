@@ -4,106 +4,106 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-pencil-square"></i> Edit Warehouse Stock Allocations</h2>
+    <div>
+        <h2><i class="bi bi-pencil-square"></i> Edit Warehouse Stock</h2>
+        <p class="text-muted mb-0">View and adjust stock balances by Account, Company, or CGMF</p>
+    </div>
     <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left"></i> Back to Dashboard
     </a>
 </div>
 
-<div class="card">
-    <div class="card-body">
+<div class="card shadow">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-people"></i> Current Stock by Account/Company/CGMF</h5>
+    </div>
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-hover mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>S.No.</th>
-                        <th>Date</th>
                         <th>Warehouse</th>
-                        <th>Company</th>
-                        <th>Product</th>
-                        <th>Quantity (MT)</th>
-                        <th>Account Type</th>
-                        <th>Dealer Name</th>
-                        <th>Remark</th>
-                        <th>Action</th>
+                        <th>Entity Name</th>
+                        <th>Type</th>
+                        <th class="text-end">Current Balance (MT)</th>
+                        <th class="text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if stock_entries %}
-                        {% for stock in stock_entries %}
+                    {% if all_stock %}
+                        {% for stock in all_stock %}
                         <tr>
-                            <td>{{ stock[1] or '-' }}</td>
-                            <td>{{ stock[9] }}</td>
-                            <td>{{ stock[2] }}</td>
-                            <td>{{ stock[3] or 'N/A' }}</td>
-                            <td>{{ stock[4] or 'N/A' }}</td>
-                            <td class="text-end">{{ "%.2f"|format(stock[5]) }}</td>
+                            <td>{{ stock.warehouse_name }}</td>
+                            <td><strong>{{ stock.entity_name }}</strong></td>
                             <td>
-                                {% if stock[6] %}
-                                    <span class="badge bg-info">{{ stock[6] }}</span>
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
+                                <span class="badge bg-{{ 'primary' if stock.type_display == 'Company' else ('warning text-dark' if stock.type_display == 'CGMF' else ('info' if stock.type_display == 'Payal' else ('success' if stock.type_display == 'Dealer' else 'secondary'))) }}">
+                                    {{ stock.type_display }}
+                                </span>
                             </td>
-                            <td>{{ stock[7] or '-' }}</td>
-                            <td><small>{{ stock[8] or '-' }}</small></td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ stock[0] }}">
-                                    <i class="bi bi-pencil"></i> Edit
+                            <td class="text-end fw-bold {{ 'text-success' if stock.balance > 0 else 'text-danger' }}">
+                                {{ "%.2f"|format(stock.balance) }}
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" 
+                                        data-bs-target="#adjustModal{{ stock.entity_type }}_{{ stock.warehouse_id }}_{{ stock.entity_id }}">
+                                    <i class="bi bi-sliders"></i> Adjust
                                 </button>
                             </td>
                         </tr>
                         
-                        <!-- Edit Modal for each stock entry -->
-                        <div class="modal fade" id="editModal{{ stock[0] }}" tabindex="-1">
+                        <!-- Adjustment Modal -->
+                        <div class="modal fade" id="adjustModal{{ stock.entity_type }}_{{ stock.warehouse_id }}_{{ stock.entity_id }}" tabindex="-1">
                             <div class="modal-dialog">
                                 <div class="modal-content">
                                     <form method="POST" action="{{ url_for('admin_edit_warehouse_stock') }}">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Edit Stock Allocation - S.No. {{ stock[1] }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        <div class="modal-header bg-primary text-white">
+                                            <h5 class="modal-title"><i class="bi bi-sliders"></i> Adjust Stock</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                                         </div>
                                         <div class="modal-body">
-                                            <input type="hidden" name="stock_id" value="{{ stock[0] }}">
+                                            <input type="hidden" name="action" value="adjust">
+                                            <input type="hidden" name="warehouse_id" value="{{ stock.warehouse_id }}">
+                                            <input type="hidden" name="entity_type" value="{{ stock.entity_type }}">
+                                            <input type="hidden" name="entity_id" value="{{ stock.entity_id }}">
                                             
-                                            <div class="mb-3">
-                                                <label class="form-label">Warehouse</label>
-                                                <input type="text" class="form-control" value="{{ stock[2] }}" readonly>
+                                            <div class="alert alert-info">
+                                                <strong>{{ stock.entity_name }}</strong><br>
+                                                <small>Warehouse: {{ stock.warehouse_name }} | Type: {{ stock.type_display }}</small>
                                             </div>
                                             
                                             <div class="mb-3">
-                                                <label class="form-label">Company - Product</label>
-                                                <input type="text" class="form-control" value="{{ stock[3] }} - {{ stock[4] }}" readonly>
+                                                <label class="form-label">Current Balance</label>
+                                                <input type="text" class="form-control form-control-lg text-center fw-bold" 
+                                                       value="{{ '%.2f'|format(stock.balance) }} MT" readonly>
                                             </div>
                                             
                                             <div class="mb-3">
-                                                <label for="quantity_mt_{{ stock[0] }}" class="form-label">Quantity (MT) <span class="text-danger">*</span></label>
-                                                <input type="number" step="0.01" class="form-control" id="quantity_mt_{{ stock[0] }}" name="quantity_mt" value="{{ stock[5] }}" required>
+                                                <label for="adjustment_{{ stock.entity_type }}_{{ stock.warehouse_id }}_{{ stock.entity_id }}" class="form-label">
+                                                    Adjustment (MT) <span class="text-danger">*</span>
+                                                </label>
+                                                <input type="number" step="0.01" class="form-control form-control-lg text-center" 
+                                                       id="adjustment_{{ stock.entity_type }}_{{ stock.warehouse_id }}_{{ stock.entity_id }}" 
+                                                       name="adjustment" required placeholder="e.g. +10 or -5">
+                                                <small class="form-text text-muted">
+                                                    Enter positive value to add stock, negative to reduce stock
+                                                </small>
                                             </div>
                                             
                                             <div class="mb-3">
-                                                <label for="account_type_{{ stock[0] }}" class="form-label">Account Type</label>
-                                                <select class="form-select" id="account_type_{{ stock[0] }}" name="account_type">
-                                                    <option value="">Select Type</option>
-                                                    <option value="Dealer" {% if stock[6] == 'Dealer' %}selected{% endif %}>Dealer</option>
-                                                    <option value="Retailer" {% if stock[6] == 'Retailer' %}selected{% endif %}>Retailer</option>
-                                                    <option value="Payal" {% if stock[6] == 'Payal' %}selected{% endif %}>Payal</option>
-                                                </select>
-                                            </div>
-                                            
-                                            <div class="mb-3">
-                                                <label for="dealer_name_{{ stock[0] }}" class="form-label">Dealer Name</label>
-                                                <input type="text" class="form-control" id="dealer_name_{{ stock[0] }}" name="dealer_name" value="{{ stock[7] or '' }}" placeholder="Enter dealer/account name">
-                                            </div>
-                                            
-                                            <div class="mb-3">
-                                                <label for="remark_{{ stock[0] }}" class="form-label">Remark (Stock Allocation Details)</label>
-                                                <textarea class="form-control" id="remark_{{ stock[0] }}" name="remark" rows="3" placeholder="Enter allocation details, notes, etc.">{{ stock[8] or '' }}</textarea>
+                                                <label for="reason_{{ stock.entity_type }}_{{ stock.warehouse_id }}_{{ stock.entity_id }}" class="form-label">
+                                                    Reason for Adjustment <span class="text-danger">*</span>
+                                                </label>
+                                                <textarea class="form-control" 
+                                                          id="reason_{{ stock.entity_type }}_{{ stock.warehouse_id }}_{{ stock.entity_id }}" 
+                                                          name="reason" rows="2" required 
+                                                          placeholder="Enter reason for this adjustment..."></textarea>
                                             </div>
                                         </div>
                                         <div class="modal-footer">
                                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="bi bi-check-lg"></i> Apply Adjustment
+                                            </button>
                                         </div>
                                     </form>
                                 </div>
@@ -112,11 +112,64 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted">No warehouse stock entries found</td>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1"></i><br>
+                                No stock entries found
+                            </td>
                         </tr>
                     {% endif %}
                 </tbody>
             </table>
+        </div>
+    </div>
+    {% if all_stock %}
+    <div class="card-footer bg-light">
+        <div class="row text-center">
+            <div class="col">
+                <strong>Total Entries:</strong> {{ all_stock|length }}
+            </div>
+            <div class="col">
+                <strong>Total Balance:</strong> 
+                <span class="text-success fw-bold">{{ "%.2f"|format(all_stock|sum(attribute='balance')) }} MT</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card mt-4 shadow">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="bi bi-info-circle"></i> How Stock Adjustments Work</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-plus-circle text-success fs-4 me-2"></i>
+                    <div>
+                        <strong>Add Stock</strong>
+                        <p class="text-muted mb-0 small">Enter a positive number (e.g., +10) to increase the stock balance</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-dash-circle text-danger fs-4 me-2"></i>
+                    <div>
+                        <strong>Reduce Stock</strong>
+                        <p class="text-muted mb-0 small">Enter a negative number (e.g., -5) to decrease the stock balance</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-journal-text text-primary fs-4 me-2"></i>
+                    <div>
+                        <strong>Audit Trail</strong>
+                        <p class="text-muted mb-0 small">All adjustments are logged with reason for accountability</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

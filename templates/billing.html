@@ -83,7 +83,7 @@
                         <td>₹{{ "%.2f"|format(bill[3]) }}</td>
                         <td>{{ "%.2f"|format(bill[4]) }} MT</td>
                         <td><strong>₹{{ "%.2f"|format(bill[5]) }}</strong></td>
-                        <td>{{ bill[6] }}</td>
+                        <td>{{ bill[6]|format_date }}</td>
                         <td>
                             <a href="{{ url_for('download_bill', bill_id=bill[0]) }}" 
                                class="btn btn-sm btn-outline-success">

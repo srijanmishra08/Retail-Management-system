@@ -48,6 +48,9 @@
                                     data-owner="{{ slip[12] }}"
                                     data-mobile1="{{ slip[13] }}"
                                     data-mobile2="{{ slip[14] }}"
+                                    data-account-id="{{ slip[15] or '' }}"
+                                    data-warehouse-id="{{ slip[16] or '' }}"
+                                    data-cgmf-id="{{ slip[17] or '' }}"
                                     data-search-text="Slip #{{ slip[2] }} {{ slip[1] }} {{ slip[8] }} MT Truck: {{ slip[9] }} Driver: {{ slip[11] }}">
                                 Slip #{{ slip[2] }} | {{ slip[1] }} | {{ slip[8] }} MT | Truck: {{ slip[9] }} | Driver: {{ slip[11] }}
                             </option>
@@ -74,6 +77,9 @@
                 <input type="hidden" id="loading_point" name="loading_point">
                 <input type="hidden" id="unloading_point" name="unloading_point">
                 <input type="hidden" id="account_warehouse" name="account_warehouse">
+                <input type="hidden" id="slip_account_id" name="slip_account_id">
+                <input type="hidden" id="slip_warehouse_id" name="slip_warehouse_id">
+                <input type="hidden" id="slip_cgmf_id" name="slip_cgmf_id">
                 <input type="hidden" id="goods_name" name="goods_name">
                 <input type="hidden" id="number_of_bags" name="number_of_bags">
                 <input type="hidden" id="quantity_wt_mt" name="quantity_wt_mt">
@@ -287,6 +293,12 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
         document.getElementById('loading_point').value = selectedOption.getAttribute('data-loading-point') || '';
         document.getElementById('unloading_point').value = selectedOption.getAttribute('data-destination') || '';
         document.getElementById('account_warehouse').value = selectedOption.getAttribute('data-account') || '';
+        
+        // Pass the actual IDs from loading slip for direct use in builty creation
+        document.getElementById('slip_account_id').value = selectedOption.getAttribute('data-account-id') || '';
+        document.getElementById('slip_warehouse_id').value = selectedOption.getAttribute('data-warehouse-id') || '';
+        document.getElementById('slip_cgmf_id').value = selectedOption.getAttribute('data-cgmf-id') || '';
+        
         document.getElementById('number_of_bags').value = selectedOption.getAttribute('data-bags') || '';
         document.getElementById('quantity_wt_mt').value = selectedOption.getAttribute('data-quantity-mt') || '';
         document.getElementById('truck_number').value = selectedOption.getAttribute('data-truck') || '';

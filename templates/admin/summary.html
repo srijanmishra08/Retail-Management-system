@@ -68,7 +68,7 @@
                             <td><strong>{{ rake.rake_code }}</strong></td>
                             <td>{{ rake.company_name }}</td>
                             <td>{{ rake.product_name }}</td>
-                            <td>{{ rake.date }}</td>
+                            <td>{{ rake.date|format_date }}</td>
                             <td>{{ "%.2f"|format(rake.rr_quantity|float) }} MT</td>
                             <td class="text-primary"><strong>{{ "%.2f"|format(rake.dispatched|float) }} MT</strong></td>
                             <td class="text-success"><strong>{{ "%.2f"|format(rake.remaining|float) }} MT</strong></td>

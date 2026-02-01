@@ -106,8 +106,8 @@
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-md-4">
-                        <h6 class="mb-1">Total Transactions</h6>
-                        <h3 class="mb-0">{{ warehouse_transactions|length }}</h3>
+                        <h6 class="mb-1">Total Products</h6>
+                        <h3 class="mb-0">{{ grouped_data|length }}</h3>
                     </div>
                     <div class="col-md-4">
                         <h6 class="mb-1">Total Stock IN</h6>
@@ -130,44 +130,44 @@
     </div>
 </div>
 
-<!-- Transactions Table -->
+<!-- Product Summary Table -->
 <div class="card">
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-bordered table-hover" id="warehouseTable">
                 <thead class="table-dark">
                     <tr>
-                        <th>S.No.</th>
-                        <th>Date</th>
-                        <th>Company</th>
-                        <th>Product</th>
-                        <th>Account</th>
-                        <th>Quantity (MT)</th>
-                        <th>Warehouse</th>
+                        <th style="width: 20%">Product</th>
+                        <th style="width: 15%" class="text-end">Total QT (MT)</th>
+                        <th style="width: 25%">Company</th>
+                        <th style="width: 15%" class="text-end">Company's QT (MT)</th>
+                        <th style="width: 25%">Warehouse</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if warehouse_transactions %}
-                        {% for txn in warehouse_transactions %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ txn[0] }}</td>
-                            <td>{{ txn[1] or 'N/A' }}</td>
-                            <td>{{ txn[2] or 'N/A' }}</td>
-                            <td>{{ txn[3] or 'N/A' }}</td>
-                            <td class="text-end">{{ "%.2f"|format(txn[4]) }}</td>
-                            <td>{{ txn[5] or 'N/A' }}</td>
-                        </tr>
+                    {% if grouped_data %}
+                        {% for product, data in grouped_data.items() %}
+                            {% for company_data in data.companies %}
+                            <tr>
+                                {% if loop.first %}
+                                <td rowspan="{{ data.companies|length }}" class="align-middle fw-bold bg-light">{{ product }}</td>
+                                <td rowspan="{{ data.companies|length }}" class="align-middle text-end fw-bold bg-light">{{ "%.2f"|format(data.total) }}</td>
+                                {% endif %}
+                                <td>{{ company_data.company }}</td>
+                                <td class="text-end">{{ "%.2f"|format(company_data.qty) }}</td>
+                                <td>{{ company_data.warehouse }}</td>
+                            </tr>
+                            {% endfor %}
                         {% endfor %}
-                        <!-- Total Row -->
-                        <tr class="table-info fw-bold">
-                            <td colspan="5" class="text-end">TOTAL =</td>
+                        <!-- Grand Total Row -->
+                        <tr class="table-primary fw-bold">
+                            <td class="text-end">GRAND TOTAL</td>
                             <td class="text-end">{{ "%.2f"|format(total_quantity) }} MT</td>
-                            <td></td>
+                            <td colspan="3"></td>
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted">
+                            <td colspan="5" class="text-center text-muted py-4">
                                 <i class="bi bi-inbox"></i> No transactions found for the selected filters
                             </td>
                         </tr>

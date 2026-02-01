@@ -65,7 +65,7 @@
                             {% if recent_ebills %}
                                 {% for ebill in recent_ebills %}
                                 <tr>
-                                    <td>{{ ebill[3][:10] if ebill[3] else 'N/A' }}</td>
+                                    <td>{{ ebill[3]|format_date if ebill[3] else 'N/A' }}</td>
                                     <td><strong>{{ ebill[6] }}</strong></td>
                                     <td>{{ ebill[11] }}</td>
                                     <td>₹{{ "{:,.2f}".format(ebill[2] if ebill[2] else 0) }}</td>

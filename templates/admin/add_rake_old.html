@@ -14,7 +14,7 @@
         <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Add New Rake</h4>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('admin_add_rake') }}" id="addRakeForm">
+        <form method="POST" action="{{ url_for('admin_add_rake') }}">
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="rake_code" class="form-label">Rake Code <span class="text-danger">*</span></label>
@@ -47,62 +47,30 @@
                 </div>
             </div>
             
-            <!-- Products Section - Multiple Products Allowed -->
-            <div class="card mb-3 border-primary">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Products</h5>
-                    <button type="button" class="btn btn-sm btn-success" onclick="addProductRow()">
-                        <i class="bi bi-plus-circle"></i> Add Product
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="product_name" class="form-label">Product Name <span class="text-danger">*</span></label>
+                    <select class="form-select" id="product_name" name="product_name" required>
+                        <option value="">Select Product</option>
+                        {% for product in products %}
+                        <option value="{{ product[1] }}" data-code="{{ product[2] }}">{{ product[1] }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-bs-toggle="modal" data-bs-target="#addProductModal">
+                        <i class="bi bi-plus-circle"></i> Add New Product
                     </button>
                 </div>
-                <div class="card-body">
-                    <div class="alert alert-info mb-3">
-                        <i class="bi bi-info-circle"></i> You can add multiple products to this rake. Click "Add Product" to add more.
-                    </div>
-                    
-                    <div id="productsContainer">
-                        <!-- Product rows will be added here -->
-                        <div class="product-row mb-3 p-3 border rounded" data-index="0">
-                            <div class="row">
-                                <div class="col-md-4 mb-2">
-                                    <label class="form-label">Product <span class="text-danger">*</span></label>
-                                    <select class="form-select product-select" name="product_ids[]" required onchange="updateProductDetails(this)">
-                                        <option value="">Select Product</option>
-                                        {% for product in products %}
-                                        <option value="{{ product[0] }}" data-name="{{ product[1] }}" data-code="{{ product[2] }}">{{ product[1] }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <input type="hidden" name="product_names[]" class="product-name-hidden">
-                                    <input type="hidden" name="product_codes[]" class="product-code-hidden">
-                                </div>
-                                <div class="col-md-3 mb-2">
-                                    <label class="form-label">Product Code</label>
-                                    <input type="text" class="form-control product-code-display" readonly placeholder="Auto-filled">
-                                </div>
-                                <div class="col-md-3 mb-2">
-                                    <label class="form-label">Quantity (MT)</label>
-                                    <input type="number" step="0.01" class="form-control product-quantity" name="product_quantities[]" placeholder="0.00" onchange="updateTotalQuantity()">
-                                </div>
-                                <div class="col-md-2 mb-2 d-flex align-items-end">
-                                    <button type="button" class="btn btn-outline-danger w-100" onclick="removeProductRow(this)" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addProductModal">
-                        <i class="bi bi-plus-circle"></i> Add New Product to System
-                    </button>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="product_code" class="form-label">Product Code</label>
+                    <input type="text" class="form-control" id="product_code" name="product_code" placeholder="e.g., URE01" readonly>
                 </div>
             </div>
             
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label for="rr_quantity" class="form-label">Total RR Quantity (MT) <span class="text-danger">*</span></label>
+                    <label for="rr_quantity" class="form-label">RR Quantity (MT) <span class="text-danger">*</span></label>
                     <input type="number" step="0.01" class="form-control" id="rr_quantity" name="rr_quantity" required placeholder="0.00">
-                    <small class="text-muted">Total quantity for all products combined</small>
                 </div>
                 
                 <div class="col-md-6 mb-3">
@@ -209,102 +177,11 @@ document.getElementById('company_name').addEventListener('change', function() {
     document.getElementById('company_code').value = companyCode || '';
 });
 
-// Product row counter
-let productRowIndex = 1;
-
-// Products data for dynamic rows
-const productsData = [
-    {% for product in products %}
-    { id: {{ product[0] }}, name: "{{ product[1] }}", code: "{{ product[2] or '' }}" },
-    {% endfor %}
-];
-
-function addProductRow() {
-    const container = document.getElementById('productsContainer');
-    const newRow = document.createElement('div');
-    newRow.className = 'product-row mb-3 p-3 border rounded';
-    newRow.setAttribute('data-index', productRowIndex);
-    
-    let productOptions = '<option value="">Select Product</option>';
-    productsData.forEach(p => {
-        productOptions += `<option value="${p.id}" data-name="${p.name}" data-code="${p.code}">${p.name}</option>`;
-    });
-    
-    newRow.innerHTML = `
-        <div class="row">
-            <div class="col-md-4 mb-2">
-                <label class="form-label">Product <span class="text-danger">*</span></label>
-                <select class="form-select product-select" name="product_ids[]" required onchange="updateProductDetails(this)">
-                    ${productOptions}
-                </select>
-                <input type="hidden" name="product_names[]" class="product-name-hidden">
-                <input type="hidden" name="product_codes[]" class="product-code-hidden">
-            </div>
-            <div class="col-md-3 mb-2">
-                <label class="form-label">Product Code</label>
-                <input type="text" class="form-control product-code-display" readonly placeholder="Auto-filled">
-            </div>
-            <div class="col-md-3 mb-2">
-                <label class="form-label">Quantity (MT)</label>
-                <input type="number" step="0.01" class="form-control product-quantity" name="product_quantities[]" placeholder="0.00" onchange="updateTotalQuantity()">
-            </div>
-            <div class="col-md-2 mb-2 d-flex align-items-end">
-                <button type="button" class="btn btn-outline-danger w-100" onclick="removeProductRow(this)">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
-        </div>
-    `;
-    
-    container.appendChild(newRow);
-    productRowIndex++;
-    
-    // Update remove button visibility
-    updateRemoveButtons();
-}
-
-function removeProductRow(btn) {
-    const row = btn.closest('.product-row');
-    row.remove();
-    updateRemoveButtons();
-    updateTotalQuantity();
-}
-
-function updateRemoveButtons() {
-    const rows = document.querySelectorAll('.product-row');
-    rows.forEach((row, index) => {
-        const removeBtn = row.querySelector('.btn-outline-danger');
-        // Show remove button only if there's more than one row
-        if (removeBtn) {
-            removeBtn.style.display = rows.length > 1 ? 'block' : 'none';
-        }
-    });
-}
-
-function updateProductDetails(selectElement) {
-    const row = selectElement.closest('.product-row');
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
-    
-    const productName = selectedOption.getAttribute('data-name') || '';
-    const productCode = selectedOption.getAttribute('data-code') || '';
-    
-    row.querySelector('.product-name-hidden').value = productName;
-    row.querySelector('.product-code-hidden').value = productCode;
-    row.querySelector('.product-code-display').value = productCode;
-}
-
-function updateTotalQuantity() {
-    let total = 0;
-    document.querySelectorAll('.product-quantity').forEach(input => {
-        const val = parseFloat(input.value) || 0;
-        total += val;
-    });
-    
-    // Optionally update RR Quantity if you want auto-sum
-    // document.getElementById('rr_quantity').value = total.toFixed(2);
-}
-
-// Initialize remove button visibility
-updateRemoveButtons();
+// Auto-fill product code when product is selected
+document.getElementById('product_name').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const productCode = selectedOption.getAttribute('data-code');
+    document.getElementById('product_code').value = productCode || '';
+});
 </script>
 {% endblock %}

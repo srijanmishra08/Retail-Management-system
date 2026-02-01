@@ -17,7 +17,16 @@
         <div class="row">
             <div class="col-md-6">
                 <p><strong>Company:</strong> {{ rake_info[1] }}</p>
+                {% if rake_products and rake_products|length > 1 %}
+                <p><strong>Products:</strong></p>
+                <ul class="list-unstyled ms-3">
+                    {% for product in rake_products %}
+                    <li><i class="bi bi-box-seam text-primary"></i> {{ product[2] }} ({{ product[3] }}) - {{ "%.2f"|format(product[4]) }} MT</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
                 <p><strong>Product:</strong> {{ rake_info[2] }}</p>
+                {% endif %}
                 <p><strong>Date:</strong> {{ rake_info[3] }}</p>
             </div>
             <div class="col-md-6">
@@ -42,7 +51,7 @@
                         <th>Account Name</th>
                         <th>Type</th>
                         <th>Total Quantity (MT)</th>
-                        <th>Loading Slips</th>
+                        <th>Builties</th>
                         <th>Details</th>
                     </tr>
                 </thead>
@@ -84,7 +93,7 @@
                         <th>Warehouse Name</th>
                         <th>Location</th>
                         <th>Total Quantity (MT)</th>
-                        <th>Loading Slips</th>
+                        <th>Builties</th>
                         <th>Details</th>
                     </tr>
                 </thead>
@@ -127,7 +136,7 @@
                         <th>District</th>
                         <th>Destination</th>
                         <th>Total Quantity (MT)</th>
-                        <th>Loading Slips</th>
+                        <th>Builties</th>
                         <th>Details</th>
                     </tr>
                 </thead>

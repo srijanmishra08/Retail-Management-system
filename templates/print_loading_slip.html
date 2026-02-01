@@ -207,7 +207,7 @@
         </div>
         <div>
             <strong>Date:</strong>
-            <span>{{ slip[13][:10] if slip[13] else 'N/A' }}</span>
+            <span>{{ slip[13]|format_date if slip[13] else 'N/A' }}</span>
         </div>
     </div>
 
@@ -308,7 +308,7 @@
     </div>
 
     <div style="margin-top: 20px; text-align: center; font-size: 9pt; color: #999;">
-        Generated on {{ slip[13] if slip[13] else 'N/A' }} | Payal Fertilizers
+        Generated on {{ slip[13]|format_date if slip[13] else 'N/A' }} | Payal Fertilizers
     </div>
 
     <script>

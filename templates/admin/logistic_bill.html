@@ -23,28 +23,42 @@
     <div class="card mb-4">
         <div class="card-header bg-dark text-white">
             <h5 class="mb-3"><i class="bi bi-list-ul"></i> Bill Summary</h5>
-            <div class="row g-2">
-                <div class="col-md-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
                     <label class="form-label mb-1">Company Filter</label>
-                    <select class="form-select form-select-sm" id="companySummaryFilter" onchange="applyFilters()">
+                    <select class="form-select form-select-sm" id="companySummaryFilter">
                         <option value="all" {% if selected_company == 'all' %}selected{% endif %}>All Companies</option>
                         {% for company in companies %}
                         <option value="{{ company[1] }}" {% if selected_company == company[1] %}selected{% endif %}>{{ company[1] }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label mb-1">Rake Filter</label>
-                    <select class="form-select form-select-sm" id="rakeSummaryFilter" onchange="applyFilters()">
+                    <select class="form-select form-select-sm" id="rakeSummaryFilter">
                         <option value="all" {% if selected_rake == 'all' %}selected{% endif %}>All Rakes</option>
                         {% for rake in rakes %}
                         <option value="{{ rake[1] }}" {% if selected_rake == rake[1] %}selected{% endif %}>{{ rake[1] }} - {{ rake[2] }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-6 text-end align-self-end">
-                    <button class="btn btn-success btn-sm" onclick="downloadBillSummaryExcel()">
-                        <i class="bi bi-file-earmark-excel"></i> Download Excel
+                <div class="col-md-2">
+                    <label class="form-label mb-1">From Date</label>
+                    <input type="date" class="form-control form-control-sm" id="dateFromFilter" value="{{ date_from or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-1">To Date</label>
+                    <input type="date" class="form-control form-control-sm" id="dateToFilter" value="{{ date_to or '' }}">
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-primary btn-sm me-1" onclick="applyFilters()" title="Apply filters">
+                        <i class="bi bi-funnel"></i> Apply Filters
+                    </button>
+                    <button class="btn btn-secondary btn-sm me-1" onclick="clearAllFilters()" title="Clear all filters">
+                        <i class="bi bi-x-circle"></i> Clear All
+                    </button>
+                    <button class="btn btn-success btn-sm me-1" onclick="downloadBillSummaryExcel()">
+                        <i class="bi bi-file-earmark-excel"></i> Excel
                     </button>
                     <button class="btn btn-info btn-sm" onclick="window.print()">
                         <i class="bi bi-printer"></i> Print
@@ -76,7 +90,7 @@
                                 <td><strong>{{ bill.rake_code }}</strong></td>
                                 <td>{{ bill.company_name }}</td>
                                 <td class="text-end">{{ "%.2f"|format(bill.total_stock) }}</td>
-                                <td>{{ bill.date }}</td>
+                                <td>{{ bill.date|format_date }}</td>
                                 <td class="text-end text-primary"><strong>₹ {{ "%.2f"|format(bill.bill_amount or 0) }}</strong></td>
                                 <td class="text-end text-success">
                                     <input type="number" 
@@ -428,56 +442,35 @@ function filterBillSummary() {
     });
 }
 
-// New function for filtering with company and rake filters
+// Function to apply filters - triggered by Apply button
 function applyFilters() {
     const companyFilter = document.getElementById('companySummaryFilter').value;
     const rakeFilter = document.getElementById('rakeSummaryFilter').value;
-    const rows = document.querySelectorAll('#billSummaryBody tr[data-rake]');
+    const dateFrom = document.getElementById('dateFromFilter').value;
+    const dateTo = document.getElementById('dateToFilter').value;
     
-    let totalStock = 0, totalBill = 0, totalReceived = 0, totalLeft = 0;
-    let visibleCount = 0;
+    // Build URL with filter parameters
+    let url = '/admin/logistic-bill?company=' + encodeURIComponent(companyFilter) + 
+              '&rake=' + encodeURIComponent(rakeFilter);
+    if (dateFrom) url += '&date_from=' + encodeURIComponent(dateFrom);
+    if (dateTo) url += '&date_to=' + encodeURIComponent(dateTo);
     
-    rows.forEach(row => {
-        const rakeCode = row.dataset.rake;
-        const company = row.dataset.company;
-        
-        const showRow = (companyFilter === 'all' || company === companyFilter) && 
-                        (rakeFilter === 'all' || rakeCode === rakeFilter);
-        
-        if (showRow) {
-            row.style.display = '';
-            visibleCount++;
-            
-            // Accumulate totals for visible rows
-            const stock = parseFloat(row.cells[3].textContent) || 0;
-            const bill = parseFloat(row.cells[5].textContent.replace('₹', '').replace(/,/g, '')) || 0;
-            const received = parseFloat(row.querySelector('.received-input').value) || 0;
-            const left = parseFloat(row.cells[7].textContent.replace('₹', '').replace(/,/g, '')) || 0;
-            
-            totalStock += stock;
-            totalBill += bill;
-            totalReceived += received;
-            totalLeft += left;
-        } else {
-            row.style.display = 'none';
-        }
-    });
+    // Store that we're viewing bill summary
+    sessionStorage.setItem('logisticBillView', 'summary');
     
-    // Update total row
-    document.getElementById('total-stock').textContent = totalStock.toFixed(2) + ' MT';
-    document.getElementById('total-bill').textContent = '₹ ' + totalBill.toFixed(2);
-    document.getElementById('total-received').textContent = '₹ ' + totalReceived.toFixed(2);
-    document.getElementById('total-left').textContent = '₹ ' + totalLeft.toFixed(2);
+    // Reload with filters
+    window.location.href = url;
+}
+
+// Function to clear all filters
+function clearAllFilters() {
+    document.getElementById('companySummaryFilter').value = 'all';
+    document.getElementById('rakeSummaryFilter').value = 'all';
+    document.getElementById('dateFromFilter').value = '';
+    document.getElementById('dateToFilter').value = '';
     
-    // Update total row label based on filter
-    const totalRow = document.getElementById('summary-total-row');
-    if (rakeFilter !== 'all') {
-        totalRow.cells[0].textContent = 'TOTAL FOR SELECTED RAKE';
-    } else if (companyFilter !== 'all') {
-        totalRow.cells[0].textContent = 'TOTAL FOR SELECTED COMPANY';
-    } else {
-        totalRow.cells[0].textContent = 'TOTAL';
-    }
+    sessionStorage.setItem('logisticBillView', 'summary');
+    window.location.href = '/admin/logistic-bill';
 }
 
 function updateReceivedAmount(rakeCode, receivedAmount) {
@@ -492,8 +485,8 @@ function updateReceivedAmount(rakeCode, receivedAmount) {
     const leftCell = document.getElementById(`left-${rakeCode}`);
     leftCell.textContent = '₹ ' + left.toFixed(2);
     
-    // Recalculate totals
-    applyFilters();
+    // Recalculate totals (locally, don't reload page)
+    recalculateTotals();
     
     // TODO: Save to backend via AJAX if needed
     console.log(`Updated ${rakeCode}: Received ₹${received}, Left ₹${left}`);
@@ -511,7 +504,45 @@ function downloadSingleBill(rakeCode) {
 }
 
 function downloadBillSummaryExcel() {
-    window.location.href = '/admin/download-bill-summary-excel';
+    const company = document.getElementById('companySummaryFilter').value;
+    const rake = document.getElementById('rakeSummaryFilter').value;
+    const dateFrom = document.getElementById('dateFromFilter').value;
+    const dateTo = document.getElementById('dateToFilter').value;
+    
+    let url = '/admin/download-bill-summary-excel?company=' + encodeURIComponent(company) + '&rake=' + encodeURIComponent(rake);
+    if (dateFrom) url += '&date_from=' + encodeURIComponent(dateFrom);
+    if (dateTo) url += '&date_to=' + encodeURIComponent(dateTo);
+    
+    window.location.href = url;
+}
+
+// Recalculate totals without reloading page
+function recalculateTotals() {
+    const rows = document.querySelectorAll('#billSummaryBody tr[data-rake]');
+    let totalStock = 0, totalBill = 0, totalReceived = 0, totalLeft = 0;
+    
+    rows.forEach(row => {
+        if (row.style.display !== 'none') {
+            totalStock += parseFloat(row.cells[3].textContent) || 0;
+            totalBill += parseFloat(row.cells[5].textContent.replace('₹', '').replace(/,/g, '')) || 0;
+            const receivedInput = row.querySelector('.received-input');
+            if (receivedInput) {
+                totalReceived += parseFloat(receivedInput.value) || 0;
+            }
+        }
+    });
+    
+    totalLeft = totalBill - totalReceived;
+    
+    const totalStockEl = document.getElementById('total-stock');
+    const totalBillEl = document.getElementById('total-bill');
+    const totalReceivedEl = document.getElementById('total-received');
+    const totalLeftEl = document.getElementById('total-left');
+    
+    if (totalStockEl) totalStockEl.textContent = totalStock.toFixed(2) + ' MT';
+    if (totalBillEl) totalBillEl.textContent = '₹ ' + totalBill.toFixed(2);
+    if (totalReceivedEl) totalReceivedEl.textContent = '₹ ' + totalReceived.toFixed(2);
+    if (totalLeftEl) totalLeftEl.textContent = '₹ ' + totalLeft.toFixed(2);
 }
 
 function loadRakeData() {
@@ -943,6 +974,17 @@ function downloadWarehouseBillExcel() {
 // Load warehouse data on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadWarehouseData();
+    
+    // If any bill summary filters are applied, show bill summary section
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('company') || urlParams.has('rake') || urlParams.has('date_from') || urlParams.has('date_to')) {
+        showBillType('summary');
+    }
+    // Also check sessionStorage for view preference
+    const savedView = sessionStorage.getItem('logisticBillView');
+    if (savedView === 'summary') {
+        showBillType('summary');
+    }
 });
 </script>
 {% endblock %}

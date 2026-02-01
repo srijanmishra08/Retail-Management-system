@@ -92,6 +92,21 @@ class Database:
                     auth_token=self.turso_token
                 )
                 Database._connection_time = time.time()
+                # Test connection is ready with a simple query
+                try:
+                    cursor = Database._cloud_connection.cursor()
+                    cursor.execute("SELECT 1")
+                    cursor.fetchone()
+                except Exception as e:
+                    print(f"[DEBUG] Connection test failed: {e}, retrying...")
+                    import time as time_module
+                    time_module.sleep(0.3)
+                    # Try again
+                    Database._cloud_connection = libsql.connect(
+                        self.turso_url,
+                        auth_token=self.turso_token
+                    )
+                    Database._connection_time = time.time()
             return Database._cloud_connection
         else:
             # Use local SQLite database
@@ -178,6 +193,21 @@ class Database:
                 closed_at TIMESTAMP,
                 shortage REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Rake Products table - allows multiple products per rake
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS rake_products (
+                rake_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rake_code TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                product_name TEXT NOT NULL,
+                product_code TEXT,
+                quantity_mt REAL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (rake_code) REFERENCES rakes(rake_code),
+                FOREIGN KEY (product_id) REFERENCES products(product_id)
             )
         ''')
         
@@ -642,11 +672,17 @@ class Database:
     # ========== Rake Operations (Admin) ==========
     
     def add_rake(self, rake_code, company_name, company_code, date, rr_quantity, 
-                 product_name, product_code, rake_point_name, builty_head=None):
-        """Add new rake"""
+                 product_name, product_code, rake_point_name, builty_head=None, products=None):
+        """Add new rake with optional multiple products"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
+            # First check if rake_code already exists
+            existing = cursor.execute('SELECT rake_id FROM rakes WHERE rake_code = ?', (rake_code,)).fetchone()
+            if existing:
+                print(f"Rake code {rake_code} already exists")
+                return None
+            
             cursor.execute('''
                 INSERT INTO rakes (rake_code, company_name, company_code, date, rr_quantity,
                                   product_name, product_code, rake_point_name, builty_head)
@@ -655,14 +691,51 @@ class Database:
                   product_name, product_code, rake_point_name, builty_head))
             
             rake_id = cursor.lastrowid
+            
+            # If multiple products provided, add them to rake_products table
+            if products and isinstance(products, list) and len(products) > 0:
+                for prod in products:
+                    cursor.execute('''
+                        INSERT INTO rake_products (rake_code, product_id, product_name, product_code, quantity_mt)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (rake_code, prod.get('product_id'), prod.get('product_name'), 
+                          prod.get('product_code'), prod.get('quantity_mt', 0)))
+            elif product_name:
+                # Add single product to rake_products for consistency
+                product_result = cursor.execute('SELECT product_id FROM products WHERE product_name = ?', (product_name,)).fetchone()
+                product_id = product_result[0] if product_result else None
+                cursor.execute('''
+                    INSERT INTO rake_products (rake_code, product_id, product_name, product_code, quantity_mt)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (rake_code, product_id, product_name, product_code, rr_quantity))
+            
             conn.commit()
+            print(f"Rake {rake_code} added successfully with ID {rake_id}")
             return rake_id
         except Exception as e:
             print(f"Error adding rake: {e}")
+            import traceback
+            traceback.print_exc()
             conn.rollback()
             return None
         finally:
             self.close_connection(conn)
+    
+    def get_rake_products(self, rake_code):
+        """Get all products for a specific rake"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT rp.rake_product_id, rp.product_id, rp.product_name, rp.product_code, rp.quantity_mt,
+                   p.unit_per_bag
+            FROM rake_products rp
+            LEFT JOIN products p ON rp.product_id = p.product_id
+            WHERE rp.rake_code = ?
+            ORDER BY rp.rake_product_id
+        ''', (rake_code,))
+        products = cursor.fetchall()
+        self.close_connection(conn)
+        return products
     
     def get_all_rakes(self):
         """Get all rakes"""
@@ -766,7 +839,7 @@ class Database:
         return results
     
     def get_all_warehouse_balances(self):
-        """Get balances for ALL warehouses in a single query"""
+        """Get balances for ALL warehouses in a single query (excluding internal allotments)"""
         cache_key = 'all_warehouse_balances'
         cached = _cache.get(cache_key)
         if cached is not None:
@@ -775,11 +848,13 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Exclude allotment transactions as they are internal transfers (would double-count)
         cursor.execute('''
             SELECT warehouse_id,
                    COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) as stock_in,
                    COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) as stock_out
             FROM warehouse_stock
+            WHERE COALESCE(source_type, '') != 'allotment'
             GROUP BY warehouse_id
         ''')
         
@@ -811,16 +886,14 @@ class Database:
         limit_clause = f"LIMIT {limit}" if limit else ""
         
         try:
+            # Get rakes with loading slip totals and builty totals
             cursor.execute(f'''
                 SELECT r.rake_id, r.rake_code, r.company_name, r.company_code,
                        r.date, r.rr_quantity, r.product_name, r.product_code,
                        r.rake_point_name, r.builty_head, r.is_closed, r.closed_at, r.shortage,
-                       COALESCE(SUM(ls.quantity_mt), 0) as dispatched
+                       COALESCE((SELECT SUM(ls.quantity_mt) FROM loading_slips ls WHERE ls.rake_code = r.rake_code), 0) as dispatched,
+                       COALESCE((SELECT SUM(b.quantity_mt) FROM builty b WHERE b.rake_code = r.rake_code), 0) as builty_total
                 FROM rakes r
-                LEFT JOIN loading_slips ls ON r.rake_code = ls.rake_code
-                GROUP BY r.rake_id, r.rake_code, r.company_name, r.company_code,
-                         r.date, r.rr_quantity, r.product_name, r.product_code,
-                         r.rake_point_name, r.builty_head, r.is_closed, r.closed_at, r.shortage
                 ORDER BY r.rake_id DESC
                 {limit_clause}
             ''')
@@ -828,7 +901,10 @@ class Database:
             results = []
             for row in cursor.fetchall():
                 rr_quantity = row[5] or 0
-                dispatched = row[13] or 0
+                dispatched = row[13] or 0  # Total via loading slips
+                builty_total = row[14] or 0  # Total via builties (delivered)
+                trucks_under_loading = dispatched - builty_total  # Stock in transit
+                
                 results.append({
                     'rake_id': row[0],
                     'rake_code': row[1],
@@ -843,7 +919,9 @@ class Database:
                     'is_closed': row[10] or 0,
                     'closed_at': row[11],
                     'shortage': row[12] or 0,
-                    'dispatched': dispatched,
+                    'dispatched': dispatched,  # Total via loading slips
+                    'builty_total': builty_total,  # Total delivered via builties
+                    'trucks_under_loading': trucks_under_loading,  # Stock in transit on trucks
                     'remaining': rr_quantity - dispatched
                 })
             
@@ -860,7 +938,7 @@ class Database:
         return results
     
     def get_dashboard_stats_optimized(self, _retry=True):
-        """Get all admin dashboard stats in a SINGLE query"""
+        """Get all admin dashboard stats in a SINGLE query (excluding internal allotments from warehouse totals)"""
         cache_key = 'admin_dashboard_stats_optimized'
         cached = _cache.get(cache_key)
         if cached is not None:
@@ -870,7 +948,7 @@ class Database:
         cursor = conn.cursor()
         
         try:
-            # Single query for all counts and stats
+            # Single query for all counts and stats (exclude allotment from warehouse totals)
             cursor.execute('''
                 SELECT 
                     (SELECT COUNT(*) FROM rakes) as total_rakes,
@@ -881,8 +959,8 @@ class Database:
                     (SELECT COUNT(*) FROM warehouses) as total_warehouses,
                     (SELECT COALESCE(SUM(rr_quantity), 0) FROM rakes) as total_stock,
                     (SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips) as total_dispatched,
-                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock) as total_stock_in,
-                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock) as total_stock_out,
+                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock WHERE COALESCE(source_type, '') != 'allotment') as total_stock_in,
+                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock WHERE COALESCE(source_type, '') != 'allotment') as total_stock_out,
                     (SELECT COUNT(*) FROM ebills) as total_ebills,
                     (SELECT COALESCE(SUM(amount), 0) FROM ebills) as total_ebill_amount
             ''')
@@ -951,9 +1029,9 @@ class Database:
         _cache.set(cache_key, count)
         return count
     
-    def get_logistic_bill_summary_optimized(self, selected_company='all', selected_rake='all'):
+    def get_logistic_bill_summary_optimized(self, selected_company='all', selected_rake='all', date_from='', date_to=''):
         """Get logistic bill summary with all data in optimized queries"""
-        cache_key = f'logistic_bill_summary_{selected_company}_{selected_rake}'
+        cache_key = f'logistic_bill_summary_{selected_company}_{selected_rake}_{date_from}_{date_to}'
         cached = _cache.get(cache_key)
         if cached is not None:
             return cached
@@ -971,6 +1049,12 @@ class Database:
         if selected_rake != 'all':
             conditions.append("r.rake_code = ?")
             params.append(selected_rake)
+        if date_from:
+            conditions.append("r.date >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("r.date <= ?")
+            params.append(date_to)
         
         where_clause = " AND ".join(conditions)
         
@@ -993,7 +1077,7 @@ class Database:
         '''
         
         if params:
-            cursor.execute(query, params)
+            cursor.execute(query, tuple(params))
         else:
             cursor.execute(query)
         
@@ -1022,13 +1106,14 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Get all stats in one query
+        # Get all stats in one query (excluding allotment transactions for stock counts)
         cursor.execute('''
             SELECT 
                 (SELECT COUNT(*) FROM accounts) as account_count,
                 (SELECT COUNT(*) FROM builty) as builty_count,
                 (SELECT COALESCE(SUM(quantity_mt), 0) FROM warehouse_stock 
-                 WHERE transaction_type = 'IN' AND date = date('now')) as today_stock_in
+                 WHERE transaction_type = 'IN' AND date = date('now') 
+                 AND COALESCE(source_type, '') != 'allotment') as today_stock_in
         ''')
         
         row = cursor.fetchone()
@@ -1043,7 +1128,7 @@ class Database:
         return stats
     
     def get_recent_warehouse_movements(self, limit=10):
-        """Get recent warehouse stock movements"""
+        """Get recent warehouse stock movements (excluding internal allotments)"""
         cache_key = f'recent_warehouse_movements_{limit}'
         cached = _cache.get(cache_key)
         if cached is not None:
@@ -1052,11 +1137,13 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Exclude allotment transactions as they are internal transfers
         cursor.execute('''
             SELECT ws.date, ws.transaction_type, b.builty_number, w.warehouse_name, ws.quantity_mt
             FROM warehouse_stock ws
             LEFT JOIN builty b ON ws.builty_id = b.builty_id
             JOIN warehouses w ON ws.warehouse_id = w.warehouse_id
+            WHERE COALESCE(ws.source_type, '') != 'allotment'
             ORDER BY ws.date DESC, ws.stock_id DESC
             LIMIT ?
         ''', (limit,))
@@ -1159,6 +1246,43 @@ class Database:
         total_shortage = cursor.fetchone()[0]
         self.close_connection(conn)
         return total_shortage
+    
+    def get_daywise_warehouse_stock(self, days=7, _retry=True):
+        """Get day-wise warehouse stock IN/OUT for last N days (excluding internal allotments)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT 
+                    DATE(created_at) as date,
+                    SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END) as stock_in,
+                    SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END) as stock_out
+                FROM warehouse_stock
+                WHERE DATE(created_at) >= DATE('now', '-' || ? || ' days')
+                  AND COALESCE(source_type, '') != 'allotment'
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at) DESC
+            ''', (days,))
+            
+            rows = cursor.fetchall()
+            self.close_connection(conn)
+            
+            result = []
+            for row in rows:
+                result.append({
+                    'date': row[0],
+                    'stock_in': row[1] or 0,
+                    'stock_out': row[2] or 0
+                })
+            return result
+        except Exception as e:
+            print(f"Error in get_daywise_warehouse_stock: {e}")
+            if self.use_cloud and _retry:
+                print("[DEBUG] Retrying get_daywise_warehouse_stock with fresh connection...")
+                Database.reset_cloud_connection()
+                return self.get_daywise_warehouse_stock(days, _retry=False)
+            return []
     
     def get_closed_rakes(self):
         """Get all closed rakes with shortage info"""
@@ -1710,12 +1834,13 @@ class Database:
             self.close_connection(conn)
     
     def get_all_builties(self):
-        """Get all builties"""
+        """Get all builties with complete joined data"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute('''
             SELECT b.*, a.account_name, w.warehouse_name, t.truck_number,
-                   c.society_name as cgmf_name, c.district as cgmf_district
+                   c.society_name as cgmf_name, c.district as cgmf_district,
+                   b.rake_code, b.account_id, b.warehouse_id, b.cgmf_id
             FROM builty b
             LEFT JOIN accounts a ON b.account_id = a.account_id
             LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
@@ -1772,11 +1897,21 @@ class Database:
     
     def add_loading_slip(self, rake_code, slip_number, loading_point_name, destination,
                         account_id, warehouse_id, quantity_bags, quantity_mt, truck_id, wagon_number, 
-                        goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id=None, cgmf_id=None, sub_head=None, warehouse_account_id=None, warehouse_account_type=None):
+                        goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, builty_id=None, cgmf_id=None, sub_head=None, warehouse_account_id=None, warehouse_account_type=None, _retry=True):
         """Add new loading slip with complete truck and goods details - supports accounts, warehouses, and CGMF"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
+            # Check for duplicate first
+            cursor.execute('''
+                SELECT slip_id FROM loading_slips 
+                WHERE rake_code = ? AND slip_number = ?
+            ''', (rake_code, slip_number))
+            existing = cursor.fetchone()
+            if existing:
+                print(f"Loading slip {slip_number} for rake {rake_code} already exists with ID {existing[0]}")
+                return existing[0]  # Return existing ID instead of creating duplicate
+            
             cursor.execute('''
                 INSERT INTO loading_slips (rake_code, slip_number, loading_point_name, destination,
                                           account_id, warehouse_id, cgmf_id, quantity_bags, quantity_mt, truck_id, 
@@ -1791,25 +1926,40 @@ class Database:
             
             conn.commit()
             
-            # Get the slip_id - handle both sqlite and libsql
-            slip_id = cursor.lastrowid
-            if not slip_id or slip_id == 0:
-                # For libsql/Turso, try to get the last inserted id differently
-                cursor.execute('SELECT slip_id FROM loading_slips WHERE rake_code = ? AND slip_number = ? ORDER BY slip_id DESC LIMIT 1', (rake_code, slip_number))
-                result = cursor.fetchone()
-                slip_id = result[0] if result else None
+            # Get the slip_id - always use SELECT for reliability with Turso/libsql
+            # cursor.lastrowid is unreliable with cloud databases
+            cursor.execute('SELECT slip_id FROM loading_slips WHERE rake_code = ? AND slip_number = ? ORDER BY slip_id DESC LIMIT 1', (rake_code, slip_number))
+            result = cursor.fetchone()
+            slip_id = result[0] if result else None
+            
+            if slip_id:
+                print(f"Loading slip created successfully with ID {slip_id}")
+            else:
+                print(f"Warning: Loading slip created but couldn't retrieve ID for rake {rake_code}, slip {slip_number}")
             
             # CRITICAL: Invalidate cache after successful write
             self.invalidate_cache()
             
-            # CRITICAL: Reset cloud connection after write to ensure subsequent reads see the new data
-            if self.use_cloud:
-                Database.reset_cloud_connection()
-            
             return slip_id
         except Exception as e:
             print(f"Error adding loading slip: {e}")
-            conn.rollback()
+            import traceback
+            traceback.print_exc()
+            try:
+                conn.rollback()
+            except:
+                pass
+            
+            # Retry with fresh connection if this is a cloud database error
+            if self.use_cloud and _retry:
+                print("[DEBUG] Retrying add_loading_slip with fresh connection...")
+                Database.reset_cloud_connection()
+                import time
+                time.sleep(0.5)  # Give the connection time to establish
+                return self.add_loading_slip(rake_code, slip_number, loading_point_name, destination,
+                    account_id, warehouse_id, quantity_bags, quantity_mt, truck_id, wagon_number,
+                    goods_name, truck_driver, truck_owner, mobile_1, mobile_2, truck_details, 
+                    builty_id, cgmf_id, sub_head, warehouse_account_id, warehouse_account_type, _retry=False)
             return None
         finally:
             self.close_connection(conn)
@@ -1887,14 +2037,16 @@ class Database:
             cursor.execute('''
                 SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
                        ls.destination, 
-                       COALESCE(a.account_name, w.warehouse_name) as destination_name,
+                       COALESCE(a.account_name, w.warehouse_name, cg.society_name) as destination_name,
                        ls.wagon_number, 
                        ls.quantity_bags, ls.quantity_mt, t.truck_number,
                        ls.goods_name, ls.truck_driver, ls.truck_owner,
-                       ls.mobile_number_1, ls.mobile_number_2
+                       ls.mobile_number_1, ls.mobile_number_2,
+                       ls.account_id, ls.warehouse_id, ls.cgmf_id
                 FROM loading_slips ls
                 LEFT JOIN accounts a ON ls.account_id = a.account_id
                 LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+                LEFT JOIN cgmf cg ON ls.cgmf_id = cg.cgmf_id
                 LEFT JOIN trucks t ON ls.truck_id = t.truck_id
                 LEFT JOIN rakes r ON ls.rake_code = r.rake_code
                 WHERE (ls.builty_id IS NULL OR ls.builty_id = 0)
@@ -1919,15 +2071,18 @@ class Database:
         cursor.execute('''
             SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
                    ls.destination, 
-                   COALESCE(a.account_name, w.warehouse_name) as destination_name,
+                   COALESCE(a.account_name, w.warehouse_name, cg.society_name) as destination_name,
                    ls.quantity_bags, ls.quantity_mt, t.truck_number,
                    ls.wagon_number, ls.builty_id, ls.created_at,
                    ls.goods_name, ls.truck_driver, ls.truck_owner,
                    ls.mobile_number_1, ls.mobile_number_2,
-                   b.builty_number
+                   b.builty_number,
+                   a.account_name, w.warehouse_name, cg.society_name,
+                   ls.account_id, ls.warehouse_id, ls.cgmf_id
             FROM loading_slips ls
             LEFT JOIN accounts a ON ls.account_id = a.account_id
             LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+            LEFT JOIN cgmf cg ON ls.cgmf_id = cg.cgmf_id
             LEFT JOIN trucks t ON ls.truck_id = t.truck_id
             LEFT JOIN builty b ON ls.builty_id = b.builty_id
             ORDER BY ls.slip_id DESC
