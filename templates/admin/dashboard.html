@@ -41,53 +41,7 @@
     </div>
 </div>
 
-<!-- Warehouse Stock Summary -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-success bg-opacity-10 text-success">
-                    <i class="bi bi-arrow-down-circle"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Total Warehouse Stock IN</div>
-                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in) }} MT</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
-                    <i class="bi bi-arrow-up-circle"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Total Warehouse Stock OUT</div>
-                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_out) }} MT</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="stat-card">
-            <div class="d-flex align-items-center">
-                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
-                    <i class="bi bi-box-seam"></i>
-                </div>
-                <div class="ms-3 flex-grow-1">
-                    <div class="text-muted small">Net Warehouse Balance</div>
-                    <h3 class="mb-0">{{ "%.2f"|format(stats.total_stock_in - stats.total_stock_out) }} MT</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Day-wise Warehouse Stock -->
-{% if daywise_stock %}
+<!-- Day-wise Warehouse Stock (always shown, 0 when no data) -->
 <div class="card mb-4">
     <div class="card-header bg-light">
         <h5 class="mb-0"><i class="bi bi-calendar-day"></i> Day-wise Warehouse Stock (Last 7 Days)</h5>
@@ -111,13 +65,16 @@
                         <td class="text-end text-danger">{{ "%.2f"|format(day.stock_out) }}</td>
                         <td class="text-end text-primary"><strong>{{ "%.2f"|format(day.stock_in - day.stock_out) }}</strong></td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No warehouse stock data available</td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
-{% endif %}
 
 <!-- Quick Actions -->
 <div class="row mb-4">

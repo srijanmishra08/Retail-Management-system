@@ -10,7 +10,6 @@ from urllib.parse import unquote
 from datetime import datetime, timedelta
 import os
 from database import Database
-from reports import ReportGenerator
 
 # Get the directory where app.py is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -2387,6 +2386,7 @@ def admin_download_eway_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
     filepath = os.path.join(upload_folder, filename)
     
@@ -2404,6 +2404,7 @@ def admin_download_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
     filepath = os.path.join(upload_folder, filename)
     
@@ -3265,6 +3266,7 @@ def rakepoint_download_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
     filepath = os.path.join(upload_folder, filename)
     
@@ -3282,6 +3284,7 @@ def rakepoint_download_eway_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
     filepath = os.path.join(upload_folder, filename)
     
@@ -4428,6 +4431,7 @@ def warehouse_download_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
     filepath = os.path.join(upload_folder, filename)
     
@@ -4445,6 +4449,7 @@ def warehouse_download_eway_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
     filepath = os.path.join(upload_folder, filename)
     
@@ -4592,6 +4597,7 @@ def download_eway_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'eway_bills')
     filepath = os.path.join(upload_folder, filename)
     
@@ -4609,6 +4615,7 @@ def download_bill(filename):
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
+    filename = os.path.basename(filename)  # Prevent path traversal
     upload_folder = os.path.join(os.path.dirname(__file__), 'uploads', 'bills')
     filepath = os.path.join(upload_folder, filename)
     

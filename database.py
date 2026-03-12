@@ -44,13 +44,14 @@ class SimpleCache:
             del self._cache[key]
 
 
-# Global cache instance with 30 second TTL
-_cache = SimpleCache(ttl=30)
+# Global cache instance with 300 second TTL (5 min) to reduce cloud DB round-trips
+_cache = SimpleCache(ttl=300)
 
 
 class Database:
     _cloud_connection = None  # Reusable connection for cloud database
     _connection_time = None   # Track when connection was created
+    _initialized = False      # Track if DB schema has been initialized this instance
     
     def __init__(self, db_name='fims.db'):
         self.db_name = db_name
@@ -80,9 +81,8 @@ class Database:
     def get_connection(self):
         """Get database connection - reuse connection for cloud to reduce latency"""
         if self.use_cloud:
-            # Check if connection is too old (older than 60 seconds) - Vercel serverless can have stale connections
-            if Database._connection_time and (time.time() - Database._connection_time > 60):
-                print("[DEBUG] Connection too old, resetting...")
+            # Check if connection is too old (older than 300 seconds) - Vercel serverless can have stale connections
+            if Database._connection_time and (time.time() - Database._connection_time > 300):
                 Database.reset_cloud_connection()
             
             # Reuse connection for cloud database to avoid TCP/TLS overhead
@@ -92,15 +92,12 @@ class Database:
                     auth_token=self.turso_token
                 )
                 Database._connection_time = time.time()
-                # Test connection is ready with a simple query
+                # Test connection with a simple query (no sleep delay)
                 try:
                     cursor = Database._cloud_connection.cursor()
                     cursor.execute("SELECT 1")
                     cursor.fetchone()
-                except Exception as e:
-                    print(f"[DEBUG] Connection test failed: {e}, retrying...")
-                    import time as time_module
-                    time_module.sleep(0.3)
+                except Exception:
                     # Try again
                     Database._cloud_connection = libsql.connect(
                         self.turso_url,
@@ -161,24 +158,37 @@ class Database:
             self.close_connection(conn)
     
     def initialize_database(self):
-        """Create all tables and insert default data"""
+        """Create all tables and insert default data.
+        Optimized: skips if already initialized this instance to avoid
+        repeated cloud DB round-trips on Vercel cold starts.
+        Uses batched execute to minimize network round-trips.
+        For cloud (Turso), skip schema creation entirely — schema is already set up.
+        Only run full initialization for local SQLite.
+        """
+        if Database._initialized:
+            return
+        
+        # For cloud databases, schema is already created — just mark initialized
+        # This eliminates ~15 CREATE TABLE IF NOT EXISTS round-trips on cold start
+        if self.use_cloud:
+            Database._initialized = True
+            return
+        
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        # Users table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
+        # Batch all CREATE TABLE statements to minimize round-trips on cloud DB
+        _schema_statements = [
+            # Users table
+            '''CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Rakes table (Admin adds rakes)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS rakes (
+            )''',
+            # Rakes table (Admin adds rakes)
+            '''CREATE TABLE IF NOT EXISTS rakes (
                 rake_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rake_code TEXT UNIQUE NOT NULL,
                 company_name TEXT NOT NULL,
@@ -193,12 +203,9 @@ class Database:
                 closed_at TIMESTAMP,
                 shortage REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Rake Products table - allows multiple products per rake
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS rake_products (
+            )''',
+            # Rake Products table
+            '''CREATE TABLE IF NOT EXISTS rake_products (
                 rake_product_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rake_code TEXT NOT NULL,
                 product_id INTEGER NOT NULL,
@@ -208,12 +215,9 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (rake_code) REFERENCES rakes(rake_code),
                 FOREIGN KEY (product_id) REFERENCES products(product_id)
-            )
-        ''')
-        
-        # Accounts table (Dealers, Retailers, Companies)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS accounts (
+            )''',
+            # Accounts table
+            '''CREATE TABLE IF NOT EXISTS accounts (
                 account_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 account_name TEXT NOT NULL,
                 account_type TEXT NOT NULL,
@@ -221,12 +225,9 @@ class Database:
                 address TEXT,
                 distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Products table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS products (
+            )''',
+            # Products table
+            '''CREATE TABLE IF NOT EXISTS products (
                 product_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 product_name TEXT UNIQUE NOT NULL,
                 product_code TEXT,
@@ -236,12 +237,9 @@ class Database:
                 unit_type TEXT DEFAULT 'kg',
                 description TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Companies table (Product suppliers)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS companies (
+            )''',
+            # Companies table
+            '''CREATE TABLE IF NOT EXISTS companies (
                 company_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 company_name TEXT UNIQUE NOT NULL,
                 company_code TEXT,
@@ -250,24 +248,18 @@ class Database:
                 address TEXT,
                 distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Employees table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS employees (
+            )''',
+            # Employees table
+            '''CREATE TABLE IF NOT EXISTS employees (
                 employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 employee_name TEXT NOT NULL,
                 employee_code TEXT,
                 mobile TEXT,
                 designation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # CGMF (CG Markfed) table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cgmf (
+            )''',
+            # CGMF table
+            '''CREATE TABLE IF NOT EXISTS cgmf (
                 cgmf_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 district TEXT NOT NULL,
                 destination TEXT NOT NULL,
@@ -275,24 +267,25 @@ class Database:
                 contact TEXT,
                 distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Warehouses table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS warehouses (
+            )''',
+            # Warehouses table
+            '''CREATE TABLE IF NOT EXISTS warehouses (
                 warehouse_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 warehouse_name TEXT NOT NULL,
                 location TEXT,
                 capacity REAL,
                 distance REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+            )''',
+        ]
         
-        # Trucks table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS trucks (
+        for stmt in _schema_statements:
+            cursor.execute(stmt)
+        
+        # Remaining tables (also batched)
+        _more_schema = [
+            # Trucks table
+            '''CREATE TABLE IF NOT EXISTS trucks (
                 truck_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 truck_number TEXT UNIQUE NOT NULL,
                 driver_name TEXT,
@@ -300,12 +293,9 @@ class Database:
                 owner_name TEXT,
                 owner_mobile TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Builty table (Created by Rake Point or Warehouse)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS builty (
+            )''',
+            # Builty table
+            '''CREATE TABLE IF NOT EXISTS builty (
                 builty_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 builty_number TEXT UNIQUE NOT NULL,
                 rake_code TEXT,
@@ -337,12 +327,9 @@ class Database:
                 FOREIGN KEY (cgmf_id) REFERENCES cgmf(cgmf_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id),
                 FOREIGN KEY (rake_code) REFERENCES rakes(rake_code)
-            )
-        ''')
-        
-        # Loading Slip table (Rake Point)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS loading_slips (
+            )''',
+            # Loading Slip table
+            '''CREATE TABLE IF NOT EXISTS loading_slips (
                 slip_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rake_code TEXT NOT NULL,
                 slip_number INTEGER NOT NULL,
@@ -369,12 +356,9 @@ class Database:
                 FOREIGN KEY (cgmf_id) REFERENCES cgmf(cgmf_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id),
                 FOREIGN KEY (builty_id) REFERENCES builty(builty_id)
-            )
-        ''')
-        
-        # Stock table (Warehouse operations)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS warehouse_stock (
+            )''',
+            # Stock table
+            '''CREATE TABLE IF NOT EXISTS warehouse_stock (
                 stock_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 serial_number INTEGER,
                 warehouse_id INTEGER NOT NULL,
@@ -403,12 +387,9 @@ class Database:
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id),
                 FOREIGN KEY (cgmf_id) REFERENCES cgmf(cgmf_id),
                 FOREIGN KEY (truck_id) REFERENCES trucks(truck_id)
-            )
-        ''')
-        
-        # E-Bills table (Accountant)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ebills (
+            )''',
+            # E-Bills table
+            '''CREATE TABLE IF NOT EXISTS ebills (
                 ebill_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 builty_id INTEGER NOT NULL,
                 ebill_number TEXT UNIQUE NOT NULL,
@@ -418,12 +399,9 @@ class Database:
                 generated_date DATE NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (builty_id) REFERENCES builty(builty_id)
-            )
-        ''')
-        
-        # Rake Bill Payments table - stores received payments for each rake
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS rake_bill_payments (
+            )''',
+            # Rake Bill Payments table
+            '''CREATE TABLE IF NOT EXISTS rake_bill_payments (
                 payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 rake_code TEXT NOT NULL UNIQUE,
                 total_bill_amount REAL DEFAULT 0,
@@ -433,8 +411,11 @@ class Database:
                 updated_by TEXT,
                 FOREIGN KEY (rake_code) REFERENCES rakes(rake_code),
                 FOREIGN KEY (updated_by) REFERENCES users(username)
-            )
-        ''')
+            )''',
+        ]
+        
+        for stmt in _more_schema:
+            cursor.execute(stmt)
         
         # Insert default users if not exist
         cursor.execute("SELECT COUNT(*) FROM users")
@@ -481,160 +462,61 @@ class Database:
         # Migrate old 'Company' account type to 'Payal'
         cursor.execute("UPDATE accounts SET account_type = 'Payal' WHERE account_type = 'Company'")
         
-        # Migration: Add cgmf_id column to builty table if it doesn't exist
-        try:
-            cursor.execute("SELECT cgmf_id FROM builty LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'cgmf_id' in str(e).lower():
-                cursor.execute("ALTER TABLE builty ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
-                print("Migration: Added cgmf_id column to builty table")
+        # ---- Batched column migrations ----
+        # Instead of 15+ try/except round-trips, query table_info once per table
+        # and only ALTER TABLE for truly missing columns.
         
-        # Migration: Add cgmf_id column to loading_slips table if it doesn't exist
-        try:
-            cursor.execute("SELECT cgmf_id FROM loading_slips LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'cgmf_id' in str(e).lower():
-                cursor.execute("ALTER TABLE loading_slips ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
-                print("Migration: Added cgmf_id column to loading_slips table")
+        def _get_existing_columns(table_name):
+            """Get set of existing column names for a table (single query)."""
+            try:
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                return {row[1] for row in cursor.fetchall()}
+            except Exception:
+                # Fallback for libsql which may not support PRAGMA
+                try:
+                    cursor.execute(f"SELECT * FROM {table_name} LIMIT 0")
+                    return {desc[0] for desc in cursor.description}
+                except Exception:
+                    return set()
         
-        # Migration: Add cgmf_id column to warehouse_stock table if it doesn't exist
-        try:
-            cursor.execute("SELECT cgmf_id FROM warehouse_stock LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'cgmf_id' in str(e).lower():
-                cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN cgmf_id INTEGER REFERENCES cgmf(cgmf_id)")
-                print("Migration: Added cgmf_id column to warehouse_stock table")
+        # Define all migrations: (table, column, type_definition)
+        _migrations = [
+            ('builty', 'cgmf_id', 'INTEGER REFERENCES cgmf(cgmf_id)'),
+            ('builty', 'sub_head', 'TEXT'),
+            ('builty', 'receiver_name', 'TEXT'),
+            ('builty', 'received_quantity', 'REAL'),
+            ('loading_slips', 'cgmf_id', 'INTEGER REFERENCES cgmf(cgmf_id)'),
+            ('loading_slips', 'sub_head', 'TEXT'),
+            ('loading_slips', 'warehouse_account_id', 'INTEGER REFERENCES accounts(account_id)'),
+            ('loading_slips', 'warehouse_account_type', 'TEXT'),
+            ('warehouse_stock', 'cgmf_id', 'INTEGER REFERENCES cgmf(cgmf_id)'),
+            ('warehouse_stock', 'sub_head', 'TEXT'),
+            ('rakes', 'is_closed', 'INTEGER DEFAULT 0'),
+            ('rakes', 'closed_at', 'TIMESTAMP'),
+            ('rakes', 'shortage', 'REAL DEFAULT 0'),
+            ('rakes', 'builty_head', 'TEXT'),
+            ('ebills', 'bill_pdf', 'TEXT'),
+            ('accounts', 'distance', 'REAL DEFAULT 0'),
+            ('warehouses', 'distance', 'REAL DEFAULT 0'),
+            ('companies', 'distance', 'REAL DEFAULT 0'),
+            ('cgmf', 'distance', 'REAL DEFAULT 0'),
+        ]
         
-        # Migration: Add sub_head column to loading_slips table if it doesn't exist
-        try:
-            cursor.execute("SELECT sub_head FROM loading_slips LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'sub_head' in str(e).lower():
-                cursor.execute("ALTER TABLE loading_slips ADD COLUMN sub_head TEXT")
-                print("Migration: Added sub_head column to loading_slips table")
-        
-        # Migration: Add sub_head column to builty table if it doesn't exist
-        try:
-            cursor.execute("SELECT sub_head FROM builty LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'sub_head' in str(e).lower():
-                cursor.execute("ALTER TABLE builty ADD COLUMN sub_head TEXT")
-                print("Migration: Added sub_head column to builty table")
-        
-        # Migration: Add sub_head column to warehouse_stock table if it doesn't exist
-        try:
-            cursor.execute("SELECT sub_head FROM warehouse_stock LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'sub_head' in str(e).lower():
-                cursor.execute("ALTER TABLE warehouse_stock ADD COLUMN sub_head TEXT")
-                print("Migration: Added sub_head column to warehouse_stock table")
-        
-        # Migration: Add is_closed column to rakes table if it doesn't exist
-        try:
-            cursor.execute("SELECT is_closed FROM rakes LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'is_closed' in str(e).lower():
-                cursor.execute("ALTER TABLE rakes ADD COLUMN is_closed INTEGER DEFAULT 0")
-                print("Migration: Added is_closed column to rakes table")
-        
-        # Migration: Add closed_at column to rakes table if it doesn't exist
-        try:
-            cursor.execute("SELECT closed_at FROM rakes LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'closed_at' in str(e).lower():
-                cursor.execute("ALTER TABLE rakes ADD COLUMN closed_at TIMESTAMP")
-                print("Migration: Added closed_at column to rakes table")
-        
-        # Migration: Add shortage column to rakes table if it doesn't exist
-        try:
-            cursor.execute("SELECT shortage FROM rakes LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'shortage' in str(e).lower():
-                cursor.execute("ALTER TABLE rakes ADD COLUMN shortage REAL DEFAULT 0")
-                print("Migration: Added shortage column to rakes table")
-        
-        # Migration: Add bill_pdf column to ebills table if it doesn't exist
-        try:
-            cursor.execute("SELECT bill_pdf FROM ebills LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'bill_pdf' in str(e).lower():
-                cursor.execute("ALTER TABLE ebills ADD COLUMN bill_pdf TEXT")
-                print("Migration: Added bill_pdf column to ebills table")
-        
-        # Migration: Add builty_head column to rakes table
-        try:
-            cursor.execute("SELECT builty_head FROM rakes LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'builty_head' in str(e).lower():
-                cursor.execute("ALTER TABLE rakes ADD COLUMN builty_head TEXT")
-                print("Migration: Added builty_head column to rakes table")
-        
-        # Migration: Add receiver_name column to builty table
-        try:
-            cursor.execute("SELECT receiver_name FROM builty LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'receiver_name' in str(e).lower():
-                cursor.execute("ALTER TABLE builty ADD COLUMN receiver_name TEXT")
-                print("Migration: Added receiver_name column to builty table")
-        
-        # Migration: Add received_quantity column to builty table
-        try:
-            cursor.execute("SELECT received_quantity FROM builty LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'received_quantity' in str(e).lower():
-                cursor.execute("ALTER TABLE builty ADD COLUMN received_quantity REAL")
-                print("Migration: Added received_quantity column to builty table")
-        
-        # Migration: Add distance column to accounts table
-        try:
-            cursor.execute("SELECT distance FROM accounts LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
-                cursor.execute("ALTER TABLE accounts ADD COLUMN distance REAL DEFAULT 0")
-                print("Migration: Added distance column to accounts table")
-        
-        # Migration: Add distance column to warehouses table
-        try:
-            cursor.execute("SELECT distance FROM warehouses LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
-                cursor.execute("ALTER TABLE warehouses ADD COLUMN distance REAL DEFAULT 0")
-                print("Migration: Added distance column to warehouses table")
-        
-        # Migration: Add distance column to companies table
-        try:
-            cursor.execute("SELECT distance FROM companies LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
-                cursor.execute("ALTER TABLE companies ADD COLUMN distance REAL DEFAULT 0")
-                print("Migration: Added distance column to companies table")
-        
-        # Migration: Add distance column to cgmf table
-        try:
-            cursor.execute("SELECT distance FROM cgmf LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'distance' in str(e).lower():
-                cursor.execute("ALTER TABLE cgmf ADD COLUMN distance REAL DEFAULT 0")
-                print("Migration: Added distance column to cgmf table")
-        
-        # Migration: Add warehouse_account_id column to loading_slips table for tracking whose stock is stored in warehouse
-        try:
-            cursor.execute("SELECT warehouse_account_id FROM loading_slips LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'warehouse_account_id' in str(e).lower():
-                cursor.execute("ALTER TABLE loading_slips ADD COLUMN warehouse_account_id INTEGER REFERENCES accounts(account_id)")
-                print("Migration: Added warehouse_account_id column to loading_slips table")
-        
-        # Migration: Add warehouse_account_type column to loading_slips table
-        try:
-            cursor.execute("SELECT warehouse_account_type FROM loading_slips LIMIT 1")
-        except (sqlite3.OperationalError, ValueError, Exception) as e:
-            if 'no such column' in str(e).lower() or 'warehouse_account_type' in str(e).lower():
-                cursor.execute("ALTER TABLE loading_slips ADD COLUMN warehouse_account_type TEXT")
-                print("Migration: Added warehouse_account_type column to loading_slips table")
+        # Group by table to minimize table_info queries
+        tables_checked = {}
+        for table, column, col_type in _migrations:
+            if table not in tables_checked:
+                tables_checked[table] = _get_existing_columns(table)
+            if column not in tables_checked[table]:
+                try:
+                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+                    print(f"Migration: Added {column} column to {table} table")
+                except Exception:
+                    pass  # Column may already exist despite not showing in table_info
         
         conn.commit()
         self.close_connection(conn)
+        Database._initialized = True
         print("Database initialized successfully!")
     
     # ========== User Operations ==========
@@ -938,7 +820,8 @@ class Database:
         return results
     
     def get_dashboard_stats_optimized(self, _retry=True):
-        """Get all admin dashboard stats in a SINGLE query (excluding internal allotments from warehouse totals)"""
+        """Get all admin dashboard stats in a SINGLE query.
+        Note: total warehouse stock in/out removed — only day-wise is shown on dashboard."""
         cache_key = 'admin_dashboard_stats_optimized'
         cached = _cache.get(cache_key)
         if cached is not None:
@@ -948,7 +831,7 @@ class Database:
         cursor = conn.cursor()
         
         try:
-            # Single query for all counts and stats (exclude allotment from warehouse totals)
+            # Single query for counts and stats (removed warehouse stock totals — unused on dashboard)
             cursor.execute('''
                 SELECT 
                     (SELECT COUNT(*) FROM rakes) as total_rakes,
@@ -959,15 +842,11 @@ class Database:
                     (SELECT COUNT(*) FROM warehouses) as total_warehouses,
                     (SELECT COALESCE(SUM(rr_quantity), 0) FROM rakes) as total_stock,
                     (SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips) as total_dispatched,
-                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock WHERE COALESCE(source_type, '') != 'allotment') as total_stock_in,
-                    (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity_mt ELSE 0 END), 0) FROM warehouse_stock WHERE COALESCE(source_type, '') != 'allotment') as total_stock_out,
                     (SELECT COUNT(*) FROM ebills) as total_ebills,
                     (SELECT COALESCE(SUM(amount), 0) FROM ebills) as total_ebill_amount
             ''')
             
             row = cursor.fetchone()
-            total_stock_in = row[8] or 0
-            total_stock_out = row[9] or 0
             
             stats = {
                 'total_rakes': row[0] or 0,
@@ -978,11 +857,8 @@ class Database:
                 'total_warehouses': row[5] or 0,
                 'total_stock': row[6] or 0,
                 'total_dispatched': row[7] or 0,
-                'total_stock_in': total_stock_in,
-                'total_stock_out': total_stock_out,
-                'balance_stock': total_stock_in - total_stock_out,
-                'total_ebills': row[10] or 0,
-                'total_ebill_amount': row[11] or 0
+                'total_ebills': row[8] or 0,
+                'total_ebill_amount': row[9] or 0
             }
             
             self.close_connection(conn)
@@ -991,16 +867,13 @@ class Database:
         except Exception as e:
             print(f"Error in get_dashboard_stats_optimized: {e}")
             if self.use_cloud and _retry:
-                print("[DEBUG] Retrying get_dashboard_stats_optimized with fresh connection...")
                 Database.reset_cloud_connection()
                 return self.get_dashboard_stats_optimized(_retry=False)
-            # Return default stats on error
             return {
                 'total_rakes': 0, 'active_rakes': 0, 'total_builties': 0,
                 'total_loading_slips': 0, 'total_accounts': 0, 'total_warehouses': 0,
-                'total_stock': 0, 'total_dispatched': 0, 'total_stock_in': 0,
-                'total_stock_out': 0, 'balance_stock': 0, 'total_ebills': 0,
-                'total_ebill_amount': 0
+                'total_stock': 0, 'total_dispatched': 0,
+                'total_ebills': 0, 'total_ebill_amount': 0
             }
     
     def count_active_rakes_optimized(self):
@@ -1248,7 +1121,8 @@ class Database:
         return total_shortage
     
     def get_daywise_warehouse_stock(self, days=7, _retry=True):
-        """Get day-wise warehouse stock IN/OUT for last N days (excluding internal allotments)"""
+        """Get day-wise warehouse stock IN/OUT for last N days (excluding internal allotments).
+        Always returns entries for all N days, filling with 0 when no transactions exist."""
         conn = self.get_connection()
         cursor = conn.cursor()
         
@@ -1268,12 +1142,23 @@ class Database:
             rows = cursor.fetchall()
             self.close_connection(conn)
             
-            result = []
+            # Build a lookup from DB results
+            db_data = {}
             for row in rows:
+                db_data[row[0]] = {'stock_in': row[1] or 0, 'stock_out': row[2] or 0}
+            
+            # Always produce entries for all N days (most recent first)
+            from datetime import date, timedelta
+            result = []
+            today = date.today()
+            for i in range(days):
+                d = today - timedelta(days=i)
+                d_str = d.isoformat()
+                entry = db_data.get(d_str, {'stock_in': 0, 'stock_out': 0})
                 result.append({
-                    'date': row[0],
-                    'stock_in': row[1] or 0,
-                    'stock_out': row[2] or 0
+                    'date': d_str,
+                    'stock_in': entry['stock_in'],
+                    'stock_out': entry['stock_out']
                 })
             return result
         except Exception as e:
