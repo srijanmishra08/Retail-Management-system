@@ -90,6 +90,10 @@
                             </td>
                             <td>{{ rake.rake_point_name }}</td>
                             <td>
+                                <a href="{{ url_for('admin_edit_rake', rake_code=rake.rake_code) }}"
+                                   class="btn btn-sm btn-warning me-1" title="Edit Rake">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
                                 <a href="{{ url_for('admin_rake_details', rake_code=rake.rake_code) }}" 
                                    class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> Details
