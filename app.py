@@ -2568,7 +2568,11 @@ def admin_print_builty(builty_id):
         'owner_mobile': builty[29],
         'builty_head': builty[30] if len(builty) > 30 else None,
         'receiver_name': builty[31] if len(builty) > 31 else None,
-        'received_quantity': builty[32] if len(builty) > 32 else None
+        'received_quantity': builty[32] if len(builty) > 32 else None,
+        'account_address': builty[33] if len(builty) > 33 else None,
+        'company_name': builty[34] if len(builty) > 34 else None,
+        'company_code': builty[35] if len(builty) > 35 else None,
+        'account_type': builty[36] if len(builty) > 36 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -3206,7 +3210,10 @@ def rakepoint_print_builty(builty_id):
         'builty_head': builty[30] if len(builty) > 30 else None,
         'receiver_name': builty[31] if len(builty) > 31 else None,
         'received_quantity': builty[32] if len(builty) > 32 else None,
-        'account_address': builty[33] if len(builty) > 33 else None
+        'account_address': builty[33] if len(builty) > 33 else None,
+        'company_name': builty[34] if len(builty) > 34 else None,
+        'company_code': builty[35] if len(builty) > 35 else None,
+        'account_type': builty[36] if len(builty) > 36 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)
@@ -3765,7 +3772,10 @@ def warehouse_print_builty(builty_id):
         'builty_head': builty[30] if len(builty) > 30 else None,
         'receiver_name': builty[31] if len(builty) > 31 else None,
         'received_quantity': builty[32] if len(builty) > 32 else None,
-        'account_address': builty[33] if len(builty) > 33 else None
+        'account_address': builty[33] if len(builty) > 33 else None,
+        'company_name': builty[34] if len(builty) > 34 else None,
+        'company_code': builty[35] if len(builty) > 35 else None,
+        'account_type': builty[36] if len(builty) > 36 else None
     }
     
     return render_template('print_builty.html', builty=builty_dict)

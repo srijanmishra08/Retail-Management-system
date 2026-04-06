@@ -1766,7 +1766,8 @@ class Database:
                    b.advance, b.to_pay, b.lr_number, b.lr_index, b.created_by_role, b.created_at,
                    a.account_name, w.warehouse_name, t.truck_number, 
                    t.driver_name, t.driver_mobile, t.owner_name, t.owner_mobile,
-                   r.builty_head, b.receiver_name, b.received_quantity, a.address as account_address
+                   r.builty_head, b.receiver_name, b.received_quantity, a.address as account_address,
+                   r.company_name, r.company_code, a.account_type
             FROM builty b
             LEFT JOIN accounts a ON b.account_id = a.account_id
             LEFT JOIN warehouses w ON b.warehouse_id = w.warehouse_id
