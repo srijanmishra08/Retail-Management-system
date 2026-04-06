@@ -51,6 +51,7 @@
                                     data-account-id="{{ slip[15] or '' }}"
                                     data-warehouse-id="{{ slip[16] or '' }}"
                                     data-cgmf-id="{{ slip[17] or '' }}"
+                                    data-account-type="{{ slip[18] or '' }}"
                                     data-search-text="Slip #{{ slip[2] }} {{ slip[1] }} {{ slip[8] }} MT Truck: {{ slip[9] }} Driver: {{ slip[11] }}">
                                 Slip #{{ slip[2] }} | {{ slip[1] }} | {{ slip[8] }} MT | Truck: {{ slip[9] }} | Driver: {{ slip[11] }}
                             </option>
@@ -192,12 +193,19 @@
                     </div>
                 </div>
 
-                <!-- Sub Head Section -->
+                <!-- Sub Head Section - conditional based on account type -->
                 <div class="row">
-                    <div class="col-md-12 mb-3">
-                        <label for="sub_head" class="form-label fw-bold"><i class="bi bi-tag"></i> Sub Head</label>
-                        <input type="text" class="form-control form-control-lg" id="sub_head" name="sub_head" placeholder="Enter sub head (optional)">
-                        <small class="text-muted">Additional categorization for this builty</small>
+                    <!-- Retailer Name: shown only for Dealer accounts -->
+                    <div class="col-md-12 mb-3" id="subhead_dealer" style="display:none;">
+                        <label for="sub_head" class="form-label fw-bold"><i class="bi bi-tag"></i> Retailer Name</label>
+                        <input type="text" class="form-control form-control-lg" id="sub_head" name="sub_head" placeholder="Enter retailer name">
+                        <small class="text-muted">Sub-head for Dealer dispatch</small>
+                    </div>
+                    <!-- MF Destination: shown only for CGMF dispatches -->
+                    <div class="col-md-12 mb-3" id="subhead_cgmf" style="display:none;">
+                        <label for="sub_head_cgmf" class="form-label fw-bold"><i class="bi bi-geo-alt"></i> MF Destination</label>
+                        <input type="text" class="form-control form-control-lg" id="sub_head_cgmf" name="sub_head" placeholder="Enter MF destination">
+                        <small class="text-muted">Sub-head for CGMF dispatch</small>
                     </div>
                 </div>
 
@@ -320,6 +328,19 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
         document.getElementById('display_destination').textContent = selectedOption.getAttribute('data-destination') || 'N/A';
         document.getElementById('display_mobile1').textContent = selectedOption.getAttribute('data-mobile1') || 'N/A';
         document.getElementById('display_mobile2').textContent = selectedOption.getAttribute('data-mobile2') || '-';
+        
+        // Show sub_head field based on account type
+        var accountType = selectedOption.getAttribute('data-account-type') || '';
+        var cgmfId = selectedOption.getAttribute('data-cgmf-id') || '';
+        var dealerDiv = document.getElementById('subhead_dealer');
+        var cgmfDiv = document.getElementById('subhead_cgmf');
+        dealerDiv.style.display = 'none';
+        cgmfDiv.style.display = 'none';
+        if (cgmfId) {
+            cgmfDiv.style.display = 'block';
+        } else if (accountType === 'Dealer') {
+            dealerDiv.style.display = 'block';
+        }
         
         // Scroll to the form
         document.getElementById('auto-filled-section').scrollIntoView({ behavior: 'smooth', block: 'start' });

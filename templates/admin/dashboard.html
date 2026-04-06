@@ -276,6 +276,9 @@
                         </td>
                         <td>{{ rake.rake_point_name }}</td>
                         <td>
+                            <a href="{{ url_for('admin_edit_rake', rake_code=rake.rake_code) }}" class="btn btn-sm btn-warning me-1" title="Edit Rake">
+                                <i class="bi bi-pencil"></i>
+                            </a>
                             {% if not rake.is_closed %}
                                 <form action="{{ url_for('admin_close_rake', rake_code=rake.rake_code) }}" method="POST" style="display: inline;">
                                     <button type="submit" class="btn btn-sm btn-danger" 

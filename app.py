@@ -180,6 +180,62 @@ def admin_add_rake():
     companies = db.get_all_companies()
     return render_template('admin/add_rake.html', products=products, companies=companies)
 
+@app.route('/admin/edit-rake/<path:rake_code>', methods=['GET', 'POST'])
+@login_required
+def admin_edit_rake(rake_code):
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    
+    rake_code = unquote(rake_code)
+    
+    if request.method == 'POST':
+        company_name = request.form.get('company_name')
+        company_code = request.form.get('company_code', '')
+        date = request.form.get('date')
+        rr_quantity = float(request.form.get('rr_quantity'))
+        rake_point_name = request.form.get('rake_point_name')
+        builty_head = request.form.get('builty_head', '')
+        
+        product_ids = request.form.getlist('product_ids[]')
+        product_names = request.form.getlist('product_names[]')
+        product_codes = request.form.getlist('product_codes[]')
+        product_quantities = request.form.getlist('product_quantities[]')
+        
+        products = []
+        for i in range(len(product_ids)):
+            if product_ids[i] and product_names[i]:
+                products.append({
+                    'product_id': int(product_ids[i]) if product_ids[i] else None,
+                    'product_name': product_names[i],
+                    'product_code': product_codes[i] if i < len(product_codes) else '',
+                    'quantity_mt': float(product_quantities[i]) if i < len(product_quantities) and product_quantities[i] else 0
+                })
+        
+        product_name = products[0]['product_name'] if products else ''
+        product_code = products[0]['product_code'] if products else ''
+        
+        success = db.update_rake(rake_code, company_name, company_code, date, rr_quantity,
+                                 product_name, product_code, rake_point_name, builty_head, products)
+        
+        if success:
+            db.invalidate_cache()
+            flash(f'Rake {rake_code} updated successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+        else:
+            flash('Error updating rake. Please try again.', 'error')
+    
+    rake = db.get_rake_by_code(rake_code)
+    if not rake:
+        flash('Rake not found', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    existing_products = db.get_rake_products(rake_code)
+    products = db.get_all_products()
+    companies = db.get_all_companies()
+    return render_template('admin/edit_rake.html', rake=rake, existing_products=existing_products,
+                           products=products, companies=companies)
+
 @app.route('/admin/close-rake/<path:rake_code>', methods=['POST'])
 @login_required
 def admin_close_rake(rake_code):
@@ -3556,95 +3612,104 @@ def warehouse_create_loading_slip():
         return redirect(url_for('index'))
     
     if request.method == 'POST':
-        warehouse_name = request.form.get('warehouse_name')
-        serial_number = int(request.form.get('serial_number'))
-        loading_point = request.form.get('loading_point')
-        destination = request.form.get('destination')
-        account = request.form.get('account')
-        quantity_in_bags = int(request.form.get('quantity_in_bags'))
-        quantity_in_mt = float(request.form.get('quantity_in_mt'))
-        truck_number = request.form.get('truck_number')
-        wagon_number = request.form.get('wagon_number', '')
-        goods_name = request.form.get('goods_name')
-        truck_driver = request.form.get('truck_driver')
-        truck_owner = request.form.get('truck_owner')
-        mobile_number_1 = request.form.get('mobile_number_1')
-        mobile_number_2 = request.form.get('mobile_number_2', '')
-        truck_details = request.form.get('truck_details', '')
-        
-        # Get warehouse ID
-        warehouse = db.execute_custom_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
-        if not warehouse:
-            flash('Invalid warehouse', 'error')
-            return redirect(url_for('warehouse_create_loading_slip'))
-        warehouse_id = warehouse[0][0]
-        
-        # Check if warehouse has enough stock
-        balance = db.get_warehouse_balance_stock(warehouse_id)
-        if balance['balance'] < quantity_in_mt:
-            flash(f'Error: Warehouse has only {balance["balance"]:.2f} MT available. Cannot dispatch {quantity_in_mt:.2f} MT', 'error')
-            return redirect(url_for('warehouse_create_loading_slip'))
-        
-        # Determine if dispatch is to account, warehouse, or CGMF
-        accounts = db.get_all_accounts()
-        warehouses_list = db.get_all_warehouses()
-        cgmf_list = db.get_all_cgmf()
-        account_id = None
-        destination_warehouse_id = None
-        cgmf_id = None
-        
-        # Check if it's a CGMF (format: CGMF_<id>)
-        if account and account.startswith('CGMF_'):
-            cgmf_id = int(account.replace('CGMF_', ''))
-        else:
-            # Check if it's an account
-            for acc in accounts:
-                if acc[1] == account:
-                    account_id = acc[0]
-                    break
+        try:
+            warehouse_name = request.form.get('warehouse_name')
+            serial_number = int(request.form.get('serial_number'))
+            loading_point = request.form.get('loading_point')
+            destination = request.form.get('destination')
+            account = request.form.get('account')
+            quantity_in_bags = int(request.form.get('quantity_in_bags'))
+            quantity_in_mt = float(request.form.get('quantity_in_mt'))
+            truck_number = request.form.get('truck_number')
+            wagon_number = request.form.get('wagon_number', '')
+            goods_name = request.form.get('goods_name')
+            truck_driver = request.form.get('truck_driver')
+            truck_owner = request.form.get('truck_owner')
+            mobile_number_1 = request.form.get('mobile_number_1')
+            mobile_number_2 = request.form.get('mobile_number_2', '')
+            truck_details = request.form.get('truck_details', '')
             
-            # If not found in accounts, check warehouses
-            if account_id is None:
-                for wh in warehouses_list:
-                    if wh[1] == account:
-                        destination_warehouse_id = wh[0]
+            # Get warehouse ID
+            warehouse = db.execute_custom_query('SELECT warehouse_id FROM warehouses WHERE warehouse_name = ?', (warehouse_name,))
+            if not warehouse:
+                flash('Invalid warehouse', 'error')
+                return redirect(url_for('warehouse_create_loading_slip'))
+            warehouse_id = warehouse[0][0]
+            
+            # Check if warehouse has enough stock
+            balance = db.get_warehouse_balance_stock(warehouse_id)
+            if balance['balance'] < quantity_in_mt:
+                flash(f'Error: Warehouse has only {balance["balance"]:.2f} MT available. Cannot dispatch {quantity_in_mt:.2f} MT', 'error')
+                return redirect(url_for('warehouse_create_loading_slip'))
+            
+            # Determine if dispatch is to account, warehouse, or CGMF
+            accounts = db.get_all_accounts()
+            warehouses_list = db.get_all_warehouses()
+            cgmf_list = db.get_all_cgmf()
+            account_id = None
+            destination_warehouse_id = None
+            cgmf_id = None
+            
+            # Check if it's a CGMF (format: CGMF:<id>)
+            if account and account.startswith('CGMF:'):
+                cgmf_id = int(account.split(':')[1])
+            else:
+                # Check if it's an account
+                for acc in accounts:
+                    if acc[1] == account:
+                        account_id = acc[0]
                         break
-        
-        # Check if truck exists, if not create it with driver/owner details
-        truck = db.get_truck_by_number(truck_number)
-        if not truck:
-            truck_id = db.add_truck(truck_number, truck_driver, mobile_number_1, truck_owner, mobile_number_2)
-        else:
-            truck_id = truck[0]
-        
-        # Get rake_code from most recent stock IN
-        rake_code_result = db.execute_custom_query('''
-            SELECT b.rake_code
-            FROM warehouse_stock ws
-            JOIN builty b ON ws.builty_id = b.builty_id
-            WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
-            ORDER BY ws.stock_id DESC
-            LIMIT 1
-        ''', (warehouse_id,))
-        rake_code = rake_code_result[0][0] if rake_code_result else 'WAREHOUSE'
-        
-        # Add loading slip
-        slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
-                                      account_id, destination_warehouse_id, quantity_in_bags, quantity_in_mt, 
-                                      truck_id, wagon_number, goods_name, truck_driver, truck_owner,
-                                      mobile_number_1, mobile_number_2, truck_details, None, cgmf_id)
-        
-        if slip_id:
-            # CRITICAL: Invalidate cache after successful write to prevent stale data
-            db.invalidate_cache()
+                
+                # If not found in accounts, check warehouses
+                if account_id is None:
+                    for wh in warehouses_list:
+                        if wh[1] == account:
+                            destination_warehouse_id = wh[0]
+                            break
             
-            flash(f'Loading slip #{serial_number} created successfully!', 'success')
-            if request.form.get('action') == 'print':
-                # Use redirect to prevent form resubmission on refresh
-                return redirect(url_for('warehouse_create_loading_slip', print_slip=slip_id))
-            return redirect(url_for('warehouse_dashboard'))
-        else:
-            flash('Error creating loading slip', 'error')
+            # Check if truck exists, if not create it with driver/owner details
+            truck = db.get_truck_by_number(truck_number)
+            if not truck:
+                truck_id = db.add_truck(truck_number, truck_driver, mobile_number_1, truck_owner, mobile_number_2)
+            else:
+                truck_id = truck[0]
+            
+            # Get rake_code from most recent stock IN
+            rake_code_result = db.execute_custom_query('''
+                SELECT b.rake_code
+                FROM warehouse_stock ws
+                JOIN builty b ON ws.builty_id = b.builty_id
+                WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
+                ORDER BY ws.stock_id DESC
+                LIMIT 1
+            ''', (warehouse_id,))
+            rake_code = rake_code_result[0][0] if rake_code_result else 'WAREHOUSE'
+            
+            # Add loading slip
+            slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
+                                          account_id, destination_warehouse_id, quantity_in_bags, quantity_in_mt, 
+                                          truck_id, wagon_number, goods_name, truck_driver, truck_owner,
+                                          mobile_number_1, mobile_number_2, truck_details, None, cgmf_id)
+            
+            if slip_id:
+                # CRITICAL: Invalidate cache after successful write to prevent stale data
+                db.invalidate_cache()
+                
+                flash(f'Loading slip #{serial_number} created successfully!', 'success')
+                if request.form.get('action') == 'print':
+                    # Use redirect to prevent form resubmission on refresh
+                    return redirect(url_for('warehouse_create_loading_slip', print_slip=slip_id))
+                return redirect(url_for('warehouse_dashboard'))
+            else:
+                flash('Error creating loading slip. Please try again.', 'error')
+        
+        except ValueError as e:
+            flash(f'Invalid input data: {str(e)}', 'error')
+        except Exception as e:
+            print(f"Error in warehouse_create_loading_slip: {e}")
+            import traceback
+            traceback.print_exc()
+            flash('An error occurred while creating the loading slip. Please try again.', 'error')
     
     warehouses = db.get_all_warehouses()
     accounts = db.get_all_accounts()

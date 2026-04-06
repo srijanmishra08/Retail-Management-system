@@ -603,6 +603,40 @@ class Database:
         finally:
             self.close_connection(conn)
     
+    def update_rake(self, rake_code, company_name, company_code, date, rr_quantity,
+                    product_name, product_code, rake_point_name, builty_head=None, products=None):
+        """Update existing rake and its products"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                UPDATE rakes SET company_name=?, company_code=?, date=?, rr_quantity=?,
+                                 product_name=?, product_code=?, rake_point_name=?, builty_head=?
+                WHERE rake_code=?
+            ''', (company_name, company_code, date, rr_quantity,
+                  product_name, product_code, rake_point_name, builty_head, rake_code))
+            
+            if products and isinstance(products, list) and len(products) > 0:
+                # Replace products
+                cursor.execute('DELETE FROM rake_products WHERE rake_code = ?', (rake_code,))
+                for prod in products:
+                    cursor.execute('''
+                        INSERT INTO rake_products (rake_code, product_id, product_name, product_code, quantity_mt)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (rake_code, prod.get('product_id'), prod.get('product_name'),
+                          prod.get('product_code'), prod.get('quantity_mt', 0)))
+            
+            conn.commit()
+            if self.use_cloud:
+                Database.reset_cloud_connection()
+            return True
+        except Exception as e:
+            print(f"Error updating rake: {e}")
+            conn.rollback()
+            return False
+        finally:
+            self.close_connection(conn)
+
     def get_rake_products(self, rake_code):
         """Get all products for a specific rake"""
         conn = self.get_connection()
@@ -1812,10 +1846,17 @@ class Database:
             
             conn.commit()
             
-            # Get the slip_id - always use SELECT for reliability with Turso/libsql
-            # cursor.lastrowid is unreliable with cloud databases
-            cursor.execute('SELECT slip_id FROM loading_slips WHERE rake_code = ? AND slip_number = ? ORDER BY slip_id DESC LIMIT 1', (rake_code, slip_number))
-            result = cursor.fetchone()
+            # Reset cloud connection after write so the subsequent SELECT uses a fresh
+            # connection that is guaranteed to see the committed row (Turso HTTP transport
+            # does not guarantee read-after-write visibility on the same connection object).
+            if self.use_cloud:
+                Database.reset_cloud_connection()
+            
+            # Get the slip_id from a fresh connection to avoid stale-read on Turso
+            read_conn = self.get_connection()
+            read_cursor = read_conn.cursor()
+            read_cursor.execute('SELECT slip_id FROM loading_slips WHERE rake_code = ? AND slip_number = ? ORDER BY slip_id DESC LIMIT 1', (rake_code, slip_number))
+            result = read_cursor.fetchone()
             slip_id = result[0] if result else None
             
             if slip_id:
@@ -1928,7 +1969,8 @@ class Database:
                        ls.quantity_bags, ls.quantity_mt, t.truck_number,
                        ls.goods_name, ls.truck_driver, ls.truck_owner,
                        ls.mobile_number_1, ls.mobile_number_2,
-                       ls.account_id, ls.warehouse_id, ls.cgmf_id
+                       ls.account_id, ls.warehouse_id, ls.cgmf_id,
+                       COALESCE(a.account_type, \'\') as account_type
                 FROM loading_slips ls
                 LEFT JOIN accounts a ON ls.account_id = a.account_id
                 LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id

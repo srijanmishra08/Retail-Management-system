@@ -96,18 +96,18 @@
                                 <option value="">-- Select --</option>
                                 <optgroup label="👥 Accounts">
                                     {% for account in accounts %}
-                                    <option value="{{ account[1] }}">{{ account[1] }} - {{ account[2] }}</option>
+                                    <option value="{{ account[1] }}" data-type="{{ account[2] }}">{{ account[1] }} - {{ account[2] }}</option>
                                     {% endfor %}
                                 </optgroup>
                                 <optgroup label="🏢 Warehouses">
                                     {% for warehouse in warehouses %}
-                                    <option value="{{ warehouse[1] }}">{{ warehouse[1] }} - Warehouse</option>
+                                    <option value="{{ warehouse[1] }}" data-type="Warehouse">{{ warehouse[1] }} - Warehouse</option>
                                     {% endfor %}
                                 </optgroup>
                                 {% if cgmf_list %}
                                 <optgroup label="🏛️ CGMF (CG Markfed)">
                                     {% for cgmf in cgmf_list %}
-                                    <option value="CGMF:{{ cgmf[0] }}">{{ cgmf[3] }} - {{ cgmf[1] }} ({{ cgmf[2] }})</option>
+                                    <option value="CGMF:{{ cgmf[0] }}" data-type="CGMF">{{ cgmf[3] }} - {{ cgmf[1] }} ({{ cgmf[2] }})</option>
                                     {% endfor %}
                                 </optgroup>
                                 {% endif %}
@@ -156,12 +156,19 @@
                     </div>
                 </div>
                 
-                <!-- Sub Head Section -->
+                <!-- Sub Head Section - conditional based on account type -->
                 <div class="row">
-                    <div class="col-md-12 mb-3">
-                        <label for="sub_head" class="form-label"><i class="bi bi-tag"></i> Sub Head</label>
-                        <input type="text" class="form-control" id="sub_head" name="sub_head" placeholder="Enter sub head (optional)">
-                        <small class="text-muted">Additional categorization for this builty</small>
+                    <!-- Retailer Name: shown only for Dealer accounts -->
+                    <div class="col-md-12 mb-3" id="subhead_dealer" style="display:none;">
+                        <label for="sub_head" class="form-label"><i class="bi bi-tag"></i> Retailer Name</label>
+                        <input type="text" class="form-control" id="sub_head" name="sub_head" placeholder="Enter retailer name">
+                        <small class="text-muted">Sub-head for Dealer dispatch</small>
+                    </div>
+                    <!-- MF Destination: shown only for CGMF dispatches -->
+                    <div class="col-md-12 mb-3" id="subhead_cgmf" style="display:none;">
+                        <label for="sub_head_cgmf" class="form-label"><i class="bi bi-geo-alt"></i> MF Destination</label>
+                        <input type="text" class="form-control" id="sub_head_cgmf" name="sub_head" placeholder="Enter MF destination">
+                        <small class="text-muted">Sub-head for CGMF dispatch</small>
                     </div>
                 </div>
                 
@@ -282,5 +289,22 @@ document.getElementById('warehouse_name').addEventListener('change', function() 
         document.getElementById('loading_point').value = this.value;
     }
 });
+
+// Toggle sub_head field based on selected account type
+function updateSubheadVisibility() {
+    var accountSelect = document.getElementById('account_warehouse');
+    var selectedOption = accountSelect.options[accountSelect.selectedIndex];
+    var accountType = selectedOption ? (selectedOption.getAttribute('data-type') || '') : '';
+    var dealerDiv = document.getElementById('subhead_dealer');
+    var cgmfDiv = document.getElementById('subhead_cgmf');
+    dealerDiv.style.display = 'none';
+    cgmfDiv.style.display = 'none';
+    if (accountType === 'CGMF') {
+        cgmfDiv.style.display = 'block';
+    } else if (accountType === 'Dealer') {
+        dealerDiv.style.display = 'block';
+    }
+}
+document.getElementById('account_warehouse').addEventListener('change', updateSubheadVisibility);
 </script>
 {% endblock %}

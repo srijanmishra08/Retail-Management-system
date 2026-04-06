@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Rake - FIMS{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h4 class="mb-0"><i class="bi bi-pencil-square"></i> Edit Rake: <strong>{{ rake[1] }}</strong></h4>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('admin_edit_rake', rake_code=rake[1]) }}" id="editRakeForm">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Rake Code</label>
+                    <input type="text" class="form-control bg-light" value="{{ rake[1] }}" readonly>
+                    <small class="text-muted">Rake code cannot be changed</small>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="date" class="form-label">Date <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="date" name="date" required value="{{ rake[4] }}">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="company_name" class="form-label">Company Name <span class="text-danger">*</span></label>
+                    <select class="form-select" id="company_name" name="company_name" required>
+                        <option value="">Select Company</option>
+                        {% for company in companies %}
+                        <option value="{{ company[1] }}" data-code="{{ company[2] }}"
+                            {% if company[1] == rake[2] %}selected{% endif %}>
+                            {{ company[1] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="company_code" class="form-label">Company Code</label>
+                    <input type="text" class="form-control" id="company_code" name="company_code"
+                           value="{{ rake[3] or '' }}" placeholder="Auto-filled from company">
+                </div>
+            </div>
+            
+            <!-- Products Section -->
+            <div class="card mb-3 border-primary">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Products</h5>
+                    <button type="button" class="btn btn-sm btn-success" onclick="addProductRow()">
+                        <i class="bi bi-plus-circle"></i> Add Product
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="productsContainer">
+                        {% for prod in existing_products %}
+                        <div class="product-row mb-3 p-3 border rounded" data-index="{{ loop.index0 }}">
+                            <div class="row">
+                                <div class="col-md-4 mb-2">
+                                    <label class="form-label">Product <span class="text-danger">*</span></label>
+                                    <select class="form-select product-select" name="product_ids[]" required onchange="updateProductDetails(this)">
+                                        <option value="">Select Product</option>
+                                        {% for product in products %}
+                                        <option value="{{ product[0] }}" data-name="{{ product[1] }}" data-code="{{ product[2] }}"
+                                            {% if product[1] == prod[2] %}selected{% endif %}>
+                                            {{ product[1] }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="hidden" name="product_names[]" class="product-name-hidden" value="{{ prod[2] }}">
+                                    <input type="hidden" name="product_codes[]" class="product-code-hidden" value="{{ prod[3] or '' }}">
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">Product Code</label>
+                                    <input type="text" class="form-control product-code-display" readonly value="{{ prod[3] or '' }}">
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">Quantity (MT)</label>
+                                    <input type="number" step="0.01" class="form-control product-quantity"
+                                           name="product_quantities[]" value="{{ prod[4] }}" onchange="updateTotalQuantity()">
+                                </div>
+                                <div class="col-md-2 mb-2 d-flex align-items-end">
+                                    <button type="button" class="btn btn-outline-danger w-100" onclick="removeProductRow(this)"
+                                        {% if loop.first %}style="display:none;"{% endif %}>
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="product-row mb-3 p-3 border rounded" data-index="0">
+                            <div class="row">
+                                <div class="col-md-4 mb-2">
+                                    <label class="form-label">Product <span class="text-danger">*</span></label>
+                                    <select class="form-select product-select" name="product_ids[]" required onchange="updateProductDetails(this)">
+                                        <option value="">Select Product</option>
+                                        {% for product in products %}
+                                        <option value="{{ product[0] }}" data-name="{{ product[1] }}" data-code="{{ product[2] }}">{{ product[1] }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="hidden" name="product_names[]" class="product-name-hidden">
+                                    <input type="hidden" name="product_codes[]" class="product-code-hidden">
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">Product Code</label>
+                                    <input type="text" class="form-control product-code-display" readonly placeholder="Auto-filled">
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">Quantity (MT)</label>
+                                    <input type="number" step="0.01" class="form-control product-quantity" name="product_quantities[]" placeholder="0.00" onchange="updateTotalQuantity()">
+                                </div>
+                                <div class="col-md-2 mb-2 d-flex align-items-end">
+                                    <button type="button" class="btn btn-outline-danger w-100" onclick="removeProductRow(this)" style="display:none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="rr_quantity" class="form-label">Total RR Quantity (MT) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" class="form-control" id="rr_quantity" name="rr_quantity"
+                           required value="{{ rake[5] }}">
+                    <small class="text-muted">Total quantity for all products combined</small>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label for="rake_point_name" class="form-label">Rake Point Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="rake_point_name" name="rake_point_name"
+                           required value="{{ rake[8] }}">
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label for="builty_head" class="form-label">Builty Head</label>
+                    <input type="text" class="form-control" id="builty_head" name="builty_head"
+                           value="{{ rake[9] or '' }}" placeholder="e.g., Payal Fertilizers">
+                    <small class="text-muted">This text will appear as the heading when printing builties for this rake</small>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var productIndex = {{ existing_products|length if existing_products else 1 }};
+var productsData = {{ products | tojson }};
+
+// Auto-fill company code when company is selected
+document.getElementById('company_name').addEventListener('change', function() {
+    var selectedOption = this.options[this.selectedIndex];
+    var code = selectedOption.getAttribute('data-code') || '';
+    document.getElementById('company_code').value = code;
+});
+
+function updateProductDetails(selectEl) {
+    var row = selectEl.closest('.product-row');
+    var selectedOption = selectEl.options[selectEl.selectedIndex];
+    var productName = selectedOption.getAttribute('data-name') || '';
+    var productCode = selectedOption.getAttribute('data-code') || '';
+    row.querySelector('.product-name-hidden').value = productName;
+    row.querySelector('.product-code-hidden').value = productCode;
+    row.querySelector('.product-code-display').value = productCode;
+}
+
+function updateTotalQuantity() {
+    var quantities = document.querySelectorAll('.product-quantity');
+    var total = 0;
+    quantities.forEach(function(q) {
+        total += parseFloat(q.value) || 0;
+    });
+    if (total > 0) {
+        document.getElementById('rr_quantity').value = total.toFixed(2);
+    }
+}
+
+function addProductRow() {
+    var container = document.getElementById('productsContainer');
+    var rows = container.querySelectorAll('.product-row');
+    
+    // Show remove button on first row if now >1
+    if (rows.length >= 1) {
+        rows[0].querySelector('button').style.display = '';
+    }
+    
+    var newRow = document.createElement('div');
+    newRow.className = 'product-row mb-3 p-3 border rounded';
+    newRow.setAttribute('data-index', productIndex);
+    
+    var options = productsData.map(function(p) {
+        return '<option value="' + p[0] + '" data-name="' + p[1] + '" data-code="' + (p[2] || '') + '">' + p[1] + '</option>';
+    }).join('');
+    
+    newRow.innerHTML = '<div class="row">' +
+        '<div class="col-md-4 mb-2"><label class="form-label">Product <span class="text-danger">*</span></label>' +
+        '<select class="form-select product-select" name="product_ids[]" required onchange="updateProductDetails(this)">' +
+        '<option value="">Select Product</option>' + options + '</select>' +
+        '<input type="hidden" name="product_names[]" class="product-name-hidden">' +
+        '<input type="hidden" name="product_codes[]" class="product-code-hidden"></div>' +
+        '<div class="col-md-3 mb-2"><label class="form-label">Product Code</label>' +
+        '<input type="text" class="form-control product-code-display" readonly placeholder="Auto-filled"></div>' +
+        '<div class="col-md-3 mb-2"><label class="form-label">Quantity (MT)</label>' +
+        '<input type="number" step="0.01" class="form-control product-quantity" name="product_quantities[]" placeholder="0.00" onchange="updateTotalQuantity()"></div>' +
+        '<div class="col-md-2 mb-2 d-flex align-items-end">' +
+        '<button type="button" class="btn btn-outline-danger w-100" onclick="removeProductRow(this)"><i class="bi bi-trash"></i></button></div>' +
+        '</div>';
+    
+    container.appendChild(newRow);
+    productIndex++;
+}
+
+function removeProductRow(btn) {
+    var container = document.getElementById('productsContainer');
+    var rows = container.querySelectorAll('.product-row');
+    if (rows.length <= 1) return;
+    btn.closest('.product-row').remove();
+    var remaining = container.querySelectorAll('.product-row');
+    if (remaining.length === 1) {
+        remaining[0].querySelector('button').style.display = 'none';
+    }
+    updateTotalQuantity();
+}
+</script>
+{% endblock %}
