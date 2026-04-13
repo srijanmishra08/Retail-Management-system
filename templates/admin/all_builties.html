@@ -14,9 +14,12 @@
             <h6 class="mb-0"><i class="bi bi-funnel"></i> Filters</h6>
         </div>
         <div class="card-body">
+            {% set goods_set = [] %}
+            {% for builty in builties %}{% if builty[11] and builty[11] not in goods_set %}{% if goods_set.append(builty[11]) %}{% endif %}{% endif %}{% endfor %}
             <div class="row g-3">
                 <div class="col-md-2">
-                    <label for="rakeFilter" class="form-label">Rake Code</label>
+                    <label class="form-label">Rake Code</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="rakeSearch" placeholder="Search rakes...">
                     <select class="form-select" id="rakeFilter">
                         <option value="">All Rakes</option>
                         {% for rake in rakes %}
@@ -25,7 +28,8 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label for="truckFilter" class="form-label">Truck Number</label>
+                    <label class="form-label">Truck Number</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="truckSearch" placeholder="Search trucks...">
                     <select class="form-select" id="truckFilter">
                         <option value="">All Trucks</option>
                         {% for truck in trucks %}
@@ -34,7 +38,8 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label for="destinationFilter" class="form-label">Destination</label>
+                    <label class="form-label">Destination</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="destinationSearch" placeholder="Search destinations...">
                     <select class="form-select" id="destinationFilter">
                         <option value="">All Destinations</option>
                         {% for warehouse in warehouses %}
@@ -45,8 +50,9 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="accountFilter" class="form-label">Account</label>
+                <div class="col-md-2">
+                    <label class="form-label">Account</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="accountSearch" placeholder="Search accounts...">
                     <select class="form-select" id="accountFilter">
                         <option value="">All Accounts</option>
                         <optgroup label="Dealers">
@@ -71,9 +77,19 @@
                         </optgroup>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="searchInput" class="form-label">Search</label>
-                    <input type="text" id="searchInput" class="form-control" placeholder="Search...">
+                <div class="col-md-2">
+                    <label class="form-label">Product / Goods</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="goodsSearch" placeholder="Search products...">
+                    <select class="form-select" id="goodsFilter">
+                        <option value="">All Products</option>
+                        {% for g in goods_set | sort %}
+                        <option value="{{ g }}">{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Search</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search all...">
                 </div>
             </div>
             <div class="mt-3">
@@ -109,7 +125,7 @@
                     </thead>
                     <tbody>
                         {% for builty in builties %}
-                        <tr data-rake="{{ builty[2] or '' }}" data-truck="{{ builty[28] or '' }}" data-destination="{{ builty[10] or '' }}" data-account="{{ builty[26] or builty[27] or builty[29] or '' }}">
+                        <tr data-rake="{{ builty[2] or '' }}" data-truck="{{ builty[28] or '' }}" data-destination="{{ builty[10] or '' }}" data-account="{{ builty[26] or builty[27] or builty[29] or '' }}" data-goods="{{ builty[11] or '' }}" data-bags="{{ builty[12] or 0 }}" data-mt="{{ builty[13] or 0 }}">
                             <td>{{ builty[0] }}</td>
                             <td><strong>{{ builty[1] }}</strong></td>
                             <td>{{ builty[2] or 'N/A' }}</td>
@@ -150,12 +166,12 @@
                                 </a>
                                 <button type="button" class="btn btn-sm btn-warning ms-1" 
                                         title="Edit Builty"
-                                        onclick="openEditBuiltyModal({{ builty[0] }}, '{{ builty[10] if builty[10] else '' }}', {{ builty[12] }}, {{ builty[13] }}, {{ builty[15] if builty[15] else 0 }}, {{ builty[16] if builty[16] else 0 }}, {{ builty[17] if builty[17] else 0 }}, {{ builty[18] if builty[18] else 0 }}, '{{ builty[3] if builty[3] else '' }}')">
+                                        onclick="openEditBuiltyModal('{{ builty[0] }}', '{{ builty[10] if builty[10] else '' }}', {{ builty[12] }}, {{ builty[13] }}, {{ builty[15] if builty[15] else 0 }}, {{ builty[16] if builty[16] else 0 }}, {{ builty[17] if builty[17] else 0 }}, {{ builty[18] if builty[18] else 0 }}, '{{ builty[3] if builty[3] else '' }}')">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-danger ms-1" 
                                         title="Delete Builty"
-                                        onclick="confirmDeleteBuilty({{ builty[0] }}, '{{ builty[1] }}')">
+                                        onclick="confirmDeleteBuilty('{{ builty[0] }}', '{{ builty[1] }}')">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </td>
@@ -163,6 +179,30 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Totals Summary -->
+    <div class="card mt-3 border-primary" id="totalsSummary">
+        <div class="card-body py-2">
+            <div class="row text-center g-0">
+                <div class="col border-end">
+                    <div class="fw-bold text-primary fs-5" id="totalBuilties">0</div>
+                    <div class="text-muted small">No. of Builties</div>
+                </div>
+                <div class="col border-end">
+                    <div class="fw-bold text-success fs-5" id="totalBags">0</div>
+                    <div class="text-muted small">Total Bags</div>
+                </div>
+                <div class="col border-end">
+                    <div class="fw-bold text-info fs-5" id="totalMT">0.00</div>
+                    <div class="text-muted small">Total MT Dispatched</div>
+                </div>
+                <div class="col">
+                    <div class="fw-bold text-warning fs-5" id="totalRakes">0</div>
+                    <div class="text-muted small">No. of Rakes</div>
+                </div>
             </div>
         </div>
     </div>
@@ -316,6 +356,7 @@
         const truckFilter = document.getElementById('truckFilter').value;
         const destinationFilter = document.getElementById('destinationFilter').value;
         const accountFilter = document.getElementById('accountFilter').value;
+        const goodsFilter = document.getElementById('goodsFilter').value;
         const searchText = document.getElementById('searchInput').value.toLowerCase();
         
         const table = document.getElementById('builtiesTable');
@@ -327,16 +368,38 @@
             const truck = row.dataset.truck || '';
             const destination = row.dataset.destination || '';
             const account = row.dataset.account || '';
+            const goods = row.dataset.goods || '';
             const text = row.textContent.toLowerCase();
             
             const matchRake = !rakeFilter || rake === rakeFilter;
             const matchTruck = !truckFilter || truck === truckFilter;
             const matchDestination = !destinationFilter || destination.includes(destinationFilter);
             const matchAccount = !accountFilter || account.includes(accountFilter);
+            const matchGoods = !goodsFilter || goods === goodsFilter;
             const matchSearch = !searchText || text.includes(searchText);
             
-            row.style.display = (matchRake && matchTruck && matchDestination && matchAccount && matchSearch) ? '' : 'none';
+            row.style.display = (matchRake && matchTruck && matchDestination && matchAccount && matchGoods && matchSearch) ? '' : 'none';
         }
+        updateTotals();
+    }
+
+    function updateTotals() {
+        const table = document.getElementById('builtiesTable');
+        const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+        let totalBuilties = 0, totalBags = 0, totalMT = 0;
+        const rakes = new Set();
+        for (let i = 0; i < rows.length; i++) {
+            if (rows[i].style.display !== 'none') {
+                totalBuilties++;
+                totalBags += parseFloat(rows[i].dataset.bags || 0);
+                totalMT += parseFloat(rows[i].dataset.mt || 0);
+                if (rows[i].dataset.rake) rakes.add(rows[i].dataset.rake);
+            }
+        }
+        document.getElementById('totalBuilties').textContent = totalBuilties.toLocaleString('en-IN');
+        document.getElementById('totalBags').textContent = totalBags.toLocaleString('en-IN');
+        document.getElementById('totalMT').textContent = totalMT.toFixed(2);
+        document.getElementById('totalRakes').textContent = rakes.size;
     }
     
     function clearFilters() {
@@ -344,16 +407,42 @@
         document.getElementById('truckFilter').value = '';
         document.getElementById('destinationFilter').value = '';
         document.getElementById('accountFilter').value = '';
+        document.getElementById('goodsFilter').value = '';
         document.getElementById('searchInput').value = '';
+        ['rakeSearch','truckSearch','destinationSearch','accountSearch','goodsSearch'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) { el.value = ''; el.dispatchEvent(new Event('input')); }
+        });
         applyFilters();
     }
+
+    // Searchable dropdown helper
+    function makeSelectSearch(inputId, selectId) {
+        document.getElementById(inputId).addEventListener('input', function() {
+            var q = this.value.toLowerCase();
+            var sel = document.getElementById(selectId);
+            Array.from(sel.options).forEach(function(opt) {
+                if (opt.value === '') { opt.style.display = ''; return; }
+                opt.style.display = opt.text.toLowerCase().includes(q) ? '' : 'none';
+            });
+        });
+    }
+    makeSelectSearch('rakeSearch', 'rakeFilter');
+    makeSelectSearch('truckSearch', 'truckFilter');
+    makeSelectSearch('destinationSearch', 'destinationFilter');
+    makeSelectSearch('accountSearch', 'accountFilter');
+    makeSelectSearch('goodsSearch', 'goodsFilter');
     
     // Add event listeners to filters
     document.getElementById('rakeFilter').addEventListener('change', applyFilters);
     document.getElementById('truckFilter').addEventListener('change', applyFilters);
     document.getElementById('destinationFilter').addEventListener('change', applyFilters);
     document.getElementById('accountFilter').addEventListener('change', applyFilters);
+    document.getElementById('goodsFilter').addEventListener('change', applyFilters);
     document.getElementById('searchInput').addEventListener('keyup', applyFilters);
+
+    // Initialize totals on page load
+    updateTotals();
     
     // Download builty function - opens in new window and triggers print/save as PDF
     function downloadBuilty(url) {

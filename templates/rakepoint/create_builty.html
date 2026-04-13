@@ -195,17 +195,34 @@
 
                 <!-- Sub Head Section - conditional based on account type -->
                 <div class="row">
-                    <!-- Retailer Name: shown only for Dealer accounts -->
+                    <!-- Retailer Name: shown only for Dealer/Payal accounts -->
                     <div class="col-md-12 mb-3" id="subhead_dealer" style="display:none;">
                         <label for="sub_head" class="form-label fw-bold"><i class="bi bi-tag"></i> Retailer Name</label>
                         <input type="text" class="form-control form-control-lg" id="sub_head" name="sub_head" placeholder="Enter retailer name">
-                        <small class="text-muted">Sub-head for Dealer dispatch</small>
+                        <small class="text-muted">Sub-head for Dealer / Payal dispatch</small>
                     </div>
                     <!-- MF Destination: shown only for CGMF dispatches -->
                     <div class="col-md-12 mb-3" id="subhead_cgmf" style="display:none;">
                         <label for="sub_head_cgmf" class="form-label fw-bold"><i class="bi bi-geo-alt"></i> MF Destination</label>
                         <input type="text" class="form-control form-control-lg" id="sub_head_cgmf" name="sub_head" placeholder="Enter MF destination">
                         <small class="text-muted">Sub-head for CGMF dispatch</small>
+                    </div>
+                </div>
+
+                <!-- Supply Term -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold"><i class="bi bi-tags"></i> Supply Term <span class="text-danger">*</span></label>
+                        <div class="d-flex gap-3 mt-1">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="supply_term" id="supply_ex" value="EX" required checked>
+                                <label class="form-check-label fw-bold" for="supply_ex">EX</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="supply_term" id="supply_for" value="FOR">
+                                <label class="form-check-label fw-bold" for="supply_for">FOR</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -289,6 +306,7 @@ document.getElementById('loading_slip_search').addEventListener('input', functio
 
 // AUTO-FILL FROM LOADING SLIP - Show/hide sections and populate data
 document.getElementById('loading_slip_id').addEventListener('change', function() {
+    this.blur(); // Prevent arrow-key from changing value after selection
     var selectedOption = this.options[this.selectedIndex];
     
     if (selectedOption.value) {
@@ -338,7 +356,7 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
         cgmfDiv.style.display = 'none';
         if (cgmfId) {
             cgmfDiv.style.display = 'block';
-        } else if (accountType === 'Dealer') {
+        } else if (accountType === 'Dealer' || accountType === 'Payal') {
             dealerDiv.style.display = 'block';
         }
         

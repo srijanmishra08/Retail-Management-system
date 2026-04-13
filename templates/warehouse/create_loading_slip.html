@@ -41,14 +41,20 @@
             </div>
             
             <div class="row">
-                <div class="col-md-6 mb-3">
+                <div class="col-md-4 mb-3">
                     <label for="loading_point" class="form-label">Loading Point <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="loading_point" name="loading_point" required placeholder="Warehouse name will auto-fill">
                 </div>
                 
-                <div class="col-md-6 mb-3">
+                <div class="col-md-4 mb-3">
                     <label for="destination" class="form-label">Destination <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="destination" name="destination" required placeholder="Enter destination">
+                </div>
+
+                <div class="col-md-4 mb-3">
+                    <label for="slip_date" class="form-label">Date</label>
+                    <input type="date" class="form-control" id="slip_date" name="slip_date">
+                    <small class="text-muted">Leave blank for today</small>
                 </div>
             </div>
             
@@ -84,17 +90,32 @@
                 </div>
             </div>
             
+            <!-- Multi-Product Section -->
+            <div class="alert alert-secondary mt-2">
+                <i class="bi bi-box-seam"></i> <strong>Products Being Dispatched</strong>
+                <small class="text-muted d-block">Only products available in the selected warehouse are shown.</small>
+            </div>
+
+            <div id="product_rows_container">
+                <!-- Product rows injected here by JS -->
+            </div>
+
+            <button type="button" class="btn btn-outline-success btn-sm mb-3" id="add_product_row">
+                <i class="bi bi-plus-circle"></i> Add Another Product
+            </button>
+
             <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="quantity_in_bags" class="form-label">Quantity in Bags <span class="text-danger">*</span></label>
-                    <input type="number" class="form-control" id="quantity_in_bags" name="quantity_in_bags" required placeholder="Enter quantity">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label fw-semibold">Total Bags</label>
+                    <input type="text" class="form-control bg-light" id="total_bags_display" readonly value="0">
                 </div>
-                
-                <div class="col-md-4 mb-3">
-                    <label for="quantity_in_mt" class="form-label">Quantity in MT <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" class="form-control" id="quantity_in_mt" name="quantity_in_mt" required placeholder="0.00">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label fw-semibold">Total MT</label>
+                    <input type="text" class="form-control bg-light" id="total_mt_display" readonly value="0.00">
                 </div>
-                
+            </div>
+
+            <div class="row mt-2">
                 <div class="col-md-4 mb-3">
                     <label for="truck_number" class="form-label">Truck Number <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Enter truck number">
@@ -128,17 +149,6 @@
                     <label for="mobile_number_2" class="form-label">Mobile Number 2</label>
                     <input type="tel" class="form-control" id="mobile_number_2" name="mobile_number_2" placeholder="Optional">
                 </div>
-                
-                <div class="col-md-4 mb-3">
-                    <label for="goods_name" class="form-label">Product <span class="text-danger">*</span></label>
-                    <select class="form-select" id="goods_name" name="goods_name" required>
-                        <option value="">Select Product</option>
-                        {% for product in products %}
-                        <option value="{{ product[1] }}" data-unit-per-bag="{{ product[5] }}">{{ product[1] }}</option>
-                        {% endfor %}
-                    </select>
-                    <small class="text-muted">Select product to auto-calculate MT from bags</small>
-                </div>
             </div>
             
             <div class="row">
@@ -166,62 +176,165 @@
 
 {% block extra_js %}
 <script>
-let currentUnitPerBag = 50; // Default value
+// ── Warehouse product data fetched from API ──────────────────────────────────
+let warehouseProducts = [];  // [{product_id, product_name, unit_per_bag, balance}]
 
-// Update unit per bag when product is selected
-document.getElementById('goods_name').addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    const unitPerBag = parseFloat(selectedOption.getAttribute('data-unit-per-bag')) || 50;
-    currentUnitPerBag = unitPerBag;
-    
-    // Recalculate MT if bags already entered
-    const bags = parseFloat(document.getElementById('quantity_in_bags').value) || 0;
-    if (bags > 0) {
-        const mt = (bags * currentUnitPerBag) / 1000;
-        document.getElementById('quantity_in_mt').value = mt.toFixed(2);
-    }
-});
+// Build a single product row element
+function buildProductRow(index) {
+    const row = document.createElement('div');
+    row.className = 'row align-items-end border rounded p-2 mb-2 product-row';
+    row.dataset.index = index;
+    row.innerHTML = `
+        <div class="col-md-4 mb-2">
+            <label class="form-label">Product <span class="text-danger">*</span></label>
+            <select class="form-select product-select" name="product_name[]" required>
+                <option value="">-- Select Warehouse First --</option>
+            </select>
+            <input type="hidden" name="product_id[]" class="product-id-field">
+            <small class="text-muted balance-display"></small>
+        </div>
+        <div class="col-md-3 mb-2">
+            <label class="form-label">Bags <span class="text-danger">*</span></label>
+            <input type="number" class="form-control bags-input" name="quantity_bags[]" min="1" required placeholder="0">
+        </div>
+        <div class="col-md-3 mb-2">
+            <label class="form-label">MT <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" class="form-control mt-input" name="quantity_mt[]" required placeholder="0.00">
+        </div>
+        <div class="col-md-2 mb-2">
+            <button type="button" class="btn btn-outline-danger btn-sm remove-row-btn w-100">
+                <i class="bi bi-trash"></i> Remove
+            </button>
+        </div>
+    `;
 
-// Auto-calculate MT from bags using selected product's unit_per_bag
-document.getElementById('quantity_in_bags').addEventListener('input', function() {
-    const bags = parseFloat(this.value) || 0;
-    const mt = (bags * currentUnitPerBag) / 1000;
-    document.getElementById('quantity_in_mt').value = mt.toFixed(2);
-});
+    // Populate dropdown with current warehouse products
+    populateProductSelect(row.querySelector('.product-select'));
 
-// Auto-fill loading point and serial number when warehouse selected
-document.getElementById('warehouse_name').addEventListener('change', async function() {
-    const selectedOption = this.options[this.selectedIndex];
-    const warehouseName = this.value;
-    
-    if (warehouseName) {
-        // Auto-fill loading point
-        document.getElementById('loading_point').value = warehouseName;
-        
-        // Auto-generate serial number
-        try {
-            const response = await fetch(`/api/next-loading-slip-serial/${encodeURIComponent(warehouseName)}`);
-            const data = await response.json();
-            document.getElementById('serial_number').value = data.serial_number;
-        } catch (error) {
-            console.error('Error fetching serial number:', error);
+    // Wire events
+    row.querySelector('.product-select').addEventListener('change', function() {
+        const pid = this.value;
+        row.querySelector('.product-id-field').value = pid;
+        const prod = warehouseProducts.find(p => p.product_id === pid);
+        const unitPerBag = prod ? prod.unit_per_bag : 50;
+        const balance = prod ? prod.balance : null;
+        row.querySelector('.balance-display').textContent =
+            balance !== null ? `Available: ${balance.toFixed(2)} MT` : '';
+        row.setAttribute('data-unit-per-bag', unitPerBag);
+        // Recalculate MT
+        const bags = parseFloat(row.querySelector('.bags-input').value) || 0;
+        if (bags > 0) {
+            row.querySelector('.mt-input').value = ((bags * unitPerBag) / 1000).toFixed(2);
         }
+        updateTotals();
+    });
+
+    row.querySelector('.bags-input').addEventListener('input', function() {
+        const bags = parseFloat(this.value) || 0;
+        const unitPerBag = parseFloat(row.getAttribute('data-unit-per-bag')) || 50;
+        row.querySelector('.mt-input').value = ((bags * unitPerBag) / 1000).toFixed(2);
+        updateTotals();
+    });
+
+    row.querySelector('.mt-input').addEventListener('input', updateTotals);
+
+    row.querySelector('.remove-row-btn').addEventListener('click', function() {
+        if (document.querySelectorAll('.product-row').length > 1) {
+            row.remove();
+            updateTotals();
+        } else {
+            alert('At least one product row is required.');
+        }
+    });
+
+    return row;
+}
+
+function populateProductSelect(selectEl) {
+    const currentVal = selectEl.value;
+    selectEl.innerHTML = '<option value="">-- Select Product --</option>';
+    warehouseProducts.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.product_id;
+        opt.textContent = `${p.product_name} (${p.balance.toFixed(2)} MT avail.)`;
+        selectEl.appendChild(opt);
+    });
+    if (currentVal) selectEl.value = currentVal;
+}
+
+function refreshAllProductSelects() {
+    document.querySelectorAll('.product-row .product-select').forEach(sel => {
+        populateProductSelect(sel);
+    });
+}
+
+function updateTotals() {
+    let totalBags = 0, totalMt = 0;
+    document.querySelectorAll('.product-row').forEach(row => {
+        totalBags += parseInt(row.querySelector('.bags-input').value) || 0;
+        totalMt   += parseFloat(row.querySelector('.mt-input').value)  || 0;
+    });
+    document.getElementById('total_bags_display').value = totalBags;
+    document.getElementById('total_mt_display').value   = totalMt.toFixed(2);
+}
+
+// ── Add initial row on page load ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('product_rows_container');
+    container.appendChild(buildProductRow(0));
+
+    document.getElementById('add_product_row').addEventListener('click', function() {
+        const count = document.querySelectorAll('.product-row').length;
+        container.appendChild(buildProductRow(count));
+    });
+});
+
+// ── Warehouse select: load serial + products ──────────────────────────────────
+// Build warehouse id map from server data
+const warehouseIdMap = {
+    {% for warehouse in warehouses %}
+    "{{ warehouse[1] }}": "{{ warehouse[0] }}",
+    {% endfor %}
+};
+
+document.getElementById('warehouse_name').addEventListener('change', async function() {
+    this.blur(); // Prevent arrow-key from changing value after selection
+    const warehouseName = this.value;
+    const warehouseId   = warehouseIdMap[warehouseName];
+
+    if (warehouseName && warehouseId) {
+        document.getElementById('loading_point').value = warehouseName;
+
+        // Fetch serial number
+        try {
+            const res = await fetch(`/api/next-loading-slip-serial/${encodeURIComponent(warehouseName)}`);
+            const data = await res.json();
+            document.getElementById('serial_number').value = data.serial_number;
+        } catch (e) { console.error('Serial fetch error:', e); }
+
+        // Fetch products in this warehouse
+        try {
+            const res = await fetch(`/api/warehouse-products/${encodeURIComponent(warehouseId)}`);
+            const data = await res.json();
+            warehouseProducts = data.products || [];
+        } catch (e) {
+            console.error('Products fetch error:', e);
+            warehouseProducts = [];
+        }
+        refreshAllProductSelects();
     } else {
         document.getElementById('loading_point').value = '';
         document.getElementById('serial_number').value = '';
+        warehouseProducts = [];
+        refreshAllProductSelects();
     }
 });
 
-// Auto-open print window and reset form if print action was clicked
+// ── Auto-print after POST redirect ───────────────────────────────────────────
 {% if print_slip_id %}
 window.addEventListener('load', function() {
-    // Open print page in new window
-    const printWindow = window.open('{{ url_for("warehouse_print_loading_slip", slip_id=print_slip_id) }}', '_blank', 'width=800,height=600');
-    
-    // Reset form after a short delay
-    setTimeout(function() {
-        document.querySelector('form').reset();
-    }, 500);
+    window.open('{{ url_for("warehouse_print_loading_slip", slip_id=print_slip_id) }}', '_blank', 'width=800,height=600');
+    setTimeout(function() { document.querySelector('form').reset(); }, 500);
 });
 {% endif %}
 </script>

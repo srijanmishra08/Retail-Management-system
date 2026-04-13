@@ -76,8 +76,8 @@
                                 <td><span class="badge bg-info">{{ account[2] }}</span></td>
                                 <td>{{ account[3] }}</td>
                                 <td>{{ account[4] }}</td>
-                                <td>{{ account[6] if account[6] else '-' }}</td>
-                                <td>{{ account[5] }}</td>
+                                <td>{{ account[5] if account[5] is not none and account[5] != '' else '-' }}</td>
+                                <td>{{ account[6] }}</td>
                                 <td>
                                     <button type="button" class="btn btn-sm btn-warning me-1 edit-account-btn" title="Edit Account"
                                             data-id="{{ account[0] }}"
@@ -85,7 +85,7 @@
                                             data-type="{{ account[2] }}"
                                             data-contact="{{ account[3] or '' }}"
                                             data-address="{{ account[4] or '' }}"
-                                            data-distance="{{ account[6] or 0 }}">
+                                            data-distance="{{ account[5] or 0 }}">
                                         <i class="bi bi-pencil"></i>
                                     </button>
                                     <form method="POST" action="{{ url_for('admin_delete_account', account_id=account[0]) }}" 
@@ -105,6 +105,9 @@
             
             <!-- Dealers -->
             <div class="tab-pane fade" id="dealers">
+                <div class="mb-3">
+                    <input type="text" id="dealerSearchInput" class="form-control" placeholder="🔍 Search dealers...">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -131,6 +134,9 @@
             
             <!-- Retailers -->
             <div class="tab-pane fade" id="retailers">
+                <div class="mb-3">
+                    <input type="text" id="retailerSearchInput" class="form-control" placeholder="🔍 Search retailers...">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -157,6 +163,9 @@
             
             <!-- Payal -->
             <div class="tab-pane fade" id="payal">
+                <div class="mb-3">
+                    <input type="text" id="payalSearchInput" class="form-control" placeholder="🔍 Search Payal accounts...">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -183,6 +192,9 @@
             
             <!-- Companies -->
             <div class="tab-pane fade" id="companies">
+                <div class="mb-3">
+                    <input type="text" id="companySearchInput" class="form-control" placeholder="🔍 Search companies...">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -228,6 +240,9 @@
             
             <!-- Employees -->
             <div class="tab-pane fade" id="employees">
+                <div class="mb-3">
+                    <input type="text" id="employeeSearchInput" class="form-control" placeholder="🔍 Search employees...">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -267,6 +282,9 @@
             
             <!-- CGMF (CG Markfed) -->
             <div class="tab-pane fade" id="cgmf">
+                <div class="mb-3">
+                    <input type="text" id="cgmfSearchInput" class="form-control" placeholder="🔍 Search CGMF societies...">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
@@ -756,6 +774,24 @@ document.getElementById('accountSearchInput').addEventListener('input', function
         row.style.display = text.includes(searchText) ? '' : 'none';
     });
 });
+
+// Generic tab search helper
+function makeTabSearch(inputId, tbodySelector) {
+    var el = document.getElementById(inputId);
+    if (!el) return;
+    el.addEventListener('input', function() {
+        var q = this.value.toLowerCase();
+        document.querySelectorAll(tbodySelector + ' tr').forEach(function(row) {
+            row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+    });
+}
+makeTabSearch('dealerSearchInput',   '#dealers tbody');
+makeTabSearch('retailerSearchInput', '#retailers tbody');
+makeTabSearch('payalSearchInput',    '#payal tbody');
+makeTabSearch('companySearchInput',  '#companies tbody');
+makeTabSearch('employeeSearchInput', '#employees tbody');
+makeTabSearch('cgmfSearchInput',     '#cgmf tbody');
 // Handle edit account button clicks
 document.querySelectorAll('.edit-account-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {

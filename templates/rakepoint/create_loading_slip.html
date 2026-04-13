@@ -72,9 +72,15 @@
                     <small class="text-muted">Auto-filled from rake details (cannot be changed)</small>
                 </div>
                 
-                <div class="col-md-6 mb-3">
+                <div class="col-md-3 mb-3">
                     <label for="destination" class="form-label">Destination <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="destination" name="destination" required placeholder="Enter destination">
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <label for="slip_date" class="form-label">Date</label>
+                    <input type="date" class="form-control" id="slip_date" name="slip_date">
+                    <small class="text-muted">Leave blank for today</small>
                 </div>
             </div>
             
@@ -265,6 +271,7 @@ function validateQuantity(quantity) {
 
 // Auto-fill goods name and loading point from rake selection
 document.getElementById('rake_code').addEventListener('change', function() {
+    this.blur(); // Prevent arrow-key from changing value after selection
     const selectedOption = this.options[this.selectedIndex];
     const rakeCode = this.value;
     
@@ -592,14 +599,14 @@ accountOptions.forEach(function(option) {
 // All accounts data for filtering
 const allAccounts = [
     {% for account in accounts %}
-    { id: {{ account[0] }}, name: "{{ account[1] }}", type: "{{ account[2] }}" },
+    { id: "{{ account[0] }}", name: "{{ account[1] }}", type: "{{ account[2] }}" },
     {% endfor %}
 ];
 
 // All companies data for filtering
 const allCompanies = [
     {% for company in companies %}
-    { id: {{ company[0] }}, name: "{{ company[1] }}" },
+    { id: "{{ company[0] }}", name: "{{ company[1] }}" },
     {% endfor %}
 ];
 

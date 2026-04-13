@@ -14,9 +14,12 @@
             <h6 class="mb-0"><i class="bi bi-funnel"></i> Filters</h6>
         </div>
         <div class="card-body">
+            {% set goods_set = [] %}
+            {% for slip in loading_slips %}{% if slip[12] and slip[12] not in goods_set %}{% if goods_set.append(slip[12]) %}{% endif %}{% endif %}{% endfor %}
             <div class="row g-3">
                 <div class="col-md-2">
-                    <label for="rakeFilter" class="form-label">Rake Code</label>
+                    <label class="form-label">Rake Code</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="rakeSearch" placeholder="Search rakes...">
                     <select class="form-select" id="rakeFilter">
                         <option value="">All Rakes</option>
                         {% for rake in rakes %}
@@ -25,7 +28,8 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label for="truckFilter" class="form-label">Truck Number</label>
+                    <label class="form-label">Truck Number</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="truckSearch" placeholder="Search trucks...">
                     <select class="form-select" id="truckFilter">
                         <option value="">All Trucks</option>
                         {% for truck in trucks %}
@@ -34,7 +38,8 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label for="destinationFilter" class="form-label">Destination</label>
+                    <label class="form-label">Destination</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="destinationSearch" placeholder="Search destinations...">
                     <select class="form-select" id="destinationFilter">
                         <option value="">All Destinations</option>
                         {% for warehouse in warehouses %}
@@ -45,8 +50,9 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="accountFilter" class="form-label">Account</label>
+                <div class="col-md-2">
+                    <label class="form-label">Account</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="accountSearch" placeholder="Search accounts...">
                     <select class="form-select" id="accountFilter">
                         <option value="">All Accounts</option>
                         <optgroup label="Dealers">
@@ -71,9 +77,19 @@
                         </optgroup>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="searchInput" class="form-label">Search</label>
-                    <input type="text" id="searchInput" class="form-control" placeholder="Search...">
+                <div class="col-md-2">
+                    <label class="form-label">Product / Goods</label>
+                    <input type="text" class="form-control form-control-sm mb-1" id="goodsSearch" placeholder="Search products...">
+                    <select class="form-select" id="goodsFilter">
+                        <option value="">All Products</option>
+                        {% for g in goods_set | sort %}
+                        <option value="{{ g }}">{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Search</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search all...">
                 </div>
             </div>
             <div class="mt-3">
@@ -108,7 +124,7 @@
                     </thead>
                     <tbody>
                         {% for slip in loading_slips %}
-                        <tr data-rake="{{ slip[1] }}" data-truck="{{ slip[8] or '' }}" data-destination="{{ slip[4] or '' }}" data-account="{{ slip[18] or slip[19] or slip[20] or '' }}">
+                        <tr data-rake="{{ slip[1] }}" data-truck="{{ slip[8] or '' }}" data-destination="{{ slip[4] or '' }}" data-account="{{ slip[18] or slip[19] or slip[20] or '' }}" data-goods="{{ slip[12] or '' }}">
                             <td>{{ slip[0] }}</td>
                             <td><strong>{{ slip[2] }}</strong></td>
                             <td>{{ slip[1] }}</td>
@@ -151,12 +167,12 @@
                                 </a>
                                 <button type="button" class="btn btn-sm btn-warning ms-1" 
                                         title="Edit Loading Slip"
-                                        onclick="openEditSlipModal({{ slip[0] }}, '{{ slip[4] }}', {{ slip[6] }}, {{ slip[7] }}, '{{ slip[12] }}', '{{ slip[11] if slip[11] else '' }}')">
+                                        onclick="openEditSlipModal('{{ slip[0] }}', '{{ slip[4] }}', {{ slip[6] }}, {{ slip[7] }}, '{{ slip[12] }}', '{{ slip[11] if slip[11] else '' }}')">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-danger ms-1" 
                                         title="Delete Loading Slip"
-                                        onclick="confirmDeleteSlip({{ slip[0] }}, '{{ slip[2] }}', {{ 'true' if slip[10] else 'false' }})">
+                                        onclick="confirmDeleteSlip('{{ slip[0] }}', '{{ slip[2] }}', {{ 'true' if slip[10] else 'false' }}, '{{ slip[17] or '' }}')">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </td>
@@ -186,17 +202,22 @@
             <form id="deleteSlipForm" method="POST">
                 <div class="modal-body">
                     <p>Are you sure you want to delete loading slip <strong id="slipNumberToDelete"></strong>?</p>
-                    <div class="alert alert-warning" id="builtyWarning" style="display: none;">
-                        <i class="bi bi-exclamation-triangle"></i> <strong>Warning:</strong> This loading slip has a linked builty attached to it.
+                    <div class="alert alert-danger" id="builtyWarning" style="display: none;">
+                        <i class="bi bi-exclamation-triangle-fill"></i> <strong>Linked Builty Detected!</strong><br>
+                        This loading slip has a linked builty (<strong id="linkedBuiltyNumber"></strong>). 
+                        Deleting this slip <strong>will also delete the linked builty and all associated warehouse stock entries.</strong>
                     </div>
-                    <div class="form-check" id="deleteBuiltyCheck" style="display: none;">
-                        <input class="form-check-input" type="checkbox" name="delete_builty" value="true" id="deleteLinkedBuilty" required>
-                        <label class="form-check-label" for="deleteLinkedBuilty">
-                            <strong>Yes, also delete the linked builty</strong> (This will also remove warehouse stock entries)
+                    <div class="alert alert-warning" id="noBuiltyInfo" style="display: none;">
+                        <i class="bi bi-info-circle"></i> This loading slip has no linked builty. It is safe to delete.
+                    </div>
+                    <div class="form-check mt-2" id="deleteBuiltyCheck" style="display: none;">
+                        <input class="form-check-input" type="checkbox" name="delete_builty" value="true" id="deleteLinkedBuilty">
+                        <label class="form-check-label text-danger fw-bold" for="deleteLinkedBuilty">
+                            I understand — delete the loading slip AND the linked builty
                         </label>
                     </div>
                     <div class="alert alert-danger mt-2" id="builtyRequiredWarning" style="display: none;">
-                        <small>You must check the box above to confirm builty deletion before proceeding.</small>
+                        <small><i class="bi bi-exclamation-circle"></i> You must check the box above to confirm deletion of the linked builty.</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -296,6 +317,7 @@
         const truckFilter = document.getElementById('truckFilter').value;
         const destinationFilter = document.getElementById('destinationFilter').value;
         const accountFilter = document.getElementById('accountFilter').value;
+        const goodsFilter = document.getElementById('goodsFilter').value;
         const searchText = document.getElementById('searchInput').value.toLowerCase();
         
         const table = document.getElementById('loadingSlipsTable');
@@ -307,15 +329,17 @@
             const truck = row.dataset.truck || '';
             const destination = row.dataset.destination || '';
             const account = row.dataset.account || '';
+            const goods = row.dataset.goods || '';
             const text = row.textContent.toLowerCase();
             
             const matchRake = !rakeFilter || rake === rakeFilter;
             const matchTruck = !truckFilter || truck === truckFilter;
             const matchDestination = !destinationFilter || destination.includes(destinationFilter);
             const matchAccount = !accountFilter || account.includes(accountFilter);
+            const matchGoods = !goodsFilter || goods === goodsFilter;
             const matchSearch = !searchText || text.includes(searchText);
             
-            row.style.display = (matchRake && matchTruck && matchDestination && matchAccount && matchSearch) ? '' : 'none';
+            row.style.display = (matchRake && matchTruck && matchDestination && matchAccount && matchGoods && matchSearch) ? '' : 'none';
         }
     }
     
@@ -324,42 +348,79 @@
         document.getElementById('truckFilter').value = '';
         document.getElementById('destinationFilter').value = '';
         document.getElementById('accountFilter').value = '';
+        document.getElementById('goodsFilter').value = '';
         document.getElementById('searchInput').value = '';
+        ['rakeSearch','truckSearch','destinationSearch','accountSearch','goodsSearch'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) { el.value = ''; el.dispatchEvent(new Event('input')); }
+        });
         applyFilters();
     }
+
+    // Searchable dropdown helper
+    function makeSelectSearch(inputId, selectId) {
+        document.getElementById(inputId).addEventListener('input', function() {
+            var q = this.value.toLowerCase();
+            var sel = document.getElementById(selectId);
+            Array.from(sel.options).forEach(function(opt) {
+                if (opt.value === '') { opt.style.display = ''; return; }
+                opt.style.display = opt.text.toLowerCase().includes(q) ? '' : 'none';
+            });
+        });
+    }
+    makeSelectSearch('rakeSearch', 'rakeFilter');
+    makeSelectSearch('truckSearch', 'truckFilter');
+    makeSelectSearch('destinationSearch', 'destinationFilter');
+    makeSelectSearch('accountSearch', 'accountFilter');
+    makeSelectSearch('goodsSearch', 'goodsFilter');
     
     // Add event listeners to filters
     document.getElementById('rakeFilter').addEventListener('change', applyFilters);
     document.getElementById('truckFilter').addEventListener('change', applyFilters);
     document.getElementById('destinationFilter').addEventListener('change', applyFilters);
     document.getElementById('accountFilter').addEventListener('change', applyFilters);
+    document.getElementById('goodsFilter').addEventListener('change', applyFilters);
     document.getElementById('searchInput').addEventListener('keyup', applyFilters);
     
     // Delete loading slip confirmation
-    function confirmDeleteSlip(slipId, slipNumber, hasBuilty) {
+    function confirmDeleteSlip(slipId, slipNumber, hasBuilty, builtyNumber) {
         document.getElementById('slipNumberToDelete').textContent = slipNumber;
         document.getElementById('deleteSlipForm').action = '/admin/delete-loading-slip/' + slipId;
         
-        const builtyWarning = document.getElementById('builtyWarning');
+        const builtyWarning    = document.getElementById('builtyWarning');
+        const noBuiltyInfo     = document.getElementById('noBuiltyInfo');
         const deleteBuiltyCheck = document.getElementById('deleteBuiltyCheck');
         const builtyRequiredWarning = document.getElementById('builtyRequiredWarning');
         const checkbox = document.getElementById('deleteLinkedBuilty');
+        const linkedBuiltyNum = document.getElementById('linkedBuiltyNumber');
+        
+        checkbox.checked = false;
         
         if (hasBuilty) {
-            builtyWarning.style.display = 'block';
+            builtyWarning.style.display   = 'block';
+            noBuiltyInfo.style.display    = 'none';
             deleteBuiltyCheck.style.display = 'block';
-            builtyRequiredWarning.style.display = 'block';
-            checkbox.checked = false;
-            checkbox.required = true;
+            builtyRequiredWarning.style.display = 'none';
+            if (linkedBuiltyNum) linkedBuiltyNum.textContent = builtyNumber || '';
         } else {
-            builtyWarning.style.display = 'none';
+            builtyWarning.style.display   = 'none';
+            noBuiltyInfo.style.display    = 'block';
             deleteBuiltyCheck.style.display = 'none';
             builtyRequiredWarning.style.display = 'none';
-            checkbox.required = false;
         }
         
         new bootstrap.Modal(document.getElementById('deleteSlipModal')).show();
     }
+
+    // Block submit if builty exists but checkbox not checked
+    document.getElementById('deleteSlipForm').addEventListener('submit', function(e) {
+        const hasBuiltyWarning = document.getElementById('builtyWarning').style.display !== 'none';
+        const checkbox = document.getElementById('deleteLinkedBuilty');
+        if (hasBuiltyWarning && !checkbox.checked) {
+            e.preventDefault();
+            document.getElementById('builtyRequiredWarning').style.display = 'block';
+        }
+    });
     
     // Edit loading slip modal
     function openEditSlipModal(slipId, destination, bags, mt, goods, dateStr) {
