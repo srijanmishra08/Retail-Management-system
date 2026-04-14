@@ -4,6 +4,8 @@ Role-based application with specific dashboards
 """
 
 import os
+import random
+import requests as http_requests
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -33,7 +35,28 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# User class for Flask-Login
+# ── Email / Notification helpers ────────────────────────────────────────────
+NOTIFY_EMAIL       = os.environ.get('NOTIFY_EMAIL', 'dipeshasrani9@gmail.com')
+FORMSPREE_FORM_ID  = os.environ.get('FORMSPREE_FORM_ID', '')
+
+def send_formspree(subject: str, message: str) -> bool:
+    """Send an email via Formspree API. Returns True on success."""
+    if not FORMSPREE_FORM_ID:
+        app.logger.warning("FORMSPREE_FORM_ID not set — email not sent")
+        return False
+    try:
+        resp = http_requests.post(
+            f'https://formspree.io/f/{FORMSPREE_FORM_ID}',
+            json={'email': NOTIFY_EMAIL, '_subject': subject, 'message': message},
+            headers={'Accept': 'application/json'},
+            timeout=8
+        )
+        return resp.status_code == 200
+    except Exception as e:
+        app.logger.error(f"Formspree send failed: {e}")
+        return False
+
+# ── User class for Flask-Login
 class User(UserMixin):
     def __init__(self, user_id, username, role):
         self.id = user_id
@@ -421,7 +444,78 @@ def admin_rake_details(rake_code):
                          cgmf_dispatches=cgmf_dispatches,
                          total_to_accounts=total_to_accounts,
                          total_to_warehouses=total_to_warehouses,
-                         total_to_cgmf=total_to_cgmf)
+                         total_to_cgmf=total_to_cgmf,
+                         notify_email=NOTIFY_EMAIL)
+
+@app.route('/admin/send-delete-rake-otp/<path:rake_code>', methods=['POST'])
+@login_required
+def admin_send_delete_rake_otp(rake_code):
+    """Generate a 6-digit OTP, store in session, and email it via Formspree."""
+    if current_user.role != 'Admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    rake_code = unquote(rake_code)
+    otp = str(random.randint(100000, 999999))
+    session['delete_rake_otp']       = otp
+    session['delete_rake_otp_code']  = rake_code
+    session['delete_rake_otp_expiry'] = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+
+    sent = send_formspree(
+        subject=f'[FIMS] OTP to Delete Rake {rake_code}',
+        message=(
+            f'An admin has requested to delete rake {rake_code} and ALL its associated '
+            f'loading slips, builties and e-bills.\n\n'
+            f'Your one-time password is: {otp}\n\n'
+            f'This OTP expires in 10 minutes. If you did not request this, please contact the administrator immediately.'
+        )
+    )
+    if sent:
+        return jsonify({'success': True, 'message': f'OTP sent to {NOTIFY_EMAIL}'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to send OTP email. Check FORMSPREE_FORM_ID env var.'})
+
+@app.route('/admin/delete-rake/<path:rake_code>', methods=['POST'])
+@login_required
+def admin_delete_rake(rake_code):
+    """Delete a rake after OTP verification."""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+    rake_code = unquote(rake_code)
+
+    entered_otp   = request.form.get('otp', '').strip()
+    stored_otp    = session.get('delete_rake_otp')
+    stored_code   = session.get('delete_rake_otp_code')
+    expiry_str    = session.get('delete_rake_otp_expiry')
+
+    if not stored_otp or stored_code != rake_code:
+        flash('No OTP found for this rake. Please request a new OTP.', 'error')
+        return redirect(url_for('admin_rake_details', rake_code=rake_code))
+
+    if expiry_str and datetime.utcnow() > datetime.fromisoformat(expiry_str):
+        session.pop('delete_rake_otp', None)
+        flash('OTP has expired. Please request a new one.', 'error')
+        return redirect(url_for('admin_rake_details', rake_code=rake_code))
+
+    if entered_otp != stored_otp:
+        flash('Invalid OTP. Please try again.', 'error')
+        return redirect(url_for('admin_rake_details', rake_code=rake_code))
+
+    # OTP valid — clear session and delete
+    session.pop('delete_rake_otp', None)
+    session.pop('delete_rake_otp_code', None)
+    session.pop('delete_rake_otp_expiry', None)
+
+    success, message = db.delete_rake(rake_code)
+    if success:
+        send_formspree(
+            subject=f'[FIMS] Rake {rake_code} Deleted',
+            message=f'Admin {current_user.username} deleted rake {rake_code} and all its associated records.'
+        )
+        flash(f'Rake {rake_code} and all associated data deleted successfully.', 'success')
+        return redirect(url_for('admin_summary'))
+    else:
+        flash(f'Error deleting rake: {message}', 'error')
+        return redirect(url_for('admin_rake_details', rake_code=rake_code))
 
 @app.route('/admin/download-rake-summary-excel')
 @login_required
@@ -1484,13 +1578,24 @@ def admin_delete_builty(builty_id):
         return redirect(url_for('index'))
     
     delete_loading_slip = request.form.get('delete_loading_slip', 'false') == 'true'
+    # Fetch builty info before deleting (for notification)
+    builty_info = db.execute_custom_query('SELECT builty_number, rake_code FROM builty WHERE id = %s', (builty_id,))
     success, message = db.delete_builty(builty_id, delete_loading_slip)
-    
+
     if success:
         flash(message, 'success')
+        b_num = builty_info[0][0] if builty_info else builty_id
+        b_rake = builty_info[0][1] if builty_info else 'N/A'
+        send_formspree(
+            subject=f'[FIMS] Builty {b_num} Deleted',
+            message=(
+                f'Admin {current_user.username} deleted builty {b_num} (Rake: {b_rake}).\n'
+                f'Also deleted linked loading slip: {"Yes" if delete_loading_slip else "No"}'
+            )
+        )
     else:
         flash(message, 'error')
-    
+
     return redirect(url_for('admin_all_builties'))
 
 @app.route('/admin/delete-loading-slip/<string:slip_id>', methods=['POST'])
@@ -1502,13 +1607,24 @@ def admin_delete_loading_slip(slip_id):
         return redirect(url_for('index'))
     
     delete_builty = request.form.get('delete_builty', 'false') == 'true'
+    # Fetch slip info before deleting (for notification)
+    slip_info = db.execute_custom_query('SELECT slip_number, rake_code FROM loading_slips WHERE id = %s', (slip_id,))
     success, message = db.delete_loading_slip(slip_id, delete_builty)
-    
+
     if success:
         flash(message, 'success')
+        s_num = slip_info[0][0] if slip_info else slip_id
+        s_rake = slip_info[0][1] if slip_info else 'N/A'
+        send_formspree(
+            subject=f'[FIMS] Loading Slip #{s_num} Deleted',
+            message=(
+                f'Admin {current_user.username} deleted loading slip #{s_num} (Rake: {s_rake}).\n'
+                f'Also deleted linked builty: {"Yes" if delete_builty else "No"}'
+            )
+        )
     else:
         flash(message, 'error')
-    
+
     return redirect(url_for('admin_all_loading_slips'))
 
 @app.route('/admin/edit-loading-slip/<string:slip_id>', methods=['POST'])

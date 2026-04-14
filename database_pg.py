@@ -1767,6 +1767,46 @@ class Database:
             conn.autocommit = True
             return False, str(e)
 
+    def delete_rake(self, rake_code):
+        """Delete a rake and ALL associated loading slips, builties, ebills, and warehouse stock."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            conn.autocommit = False
+            # Collect all builty IDs linked to this rake's loading slips
+            cursor.execute(
+                'SELECT DISTINCT builty_id FROM loading_slips WHERE rake_code = %s AND builty_id IS NOT NULL',
+                (rake_code,)
+            )
+            builty_ids = [row[0] for row in cursor.fetchall()]
+
+            if builty_ids:
+                fmt = ','.join(['%s'] * len(builty_ids))
+                # Delete ebills linked to those builties
+                cursor.execute(f'DELETE FROM ebills WHERE builty_id IN ({fmt})', builty_ids)
+                # Delete warehouse stock linked to those builties
+                cursor.execute(f'DELETE FROM warehouse_stock WHERE builty_id IN ({fmt})', builty_ids)
+
+            # Delete loading slips (unlink builty_id first to avoid FK issues, then delete builties)
+            cursor.execute('DELETE FROM loading_slips WHERE rake_code = %s', (rake_code,))
+
+            if builty_ids:
+                fmt = ','.join(['%s'] * len(builty_ids))
+                cursor.execute(f'DELETE FROM builty WHERE id IN ({fmt})', builty_ids)
+
+            # Delete rake products and rake record
+            cursor.execute('DELETE FROM rake_products WHERE rake_code = %s', (rake_code,))
+            cursor.execute('DELETE FROM rakes WHERE rake_code = %s', (rake_code,))
+
+            conn.commit()
+            conn.autocommit = True
+            return True, f"Rake {rake_code} and all associated records deleted successfully"
+        except Exception as e:
+            try: conn.rollback()
+            except Exception: pass
+            conn.autocommit = True
+            return False, str(e)
+
     def get_loading_slip_by_id(self, slip_id):
         conn = self.get_connection()
         cursor = conn.cursor()

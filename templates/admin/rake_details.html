@@ -200,11 +200,11 @@
             <div class="col-md-6">
                 <div class="p-3 border rounded bg-primary bg-opacity-10">
                     <h6 class="text-muted">Total Dispatched</h6>
-                    <h4 class="text-primary">{{ "%.2f"|format(total_to_accounts + total_to_warehouses + (total_to_cgmf|default(0))) }} MT</h4>
+                    <h4 class="text-primary">{{ "%.2f"|format((total_to_accounts|float) + (total_to_warehouses|float) + (total_to_cgmf|default(0)|float)) }} MT</h4>
                 </div>
             </div>
             <div class="col-md-6">
-                {% set total_dispatched = total_to_accounts + total_to_warehouses + (total_to_cgmf|default(0)) %}
+                {% set total_dispatched = (total_to_accounts|float) + (total_to_warehouses|float) + (total_to_cgmf|default(0)|float) %}
                 {% set remaining = rake_info[4]|float - total_dispatched %}
                 <div class="p-3 border rounded {% if remaining > 0 %}bg-danger{% else %}bg-success{% endif %} bg-opacity-10">
                     <h6 class="text-muted">Remaining in Rake</h6>
@@ -230,5 +230,101 @@
     <button class="btn btn-outline-primary" onclick="window.print()">
         <i class="bi bi-printer"></i> Print Page
     </button>
+    <button class="btn btn-danger ms-2" data-bs-toggle="modal" data-bs-target="#deleteRakeModal">
+        <i class="bi bi-trash3-fill"></i> Delete Rake
+    </button>
 </div>
+
+<!-- Delete Rake Modal -->
+<div class="modal fade" id="deleteRakeModal" tabindex="-1" aria-labelledby="deleteRakeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteRakeModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Delete Rake: {{ rake_info[0] }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <strong>Warning — This action is irreversible!</strong><br>
+                    Deleting this rake will permanently remove:
+                    <ul class="mb-0 mt-2">
+                        <li>All loading slips for this rake</li>
+                        <li>All linked builties</li>
+                        <li>All linked e-bills</li>
+                        <li>All associated warehouse stock entries</li>
+                    </ul>
+                </div>
+                <p>An OTP will be sent to <strong>{{ notify_email }}</strong>.<br>Enter it below to confirm deletion.</p>
+
+                <div id="otpSentAlert" class="alert alert-success d-none">
+                    <i class="bi bi-check-circle"></i> <span id="otpSentMsg"></span>
+                </div>
+                <div id="otpErrorAlert" class="alert alert-danger d-none">
+                    <i class="bi bi-x-circle"></i> <span id="otpErrorMsg"></span>
+                </div>
+
+                <div class="mb-3">
+                    <button type="button" class="btn btn-warning w-100" id="sendOtpBtn" onclick="sendOtp()">
+                        <i class="bi bi-envelope"></i> Send OTP to Email
+                    </button>
+                </div>
+
+                <form id="deleteRakeForm" method="POST" action="{{ url_for('admin_delete_rake', rake_code=rake_info[0]) }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Enter OTP</label>
+                        <input type="text" class="form-control form-control-lg text-center"
+                               name="otp" id="otpInput"
+                               maxlength="6" placeholder="______"
+                               autocomplete="off" required
+                               style="letter-spacing: 0.4em; font-size: 1.5rem;">
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-trash3-fill"></i> Confirm Delete Rake
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function sendOtp() {
+    const btn = document.getElementById('sendOtpBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending…';
+    document.getElementById('otpSentAlert').classList.add('d-none');
+    document.getElementById('otpErrorAlert').classList.add('d-none');
+
+    fetch("{{ url_for('admin_send_delete_rake_otp', rake_code=rake_info[0]) }}", {
+        method: 'POST',
+        headers: {'X-CSRFToken': '{{ session.get("_csrf_token", "") }}'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('otpSentMsg').textContent = data.message;
+            document.getElementById('otpSentAlert').classList.remove('d-none');
+            document.getElementById('otpInput').focus();
+            // Allow resend after 30s
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-envelope"></i> Resend OTP';
+            }, 30000);
+        } else {
+            document.getElementById('otpErrorMsg').textContent = data.message;
+            document.getElementById('otpErrorAlert').classList.remove('d-none');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-envelope"></i> Send OTP to Email';
+        }
+    })
+    .catch(() => {
+        document.getElementById('otpErrorMsg').textContent = 'Network error. Please try again.';
+        document.getElementById('otpErrorAlert').classList.remove('d-none');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-envelope"></i> Send OTP to Email';
+    });
+}
+</script>
 {% endblock %}
