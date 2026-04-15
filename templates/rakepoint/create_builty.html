@@ -266,6 +266,12 @@
 
 {% block extra_js %}
 <script>
+// Build account-type lookup map for Payal/Dealer sub_head fallback
+window.accountTypeMap = {};
+{% for account in accounts %}
+window.accountTypeMap["{{ account[0] }}"] = "{{ account[2] }}";
+{% endfor %}
+
 // Set today's date as default and fetch next LR number
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('builty_date').valueAsDate = new Date();
@@ -349,7 +355,12 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
         
         // Show sub_head field based on account type
         var accountType = selectedOption.getAttribute('data-account-type') || '';
+        var accountId = selectedOption.getAttribute('data-account-id') || '';
         var cgmfId = selectedOption.getAttribute('data-cgmf-id') || '';
+        // Fallback: look up type from the accounts list if data-account-type is missing
+        if (!accountType && accountId && window.accountTypeMap && window.accountTypeMap[accountId]) {
+            accountType = window.accountTypeMap[accountId];
+        }
         var dealerDiv = document.getElementById('subhead_dealer');
         var cgmfDiv = document.getElementById('subhead_cgmf');
         dealerDiv.style.display = 'none';

@@ -3682,6 +3682,9 @@ def warehouse_stock_in():
         if truck_id:
             pass  # truck_id is already a UUID string
         
+        # Map 'truck' to 'transfer' — the stock_source enum only has 'rake'/'transfer'
+        db_source_type = 'transfer' if source_type == 'truck' else source_type
+
         stock_id = db.add_warehouse_stock_in(
             warehouse_id=warehouse_id,
             builty_id=builty_id,
@@ -3693,7 +3696,7 @@ def warehouse_stock_in():
             notes=remarks,
             company_id=company_id,
             product_id=product_id,
-            source_type=source_type,
+            source_type=db_source_type,
             truck_id=truck_id,
             serial_number=int(serial_number) if serial_number else None,
             sub_head=sub_head
