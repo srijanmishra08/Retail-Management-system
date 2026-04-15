@@ -1637,7 +1637,8 @@ class Database:
                        ls.goods_name, ls.truck_driver, ls.truck_owner,
                        ls.mobile_number_1, ls.mobile_number_2,
                        ls.account_id, ls.warehouse_id, ls.cgmf_id,
-                       COALESCE(a.account_type::text, '') AS account_type
+                       COALESCE(a.account_type::text, '') AS account_type,
+                       COALESCE(ls.warehouse_account_type, '') AS warehouse_account_type
                 FROM loading_slips ls
                 LEFT JOIN accounts   a  ON ls.account_id   = a.id
                 LEFT JOIN warehouses w  ON ls.warehouse_id  = w.id

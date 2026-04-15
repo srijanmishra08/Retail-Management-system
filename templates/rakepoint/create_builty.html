@@ -52,6 +52,7 @@
                                     data-warehouse-id="{{ slip[16] or '' }}"
                                     data-cgmf-id="{{ slip[17] or '' }}"
                                     data-account-type="{{ slip[18] or '' }}"
+                                    data-warehouse-account-type="{{ slip[19] or '' }}"
                                     data-search-text="Slip #{{ slip[2] }} {{ slip[1] }} {{ slip[8] }} MT Truck: {{ slip[9] }} Driver: {{ slip[11] }}">
                                 Slip #{{ slip[2] }} | {{ slip[1] }} | {{ slip[8] }} MT | Truck: {{ slip[9] }} | Driver: {{ slip[11] }}
                             </option>
@@ -267,9 +268,10 @@
 {% block extra_js %}
 <script>
 // Build account-type lookup map for Payal/Dealer sub_head fallback
+// Accounts named 'payal' (case-insensitive) are treated as Payal type even if DB has wrong type
 window.accountTypeMap = {};
 {% for account in accounts %}
-window.accountTypeMap["{{ account[0] }}"] = "{{ account[2] }}";
+window.accountTypeMap["{{ account[0] }}"] = {% if 'payal' in account[1].lower() %}"Payal"{% else %}"{{ account[2] }}"{% endif %};
 {% endfor %}
 
 // Set today's date as default and fetch next LR number
@@ -357,8 +359,9 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
         var accountType = selectedOption.getAttribute('data-account-type') || '';
         var accountId = selectedOption.getAttribute('data-account-id') || '';
         var cgmfId = selectedOption.getAttribute('data-cgmf-id') || '';
-        // Fallback: look up type from the accounts list if data-account-type is missing
-        if (!accountType && accountId && window.accountTypeMap && window.accountTypeMap[accountId]) {
+        var warehouseAccountType = selectedOption.getAttribute('data-warehouse-account-type') || '';
+        // Fallback: look up type from accounts map (overrides wrong DB type for payal-named accounts)
+        if (accountId && window.accountTypeMap && window.accountTypeMap[accountId]) {
             accountType = window.accountTypeMap[accountId];
         }
         var dealerDiv = document.getElementById('subhead_dealer');
@@ -367,7 +370,8 @@ document.getElementById('loading_slip_id').addEventListener('change', function()
         cgmfDiv.style.display = 'none';
         if (cgmfId) {
             cgmfDiv.style.display = 'block';
-        } else if (accountType === 'Dealer' || accountType === 'Payal') {
+        } else if (accountType === 'Dealer' || accountType === 'Payal' ||
+                   warehouseAccountType === 'Dealer' || warehouseAccountType === 'Payal') {
             dealerDiv.style.display = 'block';
         }
         
