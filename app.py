@@ -3589,14 +3589,24 @@ def warehouse_stock_in():
         warehouse_id = request.form.get('warehouse_name')
         source_type = request.form.get('source_type', 'rake')
         builty_id = request.form.get('builty_number') if source_type == 'rake' else None
-        truck_id = request.form.get('truck_number') if source_type == 'truck' else None
         company_id = request.form.get('company_id')
         product_id = request.form.get('product_id')
         quantity = float(request.form.get('unloaded_quantity'))
         employee_id = request.form.get('employee_id')
+
+        # Resolve truck_id: look up by truck number (or create) to get the UUID FK
+        truck_id = None
+        if source_type == 'truck':
+            truck_number_raw = (request.form.get('truck_number') or '').strip()
+            if truck_number_raw:
+                existing_truck = db.get_truck_by_number(truck_number_raw)
+                if existing_truck:
+                    truck_id = existing_truck[0]
+                else:
+                    truck_id = db.add_truck(truck_number_raw, None, None, None, None)
         
         # Handle account_id which may be a regular account, CGMF, or Company
-        account_id_raw = request.form.get('account_id')
+        account_id_raw = request.form.get('account_id') or ''
         account_id = None
         cgmf_id = None
         source_company_id = None  # For when stock belongs to a specific company
@@ -3606,7 +3616,7 @@ def warehouse_stock_in():
         elif account_id_raw.startswith('COMPANY:'):
             source_company_id = account_id_raw.replace('COMPANY:', '')
         else:
-            account_id = account_id_raw
+            account_id = account_id_raw or None
         
         stock_in_date = request.form.get('stock_in_date')
         remarks = request.form.get('remarks', '')
