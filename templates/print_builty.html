@@ -289,6 +289,12 @@
                 <div class="info-label">Account Type:</div>
                 <div class="info-value">{{ builty.account_type or 'N/A' }}</div>
             </div>
+            {% if builty.sub_head %}
+            <div class="info-row">
+                <div class="info-label">Retailer Name:</div>
+                <div class="info-value"><strong>{{ builty.sub_head }}</strong></div>
+            </div>
+            {% endif %}
         </div>
     </div>
     

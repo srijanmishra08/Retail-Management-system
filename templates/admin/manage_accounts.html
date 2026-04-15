@@ -177,7 +177,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for account in accounts if account[2] == 'Payal' %}
+                            {% for account in accounts if account[2] == 'Payal' or 'payal' in account[1].lower() %}
                             <tr>
                                 <td>{{ account[0] }}</td>
                                 <td><strong>{{ account[1] }}</strong></td>

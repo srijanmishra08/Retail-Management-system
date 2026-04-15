@@ -1464,7 +1464,7 @@ class Database:
         # [23]=account_name [24]=warehouse_name [25]=truck_number
         # [26]=driver_name [27]=driver_mobile [28]=owner_name [29]=owner_mobile
         # [30]=builty_head [31]=receiver_name [32]=received_quantity
-        # [33]=account_address [34]=company_name [35]=company_code [36]=account_type
+        # [33]=account_address [34]=company_name [35]=company_code [36]=account_type [37]=sub_head
         cursor.execute('''
             SELECT b.id AS builty_id, b.builty_number, b.rake_code, b.date, b.rake_point_name,
                    b.account_id, b.warehouse_id, b.cgmf_id, b.truck_id,
@@ -1476,7 +1476,7 @@ class Database:
                    t.driver_name, t.driver_mobile, t.owner_name, t.owner_mobile,
                    r.head AS builty_head, b.receiver_name, b.received_quantity,
                    a.address AS account_address,
-                   r.company_name, r.company_code, a.account_type
+                   r.company_name, r.company_code, a.account_type, b.sub_head
             FROM builty b
             LEFT JOIN accounts   a  ON b.account_id  = a.id
             LEFT JOIN warehouses w  ON b.warehouse_id = w.id

@@ -2752,8 +2752,12 @@ def admin_print_builty(builty_id):
         'account_address': builty[33] if len(builty) > 33 else None,
         'company_name': builty[34] if len(builty) > 34 else None,
         'company_code': builty[35] if len(builty) > 35 else None,
-        'account_type': builty[36] if len(builty) > 36 else None
+        'account_type': builty[36] if len(builty) > 36 else None,
+        'sub_head': builty[37] if len(builty) > 37 else None
     }
+    # Override account_type to 'Payal' if account name contains 'payal'
+    if builty_dict['account_name'] and 'payal' in str(builty_dict['account_name']).lower():
+        builty_dict['account_type'] = 'Payal'
     
     return render_template('print_builty.html', builty=builty_dict)
 
@@ -3397,8 +3401,12 @@ def rakepoint_print_builty(builty_id):
         'account_address': builty[33] if len(builty) > 33 else None,
         'company_name': builty[34] if len(builty) > 34 else None,
         'company_code': builty[35] if len(builty) > 35 else None,
-        'account_type': builty[36] if len(builty) > 36 else None
+        'account_type': builty[36] if len(builty) > 36 else None,
+        'sub_head': builty[37] if len(builty) > 37 else None
     }
+    # Override account_type to 'Payal' if account name contains 'payal'
+    if builty_dict['account_name'] and 'payal' in str(builty_dict['account_name']).lower():
+        builty_dict['account_type'] = 'Payal'
     
     return render_template('print_builty.html', builty=builty_dict)
 
@@ -4028,8 +4036,12 @@ def warehouse_print_builty(builty_id):
         'account_address': builty[33] if len(builty) > 33 else None,
         'company_name': builty[34] if len(builty) > 34 else None,
         'company_code': builty[35] if len(builty) > 35 else None,
-        'account_type': builty[36] if len(builty) > 36 else None
+        'account_type': builty[36] if len(builty) > 36 else None,
+        'sub_head': builty[37] if len(builty) > 37 else None
     }
+    # Override account_type to 'Payal' if account name contains 'payal'
+    if builty_dict['account_name'] and 'payal' in str(builty_dict['account_name']).lower():
+        builty_dict['account_type'] = 'Payal'
     
     return render_template('print_builty.html', builty=builty_dict)
 
