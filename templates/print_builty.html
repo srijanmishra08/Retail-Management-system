@@ -185,6 +185,35 @@
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
+
+        .copy-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .copy-badge.transporter {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: 2px solid #1d4ed8;
+        }
+        .copy-badge.receiver {
+            background: #d1fae5;
+            color: #065f46;
+            border: 2px solid #065f46;
+        }
+        @media print {
+            .copy-badge {
+                position: fixed;
+                top: 8mm;
+                right: 8mm;
+            }
+        }
     </style>
 </head>
 <body>
@@ -194,6 +223,9 @@
     <button class="print-button no-print" onclick="downloadBuilty()" style="right: 150px; background: #10b981;">
         📥 Download Builty
     </button>
+
+    <!-- Copy type badge (shown both on screen and in print) -->
+    <div id="copyBadge" class="copy-badge" style="display:none;"></div>
     
     <div class="header">
         <h1>BUILTY / CONSIGNMENT NOTE</h1>
@@ -394,6 +426,22 @@
             buttons.forEach(btn => btn.style.display = '');
         }, 1000);
     }
+
+    // Show copy type badge based on ?copy= URL param
+    (function() {
+        var params = new URLSearchParams(window.location.search);
+        var copy = params.get('copy');
+        var badge = document.getElementById('copyBadge');
+        if (copy === 'transporter') {
+            badge.textContent = 'Transporter Copy';
+            badge.classList.add('transporter');
+            badge.style.display = '';
+        } else if (copy === 'receiver') {
+            badge.textContent = "Receiver's Copy";
+            badge.classList.add('receiver');
+            badge.style.display = '';
+        }
+    })();
     </script>
 </body>
 </html>
