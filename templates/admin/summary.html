@@ -3,23 +3,23 @@
 {% block title %}Summary - FIMS{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
     <h2><i class="bi bi-bar-chart-line"></i> Summary</h2>
-    <div class="btn-group" role="group">
+    <div class="btn-group flex-wrap" role="group">
         <a href="{{ url_for('admin_summary', view='rakes') }}" 
-           class="btn {% if view_type == 'rakes' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+           class="btn btn-sm {% if view_type == 'rakes' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             <i class="bi bi-train-freight-front"></i> Rake Summary
         </a>
         <a href="{{ url_for('admin_summary', view='total') }}" 
-           class="btn {% if view_type == 'total' %}btn-success{% else %}btn-outline-success{% endif %}">
+           class="btn btn-sm {% if view_type == 'total' %}btn-success{% else %}btn-outline-success{% endif %}">
             <i class="bi bi-clipboard-data"></i> Total Summary
         </a>
         <a href="{{ url_for('admin_summary', view='per_account') }}" 
-           class="btn {% if view_type == 'per_account' %}btn-info{% else %}btn-outline-info{% endif %}">
+           class="btn btn-sm {% if view_type == 'per_account' %}btn-info{% else %}btn-outline-info{% endif %}">
             <i class="bi bi-people"></i> Per Account Summary
         </a>
         <a href="{{ url_for('admin_summary', view='do') }}" 
-           class="btn {% if view_type == 'do' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+           class="btn btn-sm {% if view_type == 'do' %}btn-warning{% else %}btn-outline-warning{% endif %}">
             <i class="bi bi-clipboard2-check"></i> DO Summary
         </a>
     </div>
@@ -486,6 +486,84 @@
     </div>
 </div>
 
+{% elif view_type == 'do' %}
+<!-- ── DO SUMMARY VIEW ───────────────────────────────────────── -->
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-clipboard2-check"></i> DO Summary (Carry-Forward)</h5>
+        <div class="d-flex gap-2 flex-wrap">
+            <select class="form-select form-select-sm" id="doFilterAccount" onchange="doFilter()" style="width:180px;">
+                <option value="">All Accounts</option>
+                {% for acc in do_filter_accounts %}
+                <option value="{{ acc }}">{{ acc }}</option>
+                {% endfor %}
+            </select>
+            <select class="form-select form-select-sm" id="doFilterRake" onchange="doFilter()" style="width:160px;">
+                <option value="">All Rakes</option>
+                {% for rc in do_filter_rakes %}
+                <option value="{{ rc }}">{{ rc }}</option>
+                {% endfor %}
+            </select>
+            <select class="form-select form-select-sm" id="doFilterProduct" onchange="doFilter()" style="width:150px;">
+                <option value="">All Products</option>
+                {% for p in do_filter_products %}
+                <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-sm btn-outline-dark" onclick="printDOSummary()">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0" id="doSummaryTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Account Name</th>
+                        <th>Type</th>
+                        <th>Product</th>
+                        <th>Rake Code</th>
+                        <th>Rake Date</th>
+                        <th class="text-end">DO Qt (Bags)</th>
+                        <th class="text-end">DO Qt (MT)</th>
+                        <th class="text-end">Carry Forward (MT)</th>
+                        <th class="text-end">Total Expected (MT)</th>
+                        <th class="text-end">Dispatched (MT)</th>
+                        <th class="text-end">Dispatched (Bags)</th>
+                        <th class="text-end">Difference (MT)</th>
+                    </tr>
+                </thead>
+                <tbody id="doSummaryBody">
+                    {% for row in do_summary_rows %}
+                    <tr data-account="{{ row.account_name }}" data-rake="{{ row.rake_code }}" data-product="{{ row.product }}">
+                        <td>{{ loop.index }}</td>
+                        <td><strong>{{ row.account_name }}</strong></td>
+                        <td><span class="badge bg-secondary">{{ row.account_type }}</span></td>
+                        <td>{{ row.product }}</td>
+                        <td><code>{{ row.rake_code }}</code></td>
+                        <td>{{ row.rake_date }}</td>
+                        <td class="text-end">{{ row.do_qty_bags }}</td>
+                        <td class="text-end">{{ "%.2f"|format(row.do_qty_mt) }}</td>
+                        <td class="text-end text-secondary">{{ "%.2f"|format(row.carry_forward) }}</td>
+                        <td class="text-end text-primary fw-bold">{{ "%.2f"|format(row.total_expected) }}</td>
+                        <td class="text-end text-success">{{ "%.2f"|format(row.dispatched_mt) }}</td>
+                        <td class="text-end">{{ row.dispatched_bags }}</td>
+                        <td class="text-end fw-bold {% if row.difference > 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.2f"|format(row.difference) }}
+                            {% if row.difference > 0 %}<i class="bi bi-arrow-up-circle-fill ms-1"></i>{% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="13" class="text-center text-muted py-4">No Dispatch Orders found. <a href="{{ url_for('admin_do') }}">Create one</a>.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 {% endif %}
 {% endblock %}
 
@@ -616,83 +694,6 @@ function filterByRake() {
 </script>
 
 {% if view_type == 'do' %}
-<!-- ── DO SUMMARY VIEW ───────────────────────────────────────── -->
-<div class="card shadow-sm mb-3">
-    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h5 class="mb-0"><i class="bi bi-clipboard2-check"></i> DO Summary (Carry-Forward)</h5>
-        <div class="d-flex gap-2 flex-wrap">
-            <select class="form-select form-select-sm" id="doFilterAccount" onchange="doFilter()" style="width:180px;">
-                <option value="">All Accounts</option>
-                {% for acc in do_filter_accounts %}
-                <option value="{{ acc }}">{{ acc }}</option>
-                {% endfor %}
-            </select>
-            <select class="form-select form-select-sm" id="doFilterRake" onchange="doFilter()" style="width:160px;">
-                <option value="">All Rakes</option>
-                {% for rc in do_filter_rakes %}
-                <option value="{{ rc }}">{{ rc }}</option>
-                {% endfor %}
-            </select>
-            <select class="form-select form-select-sm" id="doFilterProduct" onchange="doFilter()" style="width:150px;">
-                <option value="">All Products</option>
-                {% for p in do_filter_products %}
-                <option value="{{ p }}">{{ p }}</option>
-                {% endfor %}
-            </select>
-            <button class="btn btn-sm btn-outline-dark" onclick="printDOSummary()">
-                <i class="bi bi-printer"></i> Print
-            </button>
-        </div>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered mb-0" id="doSummaryTable">
-                <thead class="table-dark">
-                    <tr>
-                        <th>#</th>
-                        <th>Account Name</th>
-                        <th>Type</th>
-                        <th>Product</th>
-                        <th>Rake Code</th>
-                        <th>Rake Date</th>
-                        <th class="text-end">DO Qt (Bags)</th>
-                        <th class="text-end">DO Qt (MT)</th>
-                        <th class="text-end">Carry Forward (MT)</th>
-                        <th class="text-end">Total Expected (MT)</th>
-                        <th class="text-end">Dispatched (MT)</th>
-                        <th class="text-end">Dispatched (Bags)</th>
-                        <th class="text-end">Difference (MT)</th>
-                    </tr>
-                </thead>
-                <tbody id="doSummaryBody">
-                    {% for row in do_summary_rows %}
-                    <tr data-account="{{ row.account_name }}" data-rake="{{ row.rake_code }}" data-product="{{ row.product }}">
-                        <td>{{ loop.index }}</td>
-                        <td><strong>{{ row.account_name }}</strong></td>
-                        <td><span class="badge bg-secondary">{{ row.account_type }}</span></td>
-                        <td>{{ row.product }}</td>
-                        <td><code>{{ row.rake_code }}</code></td>
-                        <td>{{ row.rake_date }}</td>
-                        <td class="text-end">{{ row.do_qty_bags }}</td>
-                        <td class="text-end">{{ "%.2f"|format(row.do_qty_mt) }}</td>
-                        <td class="text-end text-secondary">{{ "%.2f"|format(row.carry_forward) }}</td>
-                        <td class="text-end text-primary fw-bold">{{ "%.2f"|format(row.total_expected) }}</td>
-                        <td class="text-end text-success">{{ "%.2f"|format(row.dispatched_mt) }}</td>
-                        <td class="text-end">{{ row.dispatched_bags }}</td>
-                        <td class="text-end fw-bold {% if row.difference > 0 %}text-danger{% else %}text-success{% endif %}">
-                            {{ "%.2f"|format(row.difference) }}
-                            {% if row.difference > 0 %}<i class="bi bi-arrow-up-circle-fill ms-1"></i>{% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="13" class="text-center text-muted py-4">No Dispatch Orders found. <a href="{{ url_for('admin_do') }}">Create one</a>.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
 <script>
 function doFilter() {
     var acc  = document.getElementById('doFilterAccount').value.toLowerCase();
