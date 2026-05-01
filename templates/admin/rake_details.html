@@ -3,11 +3,74 @@
 {% block title %}Rake Details - {{ rake_info[0] }}{% endblock %}
 
 {% block content %}
-<div class="mb-4">
+<div class="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
     <a href="{{ url_for('admin_summary') }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left"></i> Back to Summary
     </a>
+    <div class="btn-group" role="group">
+        <input type="radio" class="btn-check" name="viewMode" id="viewSummary" autocomplete="off" checked>
+        <label class="btn btn-outline-primary" for="viewSummary"><i class="bi bi-bar-chart-fill"></i> Account Summary</label>
+        <input type="radio" class="btn-check" name="viewMode" id="viewBuilties" autocomplete="off">
+        <label class="btn btn-outline-success" for="viewBuilties"><i class="bi bi-table"></i> Builty Detail Report</label>
+    </div>
 </div>
+
+<!-- ===== BUILTY DETAIL REPORT (hidden by default) ===== -->
+<div id="builtyDetailPanel" style="display:none;">
+    <div class="d-flex align-items-center justify-content-between mb-3 no-print">
+        <h5 class="mb-0"><i class="bi bi-table text-success"></i> Builty Detail Report — {{ rake_info[0] }}</h5>
+        <button class="btn btn-primary" onclick="printBuiltyReport()"><i class="bi bi-printer"></i> Print Report</button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm" id="builtyDetailTable" style="font-size:13px;">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Builty ID</th>
+                    <th>Date</th>
+                    <th>RR Number</th>
+                    <th>Account</th>
+                    <th>Sub Head</th>
+                    <th>Truck Number</th>
+                    <th>Qt (Ton)</th>
+                    <th>Qt (Bags)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set ns = namespace(total_mt=0, total_bags=0) %}
+                {% for b in rake_builties %}
+                {% set ns.total_mt = ns.total_mt + (b[6]|float if b[6] else 0) %}
+                {% set ns.total_bags = ns.total_bags + (b[7]|int if b[7] else 0) %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><strong>{{ b[0] or 'N/A' }}</strong></td>
+                    <td>{{ b[1]|format_date if b[1] else 'N/A' }}</td>
+                    <td>{{ b[2] or 'N/A' }}</td>
+                    <td>{{ b[3] or 'N/A' }}</td>
+                    <td>{{ b[4] or '-' }}</td>
+                    <td>{{ b[5] or 'N/A' }}</td>
+                    <td class="text-end">{{ "%.2f"|format(b[6]|float) if b[6] else '0.00' }}</td>
+                    <td class="text-end">{{ b[7] if b[7] else '0' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9" class="text-center text-muted">No builties found for this rake.</td></tr>
+                {% endfor %}
+            </tbody>
+            {% if rake_builties %}
+            <tfoot>
+                <tr class="table-dark fw-bold">
+                    <td colspan="7" class="text-end">TOTAL</td>
+                    <td class="text-end">{{ "%.2f"|format(ns.total_mt) }}</td>
+                    <td class="text-end">{{ ns.total_bags }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<!-- ===== ACCOUNT SUMMARY (shown by default) ===== -->
+<div id="summaryPanel">
 
 <div class="card mb-4">
     <div class="card-header bg-primary text-white">
@@ -234,6 +297,7 @@
         <i class="bi bi-trash3-fill"></i> Delete Rake
     </button>
 </div>
+</div><!-- /#summaryPanel -->
 
 <!-- Delete Rake Modal -->
 <div class="modal fade" id="deleteRakeModal" tabindex="-1" aria-labelledby="deleteRakeModalLabel" aria-hidden="true">
@@ -290,6 +354,40 @@
 </div>
 
 <script>
+// View toggle
+document.querySelectorAll('input[name="viewMode"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        var showBuilty = document.getElementById('viewBuilties').checked;
+        document.getElementById('summaryPanel').style.display = showBuilty ? 'none' : '';
+        document.getElementById('builtyDetailPanel').style.display = showBuilty ? '' : 'none';
+    });
+});
+
+// Print the builty detail table in a clean page
+function printBuiltyReport() {
+    var table = document.getElementById('builtyDetailTable').outerHTML;
+    var win = window.open('', '_blank');
+    win.document.write('<html><head><title>Builty Detail Report — {{ rake_info[0] }}</title>');
+    win.document.write('<style>');
+    win.document.write('body{font-family:Arial,sans-serif;font-size:12px;padding:10mm;}');
+    win.document.write('h2{font-size:15px;margin-bottom:4px;}p{font-size:11px;color:#555;margin-bottom:10px;}');
+    win.document.write('table{border-collapse:collapse;width:100%;}');
+    win.document.write('th,td{border:1px solid #999;padding:5px 8px;text-align:left;}');
+    win.document.write('thead{background:#222;color:#fff;}');
+    win.document.write('tfoot{background:#222;color:#fff;font-weight:bold;}');
+    win.document.write('tr:nth-child(even){background:#f9f9f9;}');
+    win.document.write('.text-end{text-align:right;}');
+    win.document.write('@page{size:A4 landscape;margin:10mm;}');
+    win.document.write('</style></head><body>');
+    win.document.write('<h2>Builty Detail Report &mdash; {{ rake_info[0] }}</h2>');
+    win.document.write('<p>Company: {{ rake_info[1] }} &nbsp;|&nbsp; Date: {{ rake_info[3] }} &nbsp;|&nbsp; Rake Point: {{ rake_info[5] }}</p>');
+    win.document.write(table);
+    win.document.write('</body></html>');
+    win.document.close();
+    win.focus();
+    setTimeout(function(){ win.print(); }, 400);
+}
+
 function sendOtp() {
     const btn = document.getElementById('sendOtpBtn');
     btn.disabled = true;

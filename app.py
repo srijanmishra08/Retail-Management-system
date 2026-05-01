@@ -435,7 +435,20 @@ def admin_rake_details(rake_code):
     total_to_accounts = sum(row[2] for row in account_dispatches) if account_dispatches else 0
     total_to_warehouses = sum(row[2] for row in warehouse_dispatches) if warehouse_dispatches else 0
     total_to_cgmf = sum(row[3] for row in cgmf_dispatches) if cgmf_dispatches else 0
-    
+
+    # All individual builties for this rake (for the builty detail report)
+    rake_builties = db.execute_custom_query('''
+        SELECT b.builty_number, b.date, b.lr_number,
+               COALESCE(a.account_name, w.warehouse_name, 'N/A') AS account,
+               b.sub_head, t.truck_number, b.quantity_mt, b.number_of_bags
+        FROM builty b
+        LEFT JOIN accounts   a ON b.account_id  = a.id
+        LEFT JOIN warehouses w ON b.warehouse_id = w.id
+        LEFT JOIN trucks     t ON b.truck_id     = t.id
+        WHERE b.rake_code = %s
+        ORDER BY b.date, b.builty_number
+    ''', (rake_code,))
+
     return render_template('admin/rake_details.html',
                          rake_info=rake_info[0],
                          rake_products=rake_products,
@@ -445,6 +458,7 @@ def admin_rake_details(rake_code):
                          total_to_accounts=total_to_accounts,
                          total_to_warehouses=total_to_warehouses,
                          total_to_cgmf=total_to_cgmf,
+                         rake_builties=rake_builties or [],
                          notify_email=NOTIFY_EMAIL)
 
 @app.route('/admin/send-delete-rake-otp/<path:rake_code>', methods=['POST'])
