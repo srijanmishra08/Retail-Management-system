@@ -311,7 +311,7 @@ def admin_summary():
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))
     
-    view_type = request.args.get('view', 'rakes')  # rakes, total, per_account
+    view_type = request.args.get('view', 'rakes')  # rakes, total, per_account, do
     
     # Get total shortage from closed rakes
     total_shortage = db.get_total_shortage()
@@ -354,19 +354,150 @@ def admin_summary():
         GROUP BY w.id, w.warehouse_name
         ORDER BY total_quantity DESC
     ''')
-    
-    return render_template('admin/summary.html', 
+
+    # ── DO Summary (carry-forward per account per rake) ──────────────
+    do_summary_rows = []
+    do_filter_accounts = []
+    do_filter_rakes = []
+    do_filter_products = []
+
+    if view_type == 'do':
+        from collections import OrderedDict
+        raw_dos = db.execute_custom_query('''
+            SELECT do_t.account_id::text, a.account_name, a.account_type,
+                   do_t.rake_code, r.date AS rake_date,
+                   do_t.product_name, do_t.quantity_bags, do_t.quantity_mt
+            FROM dispatch_orders do_t
+            JOIN accounts a ON do_t.account_id = a.id
+            JOIN rakes r ON do_t.rake_code = r.rake_code
+            ORDER BY a.account_name, do_t.product_name, r.date, do_t.rake_code
+        ''') or []
+
+        dispatched_raw = db.execute_custom_query('''
+            SELECT b.account_id::text, b.rake_code,
+                   SUM(b.quantity_mt)::numeric    AS dispatched_mt,
+                   SUM(b.number_of_bags)::integer AS dispatched_bags
+            FROM builty b
+            WHERE b.account_id IS NOT NULL AND b.rake_code IS NOT NULL
+            GROUP BY b.account_id, b.rake_code
+        ''') or []
+        dispatched_map = {
+            (r[0], r[1]): (float(r[2] or 0), int(r[3] or 0))
+            for r in dispatched_raw
+        }
+
+        # Group DOs by (account_id, product_name) in insertion order
+        groups = OrderedDict()
+        for do in raw_dos:
+            key = (do[0], do[5])  # (account_id, product_name)
+            groups.setdefault(key, []).append(do)
+
+        for (account_id, product), do_list in groups.items():
+            carry_forward = 0.0
+            for do in do_list:
+                rake_code    = do[3]
+                account_name = do[1]
+                account_type = do[2]
+                do_mt        = float(do[7] or 0)
+                do_bags      = int(do[6] or 0)
+                rake_date    = do[4]
+
+                disp_mt, disp_bags = dispatched_map.get((account_id, rake_code), (0.0, 0))
+                total_expected = carry_forward + do_mt
+                difference     = total_expected - disp_mt
+
+                do_summary_rows.append({
+                    'account_name':   account_name,
+                    'account_type':   account_type,
+                    'product':        product,
+                    'rake_code':      rake_code,
+                    'rake_date':      rake_date,
+                    'do_qty_mt':      round(do_mt, 2),
+                    'do_qty_bags':    do_bags,
+                    'carry_forward':  round(carry_forward, 2),
+                    'total_expected': round(total_expected, 2),
+                    'dispatched_mt':  round(disp_mt, 2),
+                    'dispatched_bags':disp_bags,
+                    'difference':     round(difference, 2),
+                })
+
+                carry_forward = max(0.0, difference)
+
+        do_filter_accounts = sorted({r['account_name'] for r in do_summary_rows})
+        do_filter_rakes    = sorted({r['rake_code']    for r in do_summary_rows})
+        do_filter_products = sorted({r['product']      for r in do_summary_rows})
+
+    return render_template('admin/summary.html',
                          rakes=rakes_with_balance,
                          view_type=view_type,
                          total_account_summary=total_account_summary,
                          cgmf_summary=cgmf_summary,
                          warehouse_summary=warehouse_summary,
-                         total_shortage=total_shortage or 0)
+                         total_shortage=total_shortage or 0,
+                         do_summary_rows=do_summary_rows,
+                         do_filter_accounts=do_filter_accounts,
+                         do_filter_rakes=do_filter_rakes,
+                         do_filter_products=do_filter_products)
+
+@app.route('/admin/do', methods=['GET', 'POST'])
+@login_required
+def admin_do():
+    """Admin: create / list Dispatch Orders"""
+    if current_user.role != 'Admin':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'create')
+
+        if action == 'delete':
+            do_id = request.form.get('do_id')
+            if do_id and db.delete_dispatch_order(do_id):
+                flash('Dispatch Order deleted.', 'success')
+            else:
+                flash('Failed to delete Dispatch Order.', 'error')
+            return redirect(url_for('admin_do'))
+
+        # Create
+        account_id   = request.form.get('account_id', '').strip()
+        rake_code    = request.form.get('rake_code', '').strip()
+        product_name = request.form.get('product_name', '').strip()
+        notes        = request.form.get('notes', '').strip()
+        try:
+            quantity_bags = int(request.form.get('quantity_bags', 0) or 0)
+            quantity_mt   = float(request.form.get('quantity_mt', 0) or 0)
+        except (ValueError, TypeError):
+            flash('Invalid quantity values.', 'error')
+            return redirect(url_for('admin_do'))
+
+        if not (account_id and rake_code and product_name and quantity_mt > 0):
+            flash('Please fill in all required fields.', 'error')
+            return redirect(url_for('admin_do'))
+
+        result = db.create_dispatch_order(
+            account_id=account_id,
+            rake_code=rake_code,
+            product_name=product_name,
+            quantity_bags=quantity_bags,
+            quantity_mt=quantity_mt,
+            notes=notes,
+            created_by=current_user.username
+        )
+        if result:
+            flash('Dispatch Order created successfully.', 'success')
+        else:
+            flash('Failed to create Dispatch Order.', 'error')
+        return redirect(url_for('admin_do'))
+
+    accounts = db.get_all_accounts()
+    rakes    = db.get_rakes_with_balances()
+    dos      = db.get_all_dispatch_orders() or []
+    return render_template('admin/do_entry.html', accounts=accounts, rakes=rakes, dos=dos)
+
 
 @app.route('/admin/rake-details/<path:rake_code>')
 @login_required
 def admin_rake_details(rake_code):
-    """View detailed dispatch information for a specific rake"""
     if current_user.role != 'Admin':
         flash('Unauthorized access', 'error')
         return redirect(url_for('index'))

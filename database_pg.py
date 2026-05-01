@@ -400,6 +400,24 @@ class Database:
                     VALUES ('WAREHOUSE', 'WAREHOUSE', 'WH', 'MISC', 'MISC', 0, 'WAREHOUSE', false, CURRENT_DATE)
                 """)
             
+            # Ensure dispatch_orders table exists for DO feature
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS dispatch_orders (
+                    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    account_id    UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    rake_code     TEXT NOT NULL REFERENCES rakes(rake_code) ON DELETE CASCADE,
+                    product_name  TEXT NOT NULL,
+                    quantity_bags INTEGER NOT NULL DEFAULT 0,
+                    quantity_mt   NUMERIC(10,2) NOT NULL,
+                    notes         TEXT,
+                    created_by    TEXT,
+                    created_at    TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_account ON dispatch_orders(account_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_rake    ON dispatch_orders(rake_code)")
+            conn.commit()
+
             Database._initialized = True
             print("Database initialized successfully (Supabase/PostgreSQL)")
         except Exception as e:
@@ -2436,3 +2454,49 @@ class Database:
             }
             for r in cursor.fetchall()
         ]
+
+    # ==================================================================
+    # Dispatch Order (DO) Operations
+    # ==================================================================
+
+    def create_dispatch_order(self, account_id, rake_code, product_name,
+                              quantity_bags, quantity_mt, notes=None, created_by=None):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO dispatch_orders
+                    (account_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (account_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by))
+            row = cursor.fetchone()
+            conn.commit()
+            return row[0] if row else None
+        except Exception as e:
+            print(f"Error creating dispatch order: {e}")
+            conn.rollback()
+            return None
+
+    def delete_dispatch_order(self, do_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM dispatch_orders WHERE id = %s', (do_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error deleting dispatch order: {e}")
+            conn.rollback()
+            return False
+
+    def get_all_dispatch_orders(self):
+        return self.execute_custom_query('''
+            SELECT do.id, a.account_name, a.account_type, do.rake_code,
+                   r.date AS rake_date, do.product_name,
+                   do.quantity_bags, do.quantity_mt, do.notes, do.created_by, do.created_at
+            FROM dispatch_orders do
+            JOIN accounts a ON do.account_id = a.id
+            JOIN rakes r ON do.rake_code = r.rake_code
+            ORDER BY do.created_at DESC
+        ''')

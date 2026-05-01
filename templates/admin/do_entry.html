@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Dispatch Orders (DO) - Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-clipboard2-check"></i> Dispatch Orders (DO)</h2>
+    <a href="{{ url_for('admin_summary', view='do') }}" class="btn btn-outline-success">
+        <i class="bi bi-bar-chart-fill"></i> DO Summary Report
+    </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}{% for category, message in messages %}
+<div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}{% endif %}
+{% endwith %}
+
+<!-- ── Create DO Form ─────────────────────────────────── -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Create New Dispatch Order</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('admin_do') }}">
+            <input type="hidden" name="action" value="create">
+            <div class="row g-3">
+                <!-- Account -->
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Account <span class="text-danger">*</span></label>
+                    <select class="form-select" name="account_id" id="accountSelect" required>
+                        <option value="">— Select Account —</option>
+                        {% for acc in accounts %}
+                        <option value="{{ acc[0] }}">{{ acc[1] }} ({{ acc[2] }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <!-- Rake -->
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Rake <span class="text-danger">*</span></label>
+                    <select class="form-select" name="rake_code" id="rakeSelect" required onchange="onRakeChange()">
+                        <option value="">— Select Rake —</option>
+                        {% for rake in rakes %}
+                        <option value="{{ rake.rake_code }}"
+                                data-product="{{ rake.product_name }}">
+                            {{ rake.rake_code }} — {{ rake.company_name }} ({{ "%.2f"|format(rake.rr_quantity) }} MT)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <!-- Product -->
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Product <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="product_name" id="productName"
+                           placeholder="Auto-filled from rake or type manually" required>
+                </div>
+                <!-- Qt in Ton -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Quantity (Ton / MT) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" name="quantity_mt"
+                           id="qtyMt" step="0.01" min="0" placeholder="0.00"
+                           required oninput="calcBags()">
+                </div>
+                <!-- Qt in Bags -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Quantity (Bags)</label>
+                    <input type="number" class="form-control" name="quantity_bags"
+                           id="qtyBags" step="1" min="0" placeholder="0"
+                           oninput="calcMt()">
+                    <small class="text-muted">Auto-calculated at 50 kg/bag; edit if needed</small>
+                </div>
+                <!-- Notes -->
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Notes / Remarks</label>
+                    <input type="text" class="form-control" name="notes" placeholder="Optional remarks">
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-save"></i> Save Dispatch Order
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── Existing DOs ─────────────────────────────────────── -->
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-check"></i> All Dispatch Orders</h5>
+        <input type="text" id="doSearch" class="form-control form-control-sm"
+               placeholder="Search…" style="width:220px;"
+               oninput="filterTable()">
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" id="doTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Account</th>
+                        <th>Type</th>
+                        <th>Rake</th>
+                        <th>Rake Date</th>
+                        <th>Product</th>
+                        <th class="text-end">Qt (Bags)</th>
+                        <th class="text-end">Qt (MT)</th>
+                        <th>Notes</th>
+                        <th>Created By</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for do in dos %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><strong>{{ do[1] }}</strong></td>
+                        <td><span class="badge bg-secondary">{{ do[2] }}</span></td>
+                        <td><code>{{ do[3] }}</code></td>
+                        <td>{{ do[4]|format_date if do[4] else '—' }}</td>
+                        <td>{{ do[5] }}</td>
+                        <td class="text-end">{{ do[6] }}</td>
+                        <td class="text-end text-primary"><strong>{{ "%.2f"|format(do[7]|float) }}</strong></td>
+                        <td><small class="text-muted">{{ do[8] or '—' }}</small></td>
+                        <td><small>{{ do[9] or '—' }}</small></td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_do') }}"
+                                  onsubmit="return confirm('Delete this Dispatch Order?');">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="do_id" value="{{ do[0] }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="11" class="text-center text-muted py-4">No dispatch orders created yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-fill product from rake selection
+function onRakeChange() {
+    var sel = document.getElementById('rakeSelect');
+    var opt = sel.options[sel.selectedIndex];
+    if (opt && opt.dataset.product) {
+        document.getElementById('productName').value = opt.dataset.product;
+    }
+}
+
+// Auto-calculate bags from MT (50 kg/bag)
+function calcBags() {
+    var mt = parseFloat(document.getElementById('qtyMt').value) || 0;
+    document.getElementById('qtyBags').value = Math.round(mt * 20);  // 1 MT = 20 bags @ 50kg
+}
+
+// Auto-calculate MT from bags
+function calcMt() {
+    var bags = parseInt(document.getElementById('qtyBags').value) || 0;
+    document.getElementById('qtyMt').value = (bags * 50 / 1000).toFixed(2);
+}
+
+// Search filter
+function filterTable() {
+    var q = document.getElementById('doSearch').value.toLowerCase();
+    document.querySelectorAll('#doTable tbody tr').forEach(function(row) {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

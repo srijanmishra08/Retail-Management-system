@@ -179,6 +179,9 @@
                 <a class="nav-link {% if 'admin_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_summary') }}">
                     <i class="bi bi-table"></i> Rake Summary
                 </a>
+                <a class="nav-link {% if request.endpoint == 'admin_do' %}active{% endif %}" href="{{ url_for('admin_do') }}">
+                    <i class="bi bi-clipboard2-check"></i> Dispatch Orders (DO)
+                </a>
                 <div class="sidebar-section-header text-white-50"><strong>VIEW ALL DATA</strong></div>
                 <a class="nav-link {% if 'admin_all_loading_slips' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_all_loading_slips') }}">
                     <i class="bi bi-file-text"></i> All Loading Slips
