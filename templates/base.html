@@ -103,8 +103,10 @@
         .main-content {
             margin-left: 250px;
             padding: 20px;
-            overflow-x: auto;
+            overflow-x: hidden;
             min-width: 0;
+            max-width: calc(100vw - 250px);
+            box-sizing: border-box;
         }
         
         .card {
