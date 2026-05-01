@@ -6,13 +6,7 @@
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="bi bi-file-earmark-text"></i> All Builties (Warehouse)</h2>
-        <div class="d-flex align-items-center gap-3">
-            <div class="btn-group" role="group" id="copyToggle">
-                <input type="radio" class="btn-check" name="copyType" id="transporterCopy" value="transporter" autocomplete="off" checked>
-                <label class="btn btn-outline-primary" for="transporterCopy"><i class="bi bi-truck"></i> Transporter</label>
-                <input type="radio" class="btn-check" name="copyType" id="receiverCopy" value="receiver" autocomplete="off">
-                <label class="btn btn-outline-success" for="receiverCopy"><i class="bi bi-person-check"></i> Receiver</label>
-            </div>
+        <div>
             <input type="text" id="searchInput" class="form-control" placeholder="Search..." style="width: 300px;">
         </div>
     </div>
@@ -51,17 +45,16 @@
                             <td>{{ builty[26] if builty[26] else builty[27] if builty[27] else 'N/A' }}</td>
                             <td>
                                 <a href="{{ url_for('warehouse_print_builty', builty_id=builty[0]) }}" 
-                                   class="btn btn-sm btn-primary print-link" 
-                                   data-base-url="{{ url_for('warehouse_print_builty', builty_id=builty[0]) }}"
+                                   class="btn btn-sm btn-primary" 
                                    target="_blank" 
                                    title="Print Builty">
                                     <i class="bi bi-printer"></i>
                                 </a>
                                 <a href="{{ url_for('warehouse_print_builty', builty_id=builty[0]) }}" 
-                                   class="btn btn-sm btn-success ms-1 download-link" 
-                                   data-base-url="{{ url_for('warehouse_print_builty', builty_id=builty[0]) }}"
+                                   class="btn btn-sm btn-success ms-1" 
                                    target="_blank" 
-                                   title="Download Builty">
+                                   title="Download Builty"
+                                   onclick="event.preventDefault(); downloadBuilty('{{ url_for('warehouse_print_builty', builty_id=builty[0]) }}');">
                                     <i class="bi bi-download"></i>
                                 </a>
                             </td>
@@ -93,32 +86,11 @@
         }
     });
 
-    function getCopyType() {
-        return document.querySelector('input[name="copyType"]:checked').value;
-    }
-
-    function buildUrl(base) {
-        return base + '?copy=' + getCopyType();
-    }
-
-    // Wire up print links
-    document.querySelectorAll('.print-link').forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.open(buildUrl(this.dataset.baseUrl), '_blank');
+    function downloadBuilty(url) {
+        const win = window.open(url, '_blank');
+        win.addEventListener('load', function() {
+            setTimeout(() => win.print(), 500);
         });
-    });
-
-    // Wire up download links
-    document.querySelectorAll('.download-link').forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
-            const url = buildUrl(this.dataset.baseUrl);
-            const win = window.open(url, '_blank');
-            win.addEventListener('load', function() {
-                setTimeout(() => win.print(), 500);
-            });
-        });
-    });
+    }
 </script>
 {% endblock %}
