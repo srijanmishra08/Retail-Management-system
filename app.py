@@ -2899,8 +2899,14 @@ def admin_print_builty(builty_id):
         'company_name': builty[34] if len(builty) > 34 else None,
         'company_code': builty[35] if len(builty) > 35 else None,
         'account_type': builty[36] if len(builty) > 36 else None,
-        'sub_head': builty[37] if len(builty) > 37 else None
+        'sub_head': builty[37] if len(builty) > 37 else None,
+        'cgmf_society_name': None
     }
+    # Lookup CGMF society name if this builty is for a CGMF account
+    if builty_dict['cgmf_id']:
+        cgmf_row = db.execute_custom_query('SELECT society_name FROM cgmf WHERE id = ?', (builty_dict['cgmf_id'],))
+        if cgmf_row:
+            builty_dict['cgmf_society_name'] = cgmf_row[0][0]
     # Override account_type to 'Payal' if account name contains 'payal'
     if builty_dict['account_name'] and 'payal' in str(builty_dict['account_name']).lower():
         builty_dict['account_type'] = 'Payal'
@@ -3548,8 +3554,14 @@ def rakepoint_print_builty(builty_id):
         'company_name': builty[34] if len(builty) > 34 else None,
         'company_code': builty[35] if len(builty) > 35 else None,
         'account_type': builty[36] if len(builty) > 36 else None,
-        'sub_head': builty[37] if len(builty) > 37 else None
+        'sub_head': builty[37] if len(builty) > 37 else None,
+        'cgmf_society_name': None
     }
+    # Lookup CGMF society name if this builty is for a CGMF account
+    if builty_dict['cgmf_id']:
+        cgmf_row = db.execute_custom_query('SELECT society_name FROM cgmf WHERE id = ?', (builty_dict['cgmf_id'],))
+        if cgmf_row:
+            builty_dict['cgmf_society_name'] = cgmf_row[0][0]
     # Override account_type to 'Payal' if account name contains 'payal'
     if builty_dict['account_name'] and 'payal' in str(builty_dict['account_name']).lower():
         builty_dict['account_type'] = 'Payal'
@@ -4183,8 +4195,14 @@ def warehouse_print_builty(builty_id):
         'company_name': builty[34] if len(builty) > 34 else None,
         'company_code': builty[35] if len(builty) > 35 else None,
         'account_type': builty[36] if len(builty) > 36 else None,
-        'sub_head': builty[37] if len(builty) > 37 else None
+        'sub_head': builty[37] if len(builty) > 37 else None,
+        'cgmf_society_name': None
     }
+    # Lookup CGMF society name if this builty is for a CGMF account
+    if builty_dict['cgmf_id']:
+        cgmf_row = db.execute_custom_query('SELECT society_name FROM cgmf WHERE id = ?', (builty_dict['cgmf_id'],))
+        if cgmf_row:
+            builty_dict['cgmf_society_name'] = cgmf_row[0][0]
     # Override account_type to 'Payal' if account name contains 'payal'
     if builty_dict['account_name'] and 'payal' in str(builty_dict['account_name']).lower():
         builty_dict['account_type'] = 'Payal'

@@ -178,6 +178,15 @@
             background: #1d4ed8;
         }
         
+        .company-info {
+            font-size: 12px;
+            color: #333;
+            margin: 4px 0 0;
+            line-height: 1.5;
+        }
+        .company-info strong {
+            font-size: 13px;
+        }
         .footer {
             text-align: center;
             margin-top: 20px;
@@ -227,8 +236,12 @@
 
     <div id="builty-content">
     <div class="header">
-        <h1>BUILTY / CONSIGNMENT NOTE</h1>
-        <h2>{{ builty.builty_head or 'Payal Fertilizers' }}</h2>
+        <h1>{{ (builty.builty_head or 'PAYAL LOGISTICS') | upper }}</h1>
+        <div class="company-info">
+            <strong>GSTIN-22AAPFP8310D1ZH &nbsp;|&nbsp; PH- 4912509</strong><br>
+            C-2, 2ND FLOOR RATAN PALACE, KATORA TALAB, RAIPUR, DIST-RAIPUR(C.G.)
+        </div>
+        <h2>BUILTY / CONSIGNMENT NOTE</h2>
     </div>
     
     <!-- Builty Info + Transport in two columns -->
@@ -268,64 +281,30 @@
         </div>
     </div>
     
-    <!-- Location Details -->
+    <!-- Account & Location Details (merged) -->
     <div class="section">
-        <div class="section-title">LOCATION & DESTINATION</div>
+        <div class="section-title">ACCOUNT & LOCATION DETAILS</div>
         <div class="info-grid">
             <div class="info-row">
-                <div class="info-label">Loading Point:</div>
-                <div class="info-value">{{ builty.loading_point }}</div>
-            </div>
-            {% if builty.warehouse_name %}
-            <div class="info-row">
-                <div class="info-label">Unloading Point:</div>
-                <div class="info-value">{{ builty.unloading_point }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Warehouse:</div>
-                <div class="info-value"><strong>{{ builty.warehouse_name }}</strong></div>
-            </div>
-            {% else %}
-            <div class="info-row">
-                <div class="info-label">Destination:</div>
-                <div class="info-value">{{ builty.account_address or builty.unloading_point or 'N/A' }}</div>
-            </div>
-            {% endif %}
-            {% if builty.account_name %}
-            <div class="info-row">
-                <div class="info-label">Account:</div>
-                <div class="info-value"><strong>{{ builty.account_name }}</strong></div>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Head / Subhead -->
-    <div class="section">
-        <div class="section-title">HEAD / ACCOUNT DETAILS</div>
-        <div class="info-grid">
-            <div class="info-row">
-                <div class="info-label">Company A/C:</div>
-                <div class="info-value">{{ builty.company_code or 'N/A' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Company Name:</div>
+                <div class="info-label">Company:</div>
                 <div class="info-value"><strong>{{ builty.company_name or 'N/A' }}</strong></div>
             </div>
             <div class="info-row">
                 <div class="info-label">Account Name:</div>
-                <div class="info-value"><strong>{{ builty.account_name or 'N/A' }}</strong></div>
+                <div class="info-value"><strong>{{ builty.account_name or builty.cgmf_society_name or builty.warehouse_name or 'N/A' }}</strong></div>
             </div>
             <div class="info-row">
-                <div class="info-label">Account Type:</div>
-                <div class="info-value">{{ builty.account_type or 'N/A' }}</div>
+                <div class="info-label">Sub Head:</div>
+                <div class="info-value">{{ builty.sub_head or '' }}</div>
             </div>
-            {% if builty.sub_head %}
             <div class="info-row">
-                <div class="info-label">Retailer Name:</div>
-                <div class="info-value"><strong>{{ builty.sub_head }}</strong></div>
+                <div class="info-label">Loading Point:</div>
+                <div class="info-value">{{ builty.loading_point or 'N/A' }}</div>
             </div>
-            {% endif %}
+            <div class="info-row">
+                <div class="info-label">Destination:</div>
+                <div class="info-value">{{ builty.account_address or builty.unloading_point or 'N/A' }}</div>
+            </div>
         </div>
     </div>
     
