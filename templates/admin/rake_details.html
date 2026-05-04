@@ -47,7 +47,7 @@
                     <td>{{ b[1]|format_date if b[1] else 'N/A' }}</td>
                     <td>{{ b[2] or 'N/A' }}</td>
                     <td>{{ b[3] or 'N/A' }}</td>
-                    <td>{{ b[4] or '-' }}</td>
+                    <td>{{ b[4] if b[4] and b[4] != '-' else b[3] or 'N/A' }}</td>
                     <td>{{ b[5] or 'N/A' }}</td>
                     <td class="text-end">{{ "%.2f"|format(b[6]|float) if b[6] else '0.00' }}</td>
                     <td class="text-end">{{ b[7] if b[7] else '0' }}</td>

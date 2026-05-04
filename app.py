@@ -570,11 +570,12 @@ def admin_rake_details(rake_code):
     # All individual builties for this rake (for the builty detail report)
     rake_builties = db.execute_custom_query('''
         SELECT b.builty_number, b.date, b.lr_number,
-               COALESCE(a.account_name, w.warehouse_name, 'N/A') AS account,
+               COALESCE(a.account_name, w.warehouse_name, c.society_name, 'N/A') AS account,
                b.sub_head, t.truck_number, b.quantity_mt, b.number_of_bags
         FROM builty b
         LEFT JOIN accounts   a ON b.account_id  = a.id
         LEFT JOIN warehouses w ON b.warehouse_id = w.id
+        LEFT JOIN cgmf       c ON b.cgmf_id     = c.id
         LEFT JOIN trucks     t ON b.truck_id     = t.id
         WHERE b.rake_code = %s
         ORDER BY b.date, b.builty_number
