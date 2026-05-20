@@ -215,7 +215,7 @@ let productRowIndex = 1;
 // Products data for dynamic rows
 const productsData = [
     {% for product in products %}
-    { id: {{ product[0] }}, name: "{{ product[1] }}", code: "{{ product[2] or '' }}" },
+    { id: "{{ product[0] }}", name: "{{ product[1] }}", code: "{{ product[2] or '' }}" },
     {% endfor %}
 ];
 

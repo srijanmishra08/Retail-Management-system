@@ -571,7 +571,13 @@ def admin_rake_details(rake_code):
     rake_builties = db.execute_custom_query('''
         SELECT b.builty_number, b.date, b.lr_number,
                COALESCE(a.account_name, w.warehouse_name, c.society_name, 'N/A') AS account,
-               b.sub_head, t.truck_number, b.quantity_mt, b.number_of_bags
+               b.sub_head, t.truck_number, b.quantity_mt, b.number_of_bags,
+               CASE
+                   WHEN a.id IS NOT NULL THEN a.account_type::TEXT
+                   WHEN w.id IS NOT NULL THEN 'Warehouse'
+                   WHEN c.id IS NOT NULL THEN 'CGMF'
+                   ELSE 'Unknown'
+               END AS dispatch_type
         FROM builty b
         LEFT JOIN accounts   a ON b.account_id  = a.id
         LEFT JOIN warehouses w ON b.warehouse_id = w.id
@@ -808,41 +814,62 @@ def admin_download_rake_details_excel(rake_code):
     
     rake_info = rake_info[0]
     
-    # Get dispatches
+    # Get dispatches — summary per account/warehouse/CGMF with all builty numbers
     account_dispatches = db.execute_custom_query('''
-        SELECT a.account_name, a.account_type, 
+        SELECT a.account_name, a.account_type,
                SUM(ls.quantity_mt) as total_quantity,
                COUNT(ls.id) as slip_count,
-               STRING_AGG('Slip#' || ls.slip_number::text || ' (' || ls.quantity_mt::text || ' MT)', ', ') as slip_details
+               COUNT(b.id) as builty_count,
+               STRING_AGG(b.builty_number, ', ' ORDER BY b.builty_number) as builty_numbers
         FROM loading_slips ls
         JOIN accounts a ON ls.account_id = a.id
+        LEFT JOIN builty b ON ls.builty_id = b.id
         WHERE ls.rake_code = ?
         GROUP BY a.id, a.account_name, a.account_type
         ORDER BY total_quantity DESC
     ''', (rake_code,))
-    
+
     warehouse_dispatches = db.execute_custom_query('''
         SELECT w.warehouse_name, w.location,
                SUM(ls.quantity_mt) as total_quantity,
                COUNT(ls.id) as slip_count,
-               STRING_AGG('Slip#' || ls.slip_number::text || ' (' || ls.quantity_mt::text || ' MT)', ', ') as slip_details
+               COUNT(b.id) as builty_count,
+               STRING_AGG(b.builty_number, ', ' ORDER BY b.builty_number) as builty_numbers
         FROM loading_slips ls
         JOIN warehouses w ON ls.warehouse_id = w.id
+        LEFT JOIN builty b ON ls.builty_id = b.id
         WHERE ls.rake_code = ?
         GROUP BY w.id, w.warehouse_name, w.location
         ORDER BY total_quantity DESC
     ''', (rake_code,))
-    
+
     cgmf_dispatches = db.execute_custom_query('''
         SELECT c.society_name, c.district, c.destination,
                SUM(ls.quantity_mt) as total_quantity,
                COUNT(ls.id) as slip_count,
-               STRING_AGG('Slip#' || ls.slip_number::text || ' (' || ls.quantity_mt::text || ' MT)', ', ') as slip_details
+               COUNT(b.id) as builty_count,
+               STRING_AGG(b.builty_number, ', ' ORDER BY b.builty_number) as builty_numbers
         FROM loading_slips ls
         JOIN cgmf c ON ls.cgmf_id = c.id
+        LEFT JOIN builty b ON ls.builty_id = b.id
         WHERE ls.rake_code = ?
         GROUP BY c.id, c.society_name, c.district
         ORDER BY total_quantity DESC
+    ''', (rake_code,))
+
+    # All individual builties for this rake (detail sheet)
+    all_builties = db.execute_custom_query('''
+        SELECT b.builty_number, b.date, b.lr_number,
+               COALESCE(a.account_name, w.warehouse_name, c.society_name, 'N/A') AS recipient,
+               b.sub_head, t.truck_number, b.number_of_bags, b.quantity_mt,
+               b.loading_point, b.unloading_point, b.total_freight
+        FROM builty b
+        LEFT JOIN accounts a   ON b.account_id   = a.id
+        LEFT JOIN warehouses w ON b.warehouse_id  = w.id
+        LEFT JOIN cgmf c       ON b.cgmf_id       = c.id
+        LEFT JOIN trucks t     ON b.truck_id       = t.id
+        WHERE b.rake_code = ?
+        ORDER BY b.date, b.builty_number
     ''', (rake_code,))
     
     # Calculate totals
@@ -871,7 +898,7 @@ def admin_download_rake_details_excel(rake_code):
     # Title
     ws['A1'] = f"RAKE DETAILS - {rake_code}"
     ws['A1'].font = Font(bold=True, size=16)
-    ws.merge_cells('A1:E1')
+    ws.merge_cells('A1:F1')
     
     # Rake Info
     row = 3
@@ -892,10 +919,10 @@ def admin_download_rake_details_excel(rake_code):
     # Accounts Section
     ws.cell(row=row, column=1, value="DISPATCHED TO ACCOUNTS").font = Font(bold=True, size=12)
     ws.cell(row=row, column=1).fill = section_fill
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
     row += 1
     
-    acc_headers = ['Account Name', 'Type', 'Quantity (MT)', 'Loading Slips', 'Details']
+    acc_headers = ['Account Name', 'Type', 'Quantity (MT)', 'Loading Slips', 'Builties', 'Builty Numbers']
     for col, header in enumerate(acc_headers, 1):
         cell = ws.cell(row=row, column=col, value=header)
         cell.font = header_font
@@ -908,7 +935,8 @@ def admin_download_rake_details_excel(rake_code):
         ws.cell(row=row, column=2, value=acc[1]).border = border
         ws.cell(row=row, column=3, value=round(acc[2], 2)).border = border
         ws.cell(row=row, column=4, value=acc[3]).border = border
-        ws.cell(row=row, column=5, value=acc[4][:50] + '...' if acc[4] and len(acc[4]) > 50 else acc[4] or '-').border = border
+        ws.cell(row=row, column=5, value=acc[4]).border = border
+        ws.cell(row=row, column=6, value=acc[5] or '-').border = border
         row += 1
     
     ws.cell(row=row, column=1, value="Total to Accounts:").font = Font(bold=True)
@@ -918,10 +946,10 @@ def admin_download_rake_details_excel(rake_code):
     # Warehouses Section
     ws.cell(row=row, column=1, value="DISPATCHED TO WAREHOUSES").font = Font(bold=True, size=12)
     ws.cell(row=row, column=1).fill = section_fill
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
     row += 1
     
-    wh_headers = ['Warehouse Name', 'Location', 'Quantity (MT)', 'Loading Slips', 'Details']
+    wh_headers = ['Warehouse Name', 'Location', 'Quantity (MT)', 'Loading Slips', 'Builties', 'Builty Numbers']
     for col, header in enumerate(wh_headers, 1):
         cell = ws.cell(row=row, column=col, value=header)
         cell.font = header_font
@@ -934,7 +962,8 @@ def admin_download_rake_details_excel(rake_code):
         ws.cell(row=row, column=2, value=wh[1]).border = border
         ws.cell(row=row, column=3, value=round(wh[2], 2)).border = border
         ws.cell(row=row, column=4, value=wh[3]).border = border
-        ws.cell(row=row, column=5, value=wh[4][:50] + '...' if wh[4] and len(wh[4]) > 50 else wh[4] or '-').border = border
+        ws.cell(row=row, column=5, value=wh[4]).border = border
+        ws.cell(row=row, column=6, value=wh[5] or '-').border = border
         row += 1
     
     ws.cell(row=row, column=1, value="Total to Warehouses:").font = Font(bold=True)
@@ -945,10 +974,10 @@ def admin_download_rake_details_excel(rake_code):
     if cgmf_dispatches:
         ws.cell(row=row, column=1, value="DISPATCHED TO CGMF").font = Font(bold=True, size=12)
         ws.cell(row=row, column=1).fill = section_fill
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
         row += 1
         
-        cgmf_headers = ['Society Name', 'District', 'Quantity (MT)', 'Loading Slips', 'Details']
+        cgmf_headers = ['Society Name', 'District', 'Quantity (MT)', 'Loading Slips', 'Builties', 'Builty Numbers']
         for col, header in enumerate(cgmf_headers, 1):
             cell = ws.cell(row=row, column=col, value=header)
             cell.font = header_font
@@ -961,7 +990,8 @@ def admin_download_rake_details_excel(rake_code):
             ws.cell(row=row, column=2, value=cgmf[1]).border = border
             ws.cell(row=row, column=3, value=round(cgmf[3], 2)).border = border
             ws.cell(row=row, column=4, value=cgmf[4]).border = border
-            ws.cell(row=row, column=5, value=cgmf[5][:50] + '...' if cgmf[5] and len(cgmf[5]) > 50 else cgmf[5] or '-').border = border
+            ws.cell(row=row, column=5, value=cgmf[5]).border = border
+            ws.cell(row=row, column=6, value=cgmf[6] or '-').border = border
             row += 1
         
         ws.cell(row=row, column=1, value="Total to CGMF:").font = Font(bold=True)
@@ -983,12 +1013,75 @@ def admin_download_rake_details_excel(rake_code):
     ws.cell(row=row, column=1, value="Remaining:").font = Font(bold=True)
     ws.cell(row=row, column=2, value=f"{round(remaining, 2)} MT")
     
-    # Adjust column widths
-    ws.column_dimensions['A'].width = 25
+    # Adjust column widths for summary sheet
+    ws.column_dimensions['A'].width = 28
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 15
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 35
+    ws.column_dimensions['D'].width = 14
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 60
+    # Wrap text in the Builty Numbers column (F) so long lists are readable
+    for r in ws.iter_rows(min_col=6, max_col=6):
+        for cell in r:
+            cell.alignment = Alignment(wrap_text=True, vertical='top')
+
+    # ---------------------------------------------------------------
+    # Sheet 2: Builty Details (one row per builty, no truncation)
+    # ---------------------------------------------------------------
+    ws2 = wb.create_sheet(title="Builty Details")
+    ws2['A1'] = f"BUILTY DETAILS - {rake_code}"
+    ws2['A1'].font = Font(bold=True, size=14)
+    ws2.merge_cells('A1:K1')
+
+    detail_headers = [
+        'Builty No', 'Date', 'LR No', 'Recipient',
+        'Sub Head', 'Truck No', 'Bags', 'MT',
+        'Loading Point', 'Unloading Point', 'Freight (₹)'
+    ]
+    for col, header in enumerate(detail_headers, 1):
+        cell = ws2.cell(row=3, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+
+    detail_row = 4
+    for b in all_builties:
+        ws2.cell(row=detail_row, column=1,  value=b[0]).border = border   # builty_number
+        ws2.cell(row=detail_row, column=2,  value=str(b[1]) if b[1] else '').border = border  # date
+        ws2.cell(row=detail_row, column=3,  value=b[2] or '').border = border   # lr_number
+        ws2.cell(row=detail_row, column=4,  value=b[3]).border = border   # recipient
+        ws2.cell(row=detail_row, column=5,  value=b[4] or '').border = border   # sub_head
+        ws2.cell(row=detail_row, column=6,  value=b[5] or '').border = border   # truck_number
+        ws2.cell(row=detail_row, column=7,  value=b[6]).border = border   # number_of_bags
+        ws2.cell(row=detail_row, column=8,  value=round(b[7], 2)).border = border  # quantity_mt
+        ws2.cell(row=detail_row, column=9,  value=b[8] or '').border = border   # loading_point
+        ws2.cell(row=detail_row, column=10, value=b[9] or '').border = border   # unloading_point
+        ws2.cell(row=detail_row, column=11, value=round(b[10], 2) if b[10] else 0).border = border  # total_freight
+        detail_row += 1
+
+    # Total row for detail sheet
+    total_row_cell = ws2.cell(row=detail_row, column=1, value="TOTAL")
+    total_row_cell.font = Font(bold=True, color="FFFFFF")
+    total_row_cell.fill = total_fill
+    total_row_cell.border = border
+    for col in range(2, 12):
+        ws2.cell(row=detail_row, column=col).fill = total_fill
+        ws2.cell(row=detail_row, column=col).border = border
+    ws2.cell(row=detail_row, column=7, value=sum(b[6] for b in all_builties) if all_builties else 0).font = Font(bold=True, color="FFFFFF")
+    ws2.cell(row=detail_row, column=8, value=round(sum(b[7] for b in all_builties), 2) if all_builties else 0).font = Font(bold=True, color="FFFFFF")
+
+    # Column widths for detail sheet
+    ws2.column_dimensions['A'].width = 22
+    ws2.column_dimensions['B'].width = 12
+    ws2.column_dimensions['C'].width = 14
+    ws2.column_dimensions['D'].width = 28
+    ws2.column_dimensions['E'].width = 14
+    ws2.column_dimensions['F'].width = 14
+    ws2.column_dimensions['G'].width = 8
+    ws2.column_dimensions['H'].width = 10
+    ws2.column_dimensions['I'].width = 20
+    ws2.column_dimensions['J'].width = 20
+    ws2.column_dimensions['K'].width = 14
     
     # Save to BytesIO
     output = BytesIO()
@@ -1791,7 +1884,25 @@ def admin_edit_loading_slip(slip_id):
     quantity_mt = float(request.form.get('quantity_mt', 0))
     goods_name = request.form.get('goods_name')
     date = request.form.get('date') or None  # New date field
-    
+
+    # Balance check: prevent increasing a slip beyond the rake's remaining capacity
+    current = db.execute_custom_query(
+        'SELECT quantity_mt, rake_code FROM loading_slips WHERE id = %s', (slip_id,)
+    )
+    if current:
+        old_qty = float(current[0][0] or 0)
+        slip_rake_code = current[0][1]
+        delta = quantity_mt - old_qty
+        if delta > 0 and slip_rake_code and slip_rake_code != 'WAREHOUSE':
+            balance = db.get_rake_balance(slip_rake_code)
+            if balance and delta > balance['remaining']:
+                flash(
+                    f'Cannot increase quantity: would exceed rake balance. '
+                    f'Available: {balance["remaining"]:.2f} MT, '
+                    f'Increase requested: {delta:.2f} MT', 'error'
+                )
+                return redirect(url_for('admin_all_loading_slips'))
+
     success, message = db.update_loading_slip(slip_id, destination, quantity_bags, quantity_mt, goods_name, account_id, warehouse_id, cgmf_id, date)
     
     if success:
@@ -2576,27 +2687,100 @@ def admin_get_rake_bill_payment(rake_code):
 @login_required
 def api_warehouse_account_stock(warehouse_id):
     """API to get account-wise stock breakdown for a warehouse"""
-    # Get stock IN grouped by account
-    account_stock = db.execute_custom_query('''
-        SELECT a.id, a.account_name, a.account_type,
-               SUM(ws.quantity_mt) as total_stock
-        FROM warehouse_stock ws
-        JOIN accounts a ON ws.account_id = a.id
-        WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
-        GROUP BY a.id, a.account_name, a.account_type
-        ORDER BY total_stock DESC
-    ''', (warehouse_id,))
-    
-    result = []
-    for row in account_stock:
-        result.append({
-            'account_id': row[0],
-            'account_name': row[1],
-            'account_type': row[2],
-            'total_stock': row[3]
-        })
-    
-    return jsonify(result)
+    try:
+        # Detect PK column names dynamically (same as warehouse_dashboard)
+        def _pk_col(table_name, legacy_pk):
+            try:
+                cols = db.execute_custom_query(
+                    f"SELECT name FROM pragma_table_info('{table_name}')"
+                ) or []
+                names = [c[0] for c in cols if c and len(c) > 0]
+                if names:
+                    return 'id' if 'id' in names else legacy_pk
+            except Exception:
+                pass
+            try:
+                cols = db.execute_custom_query(
+                    f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+                ) or []
+                names = [c[0] for c in cols if c and len(c) > 0]
+                if names:
+                    return 'id' if 'id' in names else legacy_pk
+            except Exception:
+                pass
+            return legacy_pk
+
+        account_pk = _pk_col('accounts', 'account_id')
+        cgmf_pk = _pk_col('cgmf', 'cgmf_id')
+        company_pk = _pk_col('companies', 'company_id')
+        product_pk = _pk_col('products', 'product_id')
+
+        account_stock = db.execute_custom_query(f'''
+            SELECT a.{account_pk}, a.account_name,
+                   CASE
+                       WHEN LOWER(COALESCE(a.account_type, '')) IN ('company', 'payal') THEN 'Payal'
+                       WHEN LOWER(COALESCE(a.account_type, '')) = 'dealer' THEN 'Dealer'
+                       WHEN LOWER(COALESCE(a.account_type, '')) = 'retailer' THEN 'Retailer'
+                       ELSE COALESCE(a.account_type, 'Account')
+                   END AS account_type,
+                   COALESCE(p.product_name, 'N/A') AS product_name,
+                   COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) AS total_stock
+            FROM warehouse_stock ws
+            JOIN accounts a ON ws.account_id = a.{account_pk}
+            LEFT JOIN products p ON ws.product_id = p.{product_pk}
+            WHERE ws.warehouse_id = ? AND ws.account_id IS NOT NULL
+            GROUP BY a.{account_pk}, a.account_name,
+                     CASE
+                         WHEN LOWER(COALESCE(a.account_type, '')) IN ('company', 'payal') THEN 'Payal'
+                         WHEN LOWER(COALESCE(a.account_type, '')) = 'dealer' THEN 'Dealer'
+                         WHEN LOWER(COALESCE(a.account_type, '')) = 'retailer' THEN 'Retailer'
+                         ELSE COALESCE(a.account_type, 'Account')
+                     END,
+                     COALESCE(p.product_name, 'N/A')
+            HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ''', (warehouse_id,)) or []
+
+        cgmf_stock = db.execute_custom_query(f'''
+            SELECT c.{cgmf_pk}, c.society_name, 'CGMF' AS account_type,
+                   COALESCE(p.product_name, 'N/A') AS product_name,
+                   COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) AS total_stock
+            FROM warehouse_stock ws
+            JOIN cgmf c ON ws.cgmf_id = c.{cgmf_pk}
+            LEFT JOIN products p ON ws.product_id = p.{product_pk}
+            WHERE ws.warehouse_id = ? AND ws.cgmf_id IS NOT NULL
+            GROUP BY c.{cgmf_pk}, c.society_name, COALESCE(p.product_name, 'N/A')
+            HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ''', (warehouse_id,)) or []
+
+        company_stock = db.execute_custom_query(f'''
+            SELECT c.{company_pk}, c.company_name, 'Company' AS account_type,
+                   COALESCE(p.product_name, 'N/A') AS product_name,
+                   COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) AS total_stock
+            FROM warehouse_stock ws
+            JOIN companies c ON ws.company_id = c.{company_pk}
+            LEFT JOIN products p ON ws.product_id = p.{product_pk}
+            WHERE ws.warehouse_id = ?
+              AND ws.company_id IS NOT NULL
+              AND ws.account_id IS NULL
+              AND ws.cgmf_id IS NULL
+            GROUP BY c.{company_pk}, c.company_name, COALESCE(p.product_name, 'N/A')
+            HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ''', (warehouse_id,)) or []
+
+        result = []
+        for row in account_stock + cgmf_stock + company_stock:
+            result.append({
+                'account_id': row[0],
+                'account_name': row[1],
+                'account_type': row[2],
+                'product_name': row[3],
+                'total_stock': float(row[4] or 0)
+            })
+
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error in api_warehouse_account_stock: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/edit-warehouse-stock', methods=['GET', 'POST'])
 @login_required
@@ -3118,11 +3302,35 @@ def rakepoint_create_loading_slip():
                 return redirect(url_for('rakepoint_create_loading_slip'))
             
             account = request.form.get('account')
-            quantity_in_bags = int(request.form.get('quantity_in_bags'))
-            quantity_in_mt = float(request.form.get('quantity_in_mt'))
+
+            # Support multi-product (product_name[] array) or single-product (goods_name)
+            product_names = request.form.getlist('product_name[]')
+            use_multi_product = bool(product_names and any(p for p in product_names))
+
+            if use_multi_product:
+                qty_bags_list = request.form.getlist('quantity_bags[]')
+                qty_mt_list   = request.form.getlist('quantity_mt[]')
+                products_data = []
+                total_bags = 0
+                total_mt   = 0.0
+                for pname, bags, mt in zip(product_names, qty_bags_list, qty_mt_list):
+                    if not pname:
+                        continue
+                    b = int(bags) if bags else 0
+                    m = float(mt) if mt else 0.0
+                    total_bags += b
+                    total_mt   += m
+                    products_data.append({'product_name': pname, 'quantity_bags': b, 'quantity_mt': m})
+                goods_name       = products_data[0]['product_name'] if products_data else ''
+                quantity_in_bags = total_bags
+                quantity_in_mt   = total_mt
+            else:
+                goods_name       = request.form.get('goods_name')
+                quantity_in_bags = int(request.form.get('quantity_in_bags', 0))
+                quantity_in_mt   = float(request.form.get('quantity_in_mt', 0))
+                products_data    = None
             truck_number = request.form.get('truck_number')
-            wagon_number = request.form.get('wagon_number')
-            goods_name = request.form.get('goods_name')
+            wagon_number = request.form.get('wagon_number', '')
             truck_driver = request.form.get('truck_driver')
             truck_owner = request.form.get('truck_owner')
             mobile_number_1 = request.form.get('mobile_number_1')
@@ -3140,7 +3348,15 @@ def rakepoint_create_loading_slip():
             if not rake_balance:
                 flash('Error: Invalid rake code', 'error')
                 return redirect(url_for('rakepoint_create_loading_slip'))
-            
+
+            # Block slips for closed rakes (safety check even though UI hides them)
+            rake_status = db.execute_custom_query(
+                'SELECT is_closed FROM rakes WHERE rake_code = %s', (rake_code,)
+            )
+            if rake_status and rake_status[0][0]:
+                flash('This rake is closed. No more loading slips can be created.', 'error')
+                return redirect(url_for('rakepoint_create_loading_slip'))
+
             if quantity_in_mt > rake_balance['remaining']:
                 flash(f'Error: Insufficient rake quantity! Remaining: {rake_balance["remaining"]:.2f} MT, Requested: {quantity_in_mt:.2f} MT', 'error')
                 return redirect(url_for('rakepoint_create_loading_slip'))
@@ -3191,6 +3407,10 @@ def rakepoint_create_loading_slip():
             
             # slip_id is a UUID string (success) or None (failure)
             if slip_id is not None:
+                # Save individual product rows for multi-product slips
+                if use_multi_product and products_data:
+                    db.add_loading_slip_products(slip_id, products_data)
+
                 # CRITICAL: Invalidate cache after successful write to prevent stale data
                 db.invalidate_cache()
                 
@@ -3693,41 +3913,92 @@ def warehouse_dashboard():
     # Use optimized method for dashboard stats
     stats = db.get_warehouse_dashboard_stats()
     
+    # Support both legacy schema (*_id PKs) and newer schema (id PKs).
+    def _pk_col(table_name, legacy_pk):
+        try:
+            # SQLite / libsql path
+            cols = db.execute_custom_query(
+                f"SELECT name FROM pragma_table_info('{table_name}')"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+
+        try:
+            # PostgreSQL path
+            cols = db.execute_custom_query(
+                f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+
+        return legacy_pk
+
+    account_pk = _pk_col('accounts', 'account_id')
+    cgmf_pk = _pk_col('cgmf', 'cgmf_id')
+    company_pk = _pk_col('companies', 'company_id')
+    product_pk = _pk_col('products', 'product_id')
+    warehouse_pk = _pk_col('warehouses', 'warehouse_id')
+
     # Get stock by Account, CGMF, and Company for the dashboard
-    account_stock = db.execute_custom_query('''
-        SELECT w.id, w.warehouse_name, a.id, a.account_name, a.account_type,
+    account_stock = db.execute_custom_query(f'''
+        SELECT w.{warehouse_pk}, w.warehouse_name, a.{account_pk}, a.account_name,
+               CASE
+                   WHEN LOWER(COALESCE(a.account_type, '')) IN ('company', 'payal') THEN 'Payal'
+                   WHEN LOWER(COALESCE(a.account_type, '')) = 'dealer' THEN 'Dealer'
+                   WHEN LOWER(COALESCE(a.account_type, '')) = 'retailer' THEN 'Retailer'
+                   ELSE COALESCE(a.account_type, 'Account')
+               END AS account_type,
+               COALESCE(p.product_name, 'N/A') AS product_name,
                COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) as balance
         FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.id
-        JOIN accounts a ON ws.account_id = a.id
+        JOIN warehouses w ON ws.warehouse_id = w.{warehouse_pk}
+        JOIN accounts a ON ws.account_id = a.{account_pk}
+        LEFT JOIN products p ON ws.product_id = p.{product_pk}
         WHERE ws.account_id IS NOT NULL
-        GROUP BY w.id, a.id
-        HAVING balance > 0
-        ORDER BY w.warehouse_name, a.account_name
+        GROUP BY w.{warehouse_pk}, w.warehouse_name, a.{account_pk}, a.account_name,
+                 CASE
+                     WHEN LOWER(COALESCE(a.account_type, '')) IN ('company', 'payal') THEN 'Payal'
+                     WHEN LOWER(COALESCE(a.account_type, '')) = 'dealer' THEN 'Dealer'
+                     WHEN LOWER(COALESCE(a.account_type, '')) = 'retailer' THEN 'Retailer'
+                     ELSE COALESCE(a.account_type, 'Account')
+                 END,
+                 COALESCE(p.product_name, 'N/A')
+        HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ORDER BY w.warehouse_name, a.account_name, COALESCE(p.product_name, 'N/A')
     ''') or []
     
-    cgmf_stock = db.execute_custom_query('''
-        SELECT w.id, w.warehouse_name, c.id, c.society_name, 'CGMF' as type,
+    cgmf_stock = db.execute_custom_query(f'''
+        SELECT w.{warehouse_pk}, w.warehouse_name, c.{cgmf_pk}, c.society_name, 'CGMF' as type,
+               COALESCE(p.product_name, 'N/A') AS product_name,
                COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) as balance
         FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.id
-        JOIN cgmf c ON ws.cgmf_id = c.id
+        JOIN warehouses w ON ws.warehouse_id = w.{warehouse_pk}
+        JOIN cgmf c ON ws.cgmf_id = c.{cgmf_pk}
+        LEFT JOIN products p ON ws.product_id = p.{product_pk}
         WHERE ws.cgmf_id IS NOT NULL
-        GROUP BY w.id, c.id
-        HAVING balance > 0
-        ORDER BY w.warehouse_name, c.society_name
+        GROUP BY w.{warehouse_pk}, w.warehouse_name, c.{cgmf_pk}, c.society_name, COALESCE(p.product_name, 'N/A')
+        HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ORDER BY w.warehouse_name, c.society_name, COALESCE(p.product_name, 'N/A')
     ''') or []
     
-    company_stock = db.execute_custom_query('''
-        SELECT w.id, w.warehouse_name, c.id, c.company_name, 'Company' as type,
+    company_stock = db.execute_custom_query(f'''
+        SELECT w.{warehouse_pk}, w.warehouse_name, c.{company_pk}, c.company_name, 'Company' as type,
+               COALESCE(p.product_name, 'N/A') AS product_name,
                COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) as balance
         FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.id
-        JOIN companies c ON ws.company_id = c.id
+        JOIN warehouses w ON ws.warehouse_id = w.{warehouse_pk}
+        JOIN companies c ON ws.company_id = c.{company_pk}
+        LEFT JOIN products p ON ws.product_id = p.{product_pk}
         WHERE ws.company_id IS NOT NULL AND ws.account_id IS NULL AND ws.cgmf_id IS NULL
-        GROUP BY w.id, c.id
-        HAVING balance > 0
-        ORDER BY w.warehouse_name, c.company_name
+        GROUP BY w.{warehouse_pk}, w.warehouse_name, c.{company_pk}, c.company_name, COALESCE(p.product_name, 'N/A')
+        HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ORDER BY w.warehouse_name, c.company_name, COALESCE(p.product_name, 'N/A')
     ''') or []
     
     all_stock = account_stock + cgmf_stock + company_stock
@@ -4023,17 +4294,10 @@ def warehouse_create_loading_slip():
             else:
                 truck_id = truck[0]
             
-            # Get rake_code from most recent stock IN
-            rake_code_result = db.execute_custom_query('''
-                SELECT b.rake_code
-                FROM warehouse_stock ws
-                JOIN builty b ON ws.builty_id = b.id
-                WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
-                ORDER BY ws.created_at DESC
-                LIMIT 1
-            ''', (warehouse_id,))
-            rake_code = rake_code_result[0][0] if rake_code_result else 'WAREHOUSE'
-            
+            # Warehouse loading slips are secondary dispatches (stock already received
+            # from rake). NULL rake_code prevents double-counting against rake totals.
+            rake_code = 'WAREHOUSE'  # Must use sentinel; loading_slips.rake_code is NOT NULL
+
             # Add loading slip
             slip_id = db.add_loading_slip(rake_code, serial_number, loading_point, destination,
                                           account_id, destination_warehouse_id, quantity_in_bags, quantity_in_mt, 
@@ -4296,6 +4560,7 @@ def warehouse_create_builty():
         
         # Determine destination (account, warehouse, or CGMF)
         accounts = db.get_all_accounts()
+        warehouses_list = db.get_all_warehouses()
         account_id = None
         destination_warehouse_id = None
         cgmf_id = None
@@ -4308,18 +4573,16 @@ def warehouse_create_builty():
                 if account[1] == account_warehouse:
                     account_id = account[0]
                     break
+            if account_id is None:
+                for wh in warehouses_list:
+                    if wh[1] == account_warehouse:
+                        destination_warehouse_id = wh[0]
+                        break
         
-        # Get rake code from most recent stock IN
-        rake_code_result = db.execute_custom_query('''
-            SELECT b.rake_code
-            FROM warehouse_stock ws
-            JOIN builty b ON ws.builty_id = b.id
-            WHERE ws.warehouse_id = ? AND ws.transaction_type = 'IN'
-            ORDER BY ws.created_at DESC
-            LIMIT 1
-        ''', (warehouse_id,))
-        rake_code = rake_code_result[0][0] if rake_code_result else 'WAREHOUSE'
-        
+        # Warehouse builties are secondary dispatches; NULL rake_code
+        # ensures they do not inflate rake balance/dispatch totals.
+        rake_code = None
+
         # Calculate freight fields
         try:
             total_freight = float(freight_details.replace('₹', '').replace(',', '').strip())
@@ -4518,6 +4781,32 @@ def warehouse_balance_all():
     elif date_filter == 'custom' and start_date and end_date:
         date_condition = " AND DATE(ws.date) >= ? AND DATE(ws.date) <= ?"
         date_params = [start_date, end_date]
+
+    # Support both legacy and modern PK naming in related master tables
+    def _pk_col(table_name, legacy_pk):
+        try:
+            cols = db.execute_custom_query(
+                f"SELECT name FROM pragma_table_info('{table_name}')"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+        try:
+            cols = db.execute_custom_query(
+                f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+        return legacy_pk
+
+    account_pk = _pk_col('accounts', 'account_id')
+    cgmf_pk = _pk_col('cgmf', 'cgmf_id')
+    company_pk = _pk_col('companies', 'company_id')
     
     # Get overall stock statistics
     warehouse_balances = []
@@ -4630,6 +4919,140 @@ def warehouse_balance(warehouse_id):
                          warehouse=warehouse,
                          balance=balance,
                          transactions=transactions)
+
+@app.route('/warehouse/balance-summary/<string:warehouse_id>')
+@login_required
+def warehouse_balance_summary(warehouse_id):
+    """Warehouse detail page: account-wise and product-wise stock summary"""
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+
+    warehouse = db.get_warehouse_by_id(warehouse_id)
+    if not warehouse:
+        flash('Warehouse not found', 'error')
+        return redirect(url_for('warehouse_balance_all'))
+
+    date_filter = request.args.get('date_filter', 'all')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+
+    from datetime import datetime, timedelta
+    date_condition = ""
+    date_params = []
+    if date_filter == 'today':
+        date_condition = " AND DATE(ws.date) = ?"
+        date_params = [datetime.now().strftime('%Y-%m-%d')]
+    elif date_filter == 'week':
+        date_condition = " AND DATE(ws.date) >= ?"
+        date_params = [(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')]
+    elif date_filter == 'month':
+        date_condition = " AND DATE(ws.date) >= ?"
+        date_params = [(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')]
+    elif date_filter == 'custom' and start_date and end_date:
+        date_condition = " AND DATE(ws.date) >= ? AND DATE(ws.date) <= ?"
+        date_params = [start_date, end_date]
+
+    def _pk_col(table_name, legacy_pk):
+        try:
+            cols = db.execute_custom_query(
+                f"SELECT name FROM pragma_table_info('{table_name}')"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+        try:
+            cols = db.execute_custom_query(
+                f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+        return legacy_pk
+
+    account_pk = _pk_col('accounts', 'account_id')
+    cgmf_pk = _pk_col('cgmf', 'cgmf_id')
+    company_pk = _pk_col('companies', 'company_id')
+
+    _date_cond = date_condition  # plain string, safe to embed in non-f-string via format
+    _wh = warehouse_id
+    _dp = list(date_params)
+
+    _acct_rows = db.execute_custom_query(
+        '''SELECT a.account_name,
+                  CASE WHEN LOWER(COALESCE(a.account_type,'')) IN ('company','payal') THEN 'Payal'
+                       WHEN LOWER(COALESCE(a.account_type,'')) = 'dealer' THEN 'Dealer'
+                       WHEN LOWER(COALESCE(a.account_type,'')) = 'retailer' THEN 'Retailer'
+                       ELSE COALESCE(a.account_type,'Account') END,
+                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+           FROM warehouse_stock ws
+           JOIN accounts a ON ws.account_id = a.''' + account_pk + '''
+           WHERE ws.warehouse_id = ? AND ws.account_id IS NOT NULL''' + _date_cond + '''
+           GROUP BY a.account_name, CASE WHEN LOWER(COALESCE(a.account_type,'')) IN ('company','payal') THEN 'Payal'
+                       WHEN LOWER(COALESCE(a.account_type,'')) = 'dealer' THEN 'Dealer'
+                       WHEN LOWER(COALESCE(a.account_type,'')) = 'retailer' THEN 'Retailer'
+                       ELSE COALESCE(a.account_type,'Account') END
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           ORDER BY 3 DESC, 1''',
+        [_wh] + _dp
+    ) or []
+
+    _cgmf_rows = db.execute_custom_query(
+        '''SELECT c.society_name, 'CGMF',
+                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+           FROM warehouse_stock ws
+           JOIN cgmf c ON ws.cgmf_id = c.''' + cgmf_pk + '''
+           WHERE ws.warehouse_id = ? AND ws.cgmf_id IS NOT NULL''' + _date_cond + '''
+           GROUP BY c.society_name
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           ORDER BY 3 DESC, 1''',
+        [_wh] + _dp
+    ) or []
+
+    _company_rows = db.execute_custom_query(
+        '''SELECT co.company_name, 'Company',
+                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+           FROM warehouse_stock ws
+           JOIN companies co ON ws.company_id = co.''' + company_pk + '''
+           WHERE ws.warehouse_id = ? AND ws.account_id IS NULL AND ws.cgmf_id IS NULL''' + _date_cond + '''
+           GROUP BY co.company_name
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           ORDER BY 3 DESC, 1''',
+        [_wh] + _dp
+    ) or []
+
+    account_stock = _acct_rows + _cgmf_rows + _company_rows
+
+    product_stock = db.execute_custom_query(
+        '''SELECT COALESCE(p.product_name,'N/A'),
+                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+           FROM warehouse_stock ws
+           LEFT JOIN products p ON ws.product_id = p.id
+           WHERE ws.warehouse_id = ?''' + _date_cond + '''
+           GROUP BY COALESCE(p.product_name,'N/A')
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           ORDER BY 2 DESC, 1''',
+        [_wh] + _dp
+    ) or []
+
+    total_account_stock = sum(float(row[2] or 0) for row in account_stock)
+    total_product_stock = sum(float(row[1] or 0) for row in product_stock)
+
+    return render_template(
+        'warehouse/balance_summary.html',
+        warehouse=warehouse,
+        account_stock=account_stock,
+        product_stock=product_stock,
+        total_account_stock=total_account_stock,
+        total_product_stock=total_product_stock,
+        date_filter=date_filter,
+        start_date=start_date,
+        end_date=end_date
+    )
 
 @app.route('/warehouse/do-creation', methods=['GET', 'POST'])
 @login_required
@@ -4762,45 +5185,92 @@ def warehouse_do_creation():
             flash('Error processing stock allotment', 'error')
             return redirect(url_for('warehouse_do_creation'))
     
-    # GET request - fetch accounts with stock in each warehouse
-    # Get stock balance by account and warehouse
-    # Get stock by Account
-    account_stock = db.execute_custom_query('''
-        SELECT w.id, w.warehouse_name, a.id, a.account_name, a.account_type,
+    # Support both legacy schema (*_id PKs) and newer schema (id PKs).
+    def _pk_col(table_name, legacy_pk):
+        try:
+            # SQLite / libsql path
+            cols = db.execute_custom_query(
+                f"SELECT name FROM pragma_table_info('{table_name}')"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+
+        try:
+            # PostgreSQL path
+            cols = db.execute_custom_query(
+                f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+            ) or []
+            names = [c[0] for c in cols if c and len(c) > 0]
+            if names:
+                return 'id' if 'id' in names else legacy_pk
+        except Exception:
+            pass
+
+        return legacy_pk
+
+    account_pk = _pk_col('accounts', 'account_id')
+    cgmf_pk = _pk_col('cgmf', 'cgmf_id')
+    company_pk = _pk_col('companies', 'company_id')
+    product_pk = _pk_col('products', 'product_id')
+    warehouse_pk = _pk_col('warehouses', 'warehouse_id')
+
+    # GET request - fetch entities with positive stock (product-wise) for allotment source table/dropdown.
+    account_stock = db.execute_custom_query(f'''
+        SELECT w.{warehouse_pk}, w.warehouse_name, a.{account_pk}, a.account_name,
+               CASE
+                   WHEN LOWER(COALESCE(a.account_type, '')) IN ('company', 'payal') THEN 'Payal'
+                   WHEN LOWER(COALESCE(a.account_type, '')) = 'dealer' THEN 'Dealer'
+                   WHEN LOWER(COALESCE(a.account_type, '')) = 'retailer' THEN 'Retailer'
+                   ELSE COALESCE(a.account_type, 'Account')
+               END AS account_type,
+               COALESCE(p.product_name, 'N/A') AS product_name,
                COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) as balance
         FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.id
-        JOIN accounts a ON ws.account_id = a.id
+        JOIN warehouses w ON ws.warehouse_id = w.{warehouse_pk}
+        JOIN accounts a ON ws.account_id = a.{account_pk}
+        LEFT JOIN products p ON ws.product_id = p.{product_pk}
         WHERE ws.account_id IS NOT NULL
-        GROUP BY w.id, a.id
-        HAVING balance > 0
-        ORDER BY w.warehouse_name, a.account_name
+        GROUP BY w.{warehouse_pk}, w.warehouse_name, a.{account_pk}, a.account_name,
+                 CASE
+                     WHEN LOWER(COALESCE(a.account_type, '')) IN ('company', 'payal') THEN 'Payal'
+                     WHEN LOWER(COALESCE(a.account_type, '')) = 'dealer' THEN 'Dealer'
+                     WHEN LOWER(COALESCE(a.account_type, '')) = 'retailer' THEN 'Retailer'
+                     ELSE COALESCE(a.account_type, 'Account')
+                 END,
+                 COALESCE(p.product_name, 'N/A')
+        HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ORDER BY w.warehouse_name, a.account_name, COALESCE(p.product_name, 'N/A')
     ''') or []
     
-    # Get stock by CGMF
-    cgmf_stock = db.execute_custom_query('''
-        SELECT w.id, w.warehouse_name, c.id, c.society_name, 'CGMF' as type,
+    cgmf_stock = db.execute_custom_query(f'''
+        SELECT w.{warehouse_pk}, w.warehouse_name, c.{cgmf_pk}, c.society_name, 'CGMF' as type,
+               COALESCE(p.product_name, 'N/A') AS product_name,
                COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) as balance
         FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.id
-        JOIN cgmf c ON ws.cgmf_id = c.id
+        JOIN warehouses w ON ws.warehouse_id = w.{warehouse_pk}
+        JOIN cgmf c ON ws.cgmf_id = c.{cgmf_pk}
+        LEFT JOIN products p ON ws.product_id = p.{product_pk}
         WHERE ws.cgmf_id IS NOT NULL
-        GROUP BY w.id, c.id
-        HAVING balance > 0
-        ORDER BY w.warehouse_name, c.society_name
+        GROUP BY w.{warehouse_pk}, w.warehouse_name, c.{cgmf_pk}, c.society_name, COALESCE(p.product_name, 'N/A')
+        HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ORDER BY w.warehouse_name, c.society_name, COALESCE(p.product_name, 'N/A')
     ''') or []
     
-    # Get stock by Company
-    company_stock = db.execute_custom_query('''
-        SELECT w.id, w.warehouse_name, c.id, c.company_name, 'Company' as type,
+    company_stock = db.execute_custom_query(f'''
+        SELECT w.{warehouse_pk}, w.warehouse_name, c.{company_pk}, c.company_name, 'Company' as type,
+               COALESCE(p.product_name, 'N/A') AS product_name,
                COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) as balance
         FROM warehouse_stock ws
-        JOIN warehouses w ON ws.warehouse_id = w.id
-        JOIN companies c ON ws.company_id = c.id
+        JOIN warehouses w ON ws.warehouse_id = w.{warehouse_pk}
+        JOIN companies c ON ws.company_id = c.{company_pk}
+        LEFT JOIN products p ON ws.product_id = p.{product_pk}
         WHERE ws.company_id IS NOT NULL AND ws.account_id IS NULL AND ws.cgmf_id IS NULL
-        GROUP BY w.id, c.id
-        HAVING balance > 0
-        ORDER BY w.warehouse_name, c.company_name
+        GROUP BY w.{warehouse_pk}, w.warehouse_name, c.{company_pk}, c.company_name, COALESCE(p.product_name, 'N/A')
+        HAVING COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+        ORDER BY w.warehouse_name, c.company_name, COALESCE(p.product_name, 'N/A')
     ''') or []
     
     # Combine all stock lists

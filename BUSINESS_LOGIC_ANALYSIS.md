@@ -272,7 +272,7 @@ Stock IN #4: 1 MT → ✗ REJECTED (builty fully stocked)
 - Stock OUT is a **new transportation event**
 - Different truck, driver, destination, freight
 - Needs complete documentation for accountability
-- But still traces back to original Rake Code
+- **rake_code is set to NULL** — warehouse outgoing dispatches are secondary events and must NOT be counted against the original rake's RR quantity
 
 **Example Flow:**
 ```
@@ -280,16 +280,25 @@ Warehouse 1 Balance: 50 MT (from 2 builties of RK-2023-001)
 ↓
 Customer order: 15 MT to Dealer A
 ↓
-Create new Builty: BLTO-20231010-103045
+Create new Builty: WBLT-20231010-103045
+  rake_code: NULL  ← Prevents double-counting against RK-2023-001
   Truck: GJ-05-CD-5678
   Destination: Dealer A Address
   Quantity: 15 MT
   Freight: ₹7,500
-  Linked to: RK-2023-001 (auto-detected from warehouse stock)
 ↓
 Record Stock OUT: 15 MT
 New Balance: 35 MT
 ```
+
+**⚠️ Double-Counting Guard:**
+The rake balance (RR Quantity - Dispatched) is computed from `loading_slips` WHERE
+`rake_code = <specific_rake>`. Warehouse-generated loading slips use the sentinel
+`rake_code = 'WAREHOUSE'` (required by NOT NULL constraint) and are always excluded
+from real-rake balance queries. Warehouse outgoing builties use `rake_code = NULL`
+and are also naturally excluded. This ensures the same goods are not counted twice
+— once when rakepoint dispatches to warehouse, and again when warehouse re-dispatches
+to a customer.
 
 #### 3C. View Balance
 

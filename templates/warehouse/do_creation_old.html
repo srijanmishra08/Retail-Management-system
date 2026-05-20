@@ -156,7 +156,7 @@
                                     <td class="text-end fw-bold text-success">{{ "%.2f"|format(stock[9]) }}</td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                onclick="selectStock({{ stock[0] }}, {{ stock[2] or 'null' }}, {{ stock[4] or 'null' }}, {{ stock[7] }}, {{ stock[9] }}, {{ stock[10] or 'null' }})">
+                                                onclick="selectStock('{{ stock[0] }}', '{{ stock[2] or '' }}', '{{ stock[4] or '' }}', '{{ stock[7] }}', {{ stock[9] }}, '{{ stock[10] or '' }}')">
                                             <i class="bi bi-arrow-right"></i> Select
                                         </button>
                                     </td>
@@ -244,19 +244,19 @@ document.getElementById('allotment_date').value = new Date().toISOString().split
 // Data for dropdowns
 const companies = [
     {% for c in companies %}
-    { id: {{ c[0] }}, name: "{{ c[1] }}", code: "{{ c[2] or '' }}" },
+    { id: "{{ c[0] }}", name: "{{ c[1] }}", code: "{{ c[2] or '' }}" },
     {% endfor %}
 ];
 
 const accounts = [
     {% for acc in accounts %}
-    { id: {{ acc[0] }}, name: "{{ acc[1] }}", type: "{{ acc[2] }}" },
+    { id: "{{ acc[0] }}", name: "{{ acc[1] }}", type: "{{ acc[2] }}" },
     {% endfor %}
 ];
 
 const cgmfList = [
     {% for cg in cgmf_list %}
-    { id: {{ cg[0] }}, name: "{{ cg[1] }}", district: "{{ cg[2] or '' }}", destination: "{{ cg[3] or '' }}" },
+    { id: "{{ cg[0] }}", name: "{{ cg[1] }}", district: "{{ cg[2] or '' }}", destination: "{{ cg[3] or '' }}" },
     {% endfor %}
 ];
 
@@ -264,17 +264,17 @@ const cgmfList = [
 const availableStock = [
     {% for stock in available_stock %}
     {
-        product_id: {{ stock[0] }},
+        product_id: "{{ stock[0] }}",
         product_name: "{{ stock[1] or 'N/A' }}",
-        company_id: {{ stock[2] or 'null' }},
+        company_id: "{{ stock[2] or '' }}",
         company_name: "{{ stock[3] or 'N/A' }}",
-        account_id: {{ stock[4] or 'null' }},
+        account_id: "{{ stock[4] or '' }}",
         account_name: "{{ stock[5] or 'N/A' }}",
         account_type: "{{ stock[6] or '' }}",
-        warehouse_id: {{ stock[7] }},
+        warehouse_id: "{{ stock[7] }}",
         warehouse_name: "{{ stock[8] or 'N/A' }}",
         balance: {{ stock[9] }},
-        cgmf_id: {{ stock[10] or 'null' }},
+        cgmf_id: "{{ stock[10] or '' }}",
         cgmf_name: "{{ stock[11] or '' }}"
     },
     {% endfor %}

@@ -1,229 +1,312 @@
-# 📦 Fertilizer Inventory Management System (FIMS)
+# Retail Management System (FIMS)
 
-A comprehensive web-based inventory management system for managing fertilizer distribution from rake points to warehouses, dispatches to dealers, and billing operations.
+Implementation-accurate documentation for the current codebase on the `main` branch.
 
-## 🎯 Features
+## What This System Does
 
-### Core Modules
+This is a role-based fertilizer logistics and inventory system built with Flask. It manages the complete operational chain:
 
-1. **Rake Management**
-   - Add and track incoming rakes from suppliers
-   - Record rake unloading details
-   - Allocate stock to warehouses or direct market dispatch
-   - Track rake-wise inventory
+1. Admin creates and manages rakes, masters, summaries, and logistics billing.
+2. Rake Point creates loading slips and builties for dispatch from rake source.
+3. Warehouse handles stock-in/stock-out, dispatch documentation, and balance tracking.
+4. Accountant generates e-bills and manages bill/eway bill files.
 
-2. **Warehouse Management**
-   - Manage 3 warehouse locations
-   - Track stock in/out operations
-   - Monitor current stock levels
-   - Low stock alerts
-   - Per-lot tracking with rent calculation
+The same codebase supports two runtime modes:
 
-3. **Dispatch Management**
-   - Record dispatches to dealers, government, and own company
-   - Truck-wise tracking
-   - Transport company details
-   - Automatic stock deduction
+1. Local mode: SQLite (`fims.db`).
+2. Cloud mode: Turso/LibSQL when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set.
 
-4. **Billing & Rent Module**
-   - Generate transportation bills
-   - Calculate warehouse rent (per day per MT)
-   - Calculate lifting charges
-   - Download bills as PDF
-   - Billing summary and analytics
+## Current Architecture
 
-5. **Reports & Analytics**
-   - Dashboard with key statistics
-   - Rake-wise reports
-   - Warehouse-wise stock reports
-   - Dealer-wise dispatch reports
-   - Billing summary reports
+### Application Layer
 
-## 🚀 Quick Start
+1. `app.py`
+2. Flask app, all routes, login/session handling, role checks, API endpoints, print/download endpoints.
 
-### Prerequisites
+### Data Layer
 
-- Python 3.8 or higher
-- pip (Python package manager)
+1. `database.py`
+2. `Database` class for schema init, CRUD, analytics queries, stock movement logic, billing persistence.
+3. Optional Turso connection reuse with stale-connection reset.
+4. In-memory TTL cache (`SimpleCache`, 300s) for frequently reused query results.
 
-### Installation
+### Deployment Entrypoints
 
-1. **Clone or navigate to the project directory**
-   ```bash
-   cd /Users/s/Documents/Retail-Management-system
-   ```
+1. `api/index.py`: Vercel serverless entrypoint importing app from `app.py`.
+2. `vercel.json`: routes all dynamic traffic to `api/index.py`.
+3. `Procfile`: Gunicorn process (`web: gunicorn app:app --worker-class gevent --timeout 120 --workers 1`).
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Presentation Layer
 
-3. **Run the application**
-   ```bash
-   python app.py
-   ```
+1. Jinja templates under `templates/`.
+2. Role-specific template folders: `templates/admin/`, `templates/rakepoint/`, `templates/warehouse/`, `templates/accountant/`.
 
-4. **Access the application**
-   - Open your browser and navigate to: `http://localhost:5000`
-   - The database will be automatically created on first run
+### File Storage
 
-## 👥 Default User Credentials
+1. `uploads/bills/`: bill PDFs.
+2. `uploads/eway_bills/`: e-way bill PDFs.
+
+## Technology Stack
+
+1. Python 3
+2. Flask 3.0.0
+3. Flask-Login 0.6.3
+4. Werkzeug 3.0.1 (password hashing/checking)
+5. openpyxl 3.1.2 (Excel exports)
+6. reportlab 4.0.7
+7. libsql-experimental 0.0.47 (Turso)
+
+## Authentication and Roles
+
+Authentication is session-based using Flask-Login and password hashes.
+
+Default users created during local DB initialization:
 
 | Role | Username | Password |
-|------|----------|----------|
-| Admin/Manager | `admin` | `admin123` |
-| Warehouse Worker | `warehouse1` | `warehouse123` |
-| Dispatch Clerk | `dispatch1` | `dispatch123` |
-| Billing Officer | `billing1` | `billing123` |
+|---|---|---|
+| Admin | admin | admin123 |
+| RakePoint | rakepoint | rake123 |
+| Warehouse | warehouse | warehouse123 |
+| Accountant | accountant | account123 |
 
-## 📂 Project Structure
+Root route (`/`) redirects authenticated users to role-specific dashboards.
 
-```
+## Major Features Implemented
+
+### Admin
+
+1. Dashboard stats (optimized queries).
+2. Add rake with multi-product support.
+3. Close/reopen rake with shortage tracking.
+4. Summary views (rake/account/cgmf/warehouse).
+5. Excel export endpoints for summaries and details.
+6. Manage accounts, products, companies, employees, CGMF, warehouses.
+7. View/edit/delete all loading slips and builties.
+8. Warehouse transactions and warehouse summary analytics.
+9. Logistic bill module (rake/warehouse level) with exports.
+10. Save/get rake bill payments.
+11. Download database backup (`fims.db`) from admin route.
+
+### Rake Point
+
+1. Dashboard with operational stats.
+2. Create builty.
+3. Create loading slip.
+4. List loading slips and builties.
+5. Print loading slip and builty.
+6. View and download bills/e-way bills.
+
+### Warehouse
+
+1. Dashboard with warehouse-focused metrics.
+2. Stock in (warehouse stock ledger entries).
+3. Stock out with dispatch/builty generation.
+4. Create loading slip and create builty.
+5. Balance pages (all warehouses and per warehouse).
+6. DO creation flow.
+7. Print/loading-slip and print-builty endpoints.
+8. View and download bills/e-way bills.
+
+### Accountant
+
+1. Dashboard.
+2. Create e-bill from builty data.
+3. List all e-bills.
+4. Download bill and e-way bill files.
+
+### Shared APIs
+
+1. Rake balance/product data.
+2. Next serial/LR/warehouse sequence APIs.
+3. Builty detail lookup.
+4. Dispatch summaries by account/CGMF.
+5. Warehouse account stock endpoint.
+
+## End-to-End Business Flow (Current)
+
+1. Admin creates rake (`/admin/add-rake`) including company, product data, RR quantity.
+2. RakePoint creates loading slips and/or builties tied to rake and destination.
+3. Warehouse records stock-in from movement documents and stock-out for onward dispatch.
+4. System maintains running balances via `warehouse_stock` and rake-based dispatch totals.
+5. Accountant generates e-bills for builties and attaches bill/eway bill files.
+6. Admin reviews summaries/logistic billing and can close rake with shortage computation.
+
+## Route Surface (High-Level)
+
+The route map in `app.py` currently includes:
+
+1. Authentication routes (`/`, `/login`, `/logout`).
+2. Admin module routes under `/admin/*` including dashboards, summaries, masters, logistics billing, exports.
+3. RakePoint module routes under `/rakepoint/*`.
+4. Warehouse module routes under `/warehouse/*`.
+5. Accountant module routes under `/accountant/*`.
+6. Utility API routes under `/api/*`.
+
+## Database Schema (Current)
+
+Tables currently created/maintained by `database.py`:
+
+1. `users`
+2. `rakes`
+3. `rake_products`
+4. `accounts`
+5. `products`
+6. `companies`
+7. `employees`
+8. `cgmf`
+9. `warehouses`
+10. `trucks`
+11. `builty`
+12. `loading_slips`
+13. `warehouse_stock`
+14. `ebills`
+15. `rake_bill_payments`
+
+### Core Data Relationships
+
+1. `loading_slips` links to destination entities (`accounts`/`warehouses`/`cgmf`) and optional `builty`.
+2. `builty` links to rake, truck, and destination entity.
+3. `warehouse_stock` records stock transactions with references to warehouse, product, account/cgmf, builty/truck.
+4. `ebills` link directly to `builty`.
+5. `rake_bill_payments` aggregate payment tracking by `rake_code`.
+
+## Project Structure (Current)
+
+```text
 Retail-Management-system/
-│
-├── app.py                 # Main Flask application
-├── database.py            # Database operations and queries
-├── reports.py             # PDF report generation
-├── requirements.txt       # Python dependencies
-├── SRS.txt               # Software Requirements Specification
-├── fims.db               # SQLite database (auto-created)
-│
-├── templates/            # HTML templates
-│   ├── base.html
-│   ├── login.html
-│   ├── dashboard.html
-│   ├── rakes.html
-│   ├── warehouses.html
-│   ├── dispatches.html
-│   ├── billing.html
-│   ├── reports.html
-│   └── settings.html
-│
-└── reports/              # Generated PDF reports (auto-created)
+|-- app.py
+|-- database.py
+|-- reports.py
+|-- api/
+|   `-- index.py
+|-- templates/
+|   |-- base.html
+|   |-- login.html
+|   |-- admin/
+|   |   |-- dashboard.html
+|   |   |-- add_rake.html
+|   |   |-- summary.html
+|   |   |-- manage_accounts.html
+|   |   |-- all_loading_slips.html
+|   |   |-- all_builties.html
+|   |   |-- all_ebills.html
+|   |   |-- logistic_bill.html
+|   |   |-- warehouse_transactions.html
+|   |   |-- warehouse_summary.html
+|   |   |-- manage_warehouses.html
+|   |   |-- edit_warehouse_stock.html
+|   |   `-- rake_details.html
+|   |-- rakepoint/
+|   |   |-- dashboard.html
+|   |   |-- create_builty.html
+|   |   |-- create_loading_slip.html
+|   |   |-- loading_slips.html
+|   |   |-- all_builties.html
+|   |   `-- view_ebills.html
+|   |-- warehouse/
+|   |   |-- dashboard.html
+|   |   |-- stock_in.html
+|   |   |-- stock_out.html
+|   |   |-- create_builty.html
+|   |   |-- create_loading_slip.html
+|   |   |-- loading_slips.html
+|   |   |-- balance.html
+|   |   |-- do_creation.html
+|   |   |-- all_builties.html
+|   |   `-- view_ebills.html
+|   `-- accountant/
+|       |-- dashboard.html
+|       |-- create_ebill.html
+|       `-- all_ebills.html
+|-- uploads/
+|   |-- bills/
+|   `-- eway_bills/
+|-- requirements.txt
+|-- Procfile
+|-- vercel.json
+|-- test_pipeline.py
+`-- test_system.py
 ```
 
-## 🔧 Configuration
+## Setup and Run
 
-### Database
-- The system uses SQLite for data storage
-- Database file: `fims.db` (automatically created)
-- All tables and default data are initialized on first run
+### Local Development (SQLite)
 
-### Customization
-- Modify warehouse capacity in Settings
-- Add new suppliers, dealers, and users
-- Configure billing rates per dispatch
+1. Install dependencies:
 
-## 📊 Database Schema
-
-### Main Tables
-- **users** - System users with role-based access
-- **suppliers** - Fertilizer suppliers
-- **warehouses** - Warehouse locations
-- **dealers** - Customers and dealers
-- **rakes** - Incoming rake shipments
-- **warehouse_stock** - Stock tracking per warehouse
-- **dispatches** - Outgoing dispatches
-- **billing** - Bills for transport, rent, and lifting
-
-## 🎨 User Interface
-
-- **Modern Bootstrap 5** design
-- **Responsive** layout for desktop and tablet
-- **Role-based navigation** and access control
-- **Real-time statistics** on dashboard
-- **Interactive forms** with validation
-- **Data tables** with sorting and filtering
-
-## 🔐 Security Features
-
-- Password hashing using Werkzeug
-- Session-based authentication
-- Role-based access control (RBAC)
-- CSRF protection via Flask
-- Secure password storage
-
-## 📝 Usage Guide
-
-### Adding a New Rake
-1. Navigate to **Rakes** section
-2. Click **"Add New Rake"**
-3. Fill in rake details (number, supplier, date, quantity)
-4. Select allocation type (Warehouse or Market Dispatch)
-5. If warehouse, select destination warehouse
-6. Submit to add rake
-
-### Recording a Dispatch
-1. Go to **Dispatches**
-2. Click **"Add Dispatch"**
-3. Select source warehouse
-4. Choose destination type and dealer
-5. Enter truck details and quantity
-6. Set dispatch date
-7. Submit to create dispatch
-
-### Generating Bills
-1. Navigate to **Billing** section
-2. View pending dispatches
-3. Click **"Generate Bill"**
-4. Select bill type (Transport/Rent/Lifting)
-5. Enter rate and other details
-6. System calculates total amount
-7. Submit to generate bill
-8. Download PDF invoice
-
-## 🛠️ Technologies Used
-
-- **Backend**: Python 3, Flask
-- **Database**: SQLite3
-- **Frontend**: HTML5, CSS3, Bootstrap 5
-- **Authentication**: Flask-Login
-- **PDF Generation**: ReportLab
-- **Icons**: Bootstrap Icons
-
-## 📈 Future Enhancements
-
-- [ ] Excel export functionality
-- [ ] Advanced analytics and charts
-- [ ] Email notifications for low stock
-- [ ] Multi-language support
-- [ ] Mobile app integration
-- [ ] Barcode/QR code scanning
-- [ ] Advanced user management
-- [ ] Audit trail logging
-
-## 🐛 Troubleshooting
-
-### Database Issues
 ```bash
-# If database gets corrupted, delete and restart
-rm fims.db
-python app.py
-```
-
-### Port Already in Use
-```bash
-# Change port in app.py (last line)
-app.run(debug=True, host='0.0.0.0', port=5001)
-```
-
-### Dependencies Not Installing
-```bash
-# Upgrade pip first
-pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## 📄 License
+2. Run app:
 
-This project is developed for internal use in fertilizer inventory management.
+```bash
+python app.py
+```
 
-## 👨‍💻 Support
+3. Open:
 
-For issues or questions, refer to the SRS.txt document for detailed system specifications.
+```text
+http://localhost:5001
+```
 
----
+### Cloud DB Mode (Turso)
 
-**Version**: 1.0.0  
-**Last Updated**: October 2025  
-**Built with** ❤️ **for efficient fertilizer inventory management**
+Set environment variables before start:
+
+```bash
+export TURSO_DATABASE_URL="libsql://..."
+export TURSO_AUTH_TOKEN="..."
+export SECRET_KEY="replace-in-production"
+python app.py
+```
+
+Notes:
+
+1. In cloud mode, schema initialization is skipped by design (assumes schema already provisioned).
+2. A reusable cloud connection is kept with a 300s staleness reset.
+
+## Deployment
+
+### Vercel
+
+1. Entrypoint: `api/index.py`
+2. Build target: `@vercel/python`
+3. All dynamic routes forwarded to serverless function.
+
+### Gunicorn/Process Hosts
+
+Use `Procfile` command:
+
+```bash
+gunicorn app:app --worker-class gevent --timeout 120 --workers 1
+```
+
+## Testing
+
+Current test files in repo:
+
+1. `test_pipeline.py` (comprehensive auth/database/route/performance/security tests)
+2. `test_system.py`
+
+Run tests:
+
+```bash
+python -m pytest test_pipeline.py -v
+python -m pytest test_system.py -v
+```
+
+## Operational Notes
+
+1. App currently runs on port `5001` in local `__main__` block.
+2. Upload/download routes sanitize filenames with `os.path.basename`.
+3. Passwords are stored as hashes, not plaintext.
+4. There is role-based authorization per route, with redirect on unauthorized access.
+
+## Repository Sync Status
+
+Verified against remote:
+
+1. Remote: `https://github.com/srijanmishra08/Retail-Management-system.git`
+2. Branch: `main`
+3. Pull status: already up to date at the time of this documentation update.

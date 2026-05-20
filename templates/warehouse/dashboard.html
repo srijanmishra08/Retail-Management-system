@@ -60,6 +60,7 @@
                                 <th>Warehouse</th>
                                 <th>Entity</th>
                                 <th>Type</th>
+                                <th>Product</th>
                                 <th class="text-end">Balance (MT)</th>
                             </tr>
                         </thead>
@@ -70,12 +71,13 @@
                                     <td>{{ stock[1] }}</td>
                                     <td><strong>{{ stock[3] }}</strong></td>
                                     <td><span class="badge bg-{{ 'primary' if stock[4] == 'Company' else ('warning text-dark' if stock[4] == 'CGMF' else ('info' if stock[4] == 'Payal' else ('success' if stock[4] == 'Dealer' else 'secondary'))) }}">{{ stock[4] }}</span></td>
-                                    <td class="text-end fw-bold text-success">{{ "%.2f"|format(stock[5]) }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ stock[5] }}</span></td>
+                                    <td class="text-end fw-bold text-success">{{ "%.2f"|format((stock[6] or 0)|float) }}</td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted py-3">
+                                    <td colspan="5" class="text-center text-muted py-3">
                                         <i class="bi bi-inbox"></i> No stock assigned yet
                                     </td>
                                 </tr>

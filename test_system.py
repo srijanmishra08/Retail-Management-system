@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-FIMS - Comprehensive System Test Suite
-======================================
-This script performs extensive testing of the entire Retail Management System:
-- Database integrity and consistency checks
-- Security vulnerability assessment
+FIMS - Comprehensive System Test Suite (Supabase PostgreSQL)
+============================================================
+This script performs extensive testing of the Supabase-based system:
+- Database connectivity and schema validation
+- Data integrity and consistency checks
 - Business logic validation
-- Data flow verification
-- Edge case handling
+- Security and permissions testing
 - Performance analysis
 
 Run with: python3 test_system.py
@@ -21,12 +20,13 @@ import hashlib
 import re
 from datetime import datetime, timedelta
 from collections import defaultdict
+from dotenv import load_dotenv
 
-# Set environment variables for Turso
-os.environ['TURSO_DATABASE_URL'] = os.environ.get('TURSO_DATABASE_URL', 'libsql://fims-production-srijanmishra08.aws-ap-south-1.turso.io')
-os.environ['TURSO_AUTH_TOKEN'] = os.environ.get('TURSO_AUTH_TOKEN', 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjYxMzMyMzIsImlkIjoiZjY5YWYwYzEtNGNkNi00YzBhLWI3YWUtYTY0NGJkMTBlOWViIiwicmlkIjoiMDhjYmI3YWYtMDc2My00YjdhLWE3MGMtZmQwYmE5OWU0NDZiIn0.qbioLnGW7hRmKfQQ4Y8Y_47YixHQMv-KrZuF5quIHmQok1P22oGlE5XXb-KR4SNMrWL_hqflMi2XNam0tHE8CQ')
+# Load environment variables
+load_dotenv()
 
-import database
+# Import the PostgreSQL database module
+import database_pg as database
 
 # ============================================================================
 # ANSI Color Codes for Pretty Output
@@ -123,19 +123,23 @@ def test_database_connection():
 
 def test_database_schema():
     """Verify all required tables exist with correct structure"""
-    print_section("DATABASE SCHEMA VERIFICATION")
+    print_section("DATABASE SCHEMA VERIFICATION (PostgreSQL)")
     
     required_tables = [
         'users', 'rakes', 'rake_products', 'loading_slips',
         'builty', 'warehouses', 'warehouse_stock', 'accounts', 'companies',
-        'cgmf', 'ebills', 'rake_bill_payments'
+        'cgmf', 'ebills', 'rake_bill_payments', 'products', 'trucks', 'employees', 'profiles'
     ]
     
     db = database.Database()
     conn = db.get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    # PostgreSQL query to get table names
+    cursor.execute("""
+        SELECT tablename FROM pg_tables 
+        WHERE schemaname = 'public'
+    """)
     existing_tables = [row[0] for row in cursor.fetchall()]
     
     for table in required_tables:
@@ -148,7 +152,7 @@ def test_database_schema():
 
 def test_database_integrity():
     """Check for orphaned records and referential integrity"""
-    print_section("DATABASE REFERENTIAL INTEGRITY")
+    print_section("DATABASE REFERENTIAL INTEGRITY (PostgreSQL)")
     
     db = database.Database()
     conn = db.get_connection()
@@ -178,11 +182,11 @@ def test_database_integrity():
     else:
         results.add_fail('database', f"Found {orphan_slips} loading slips with invalid rake_code")
     
-    # Test 3: Warehouse stock with invalid warehouse_id
+    # Test 3: Warehouse stock with invalid warehouse_id (using UUID comparison)
     cursor.execute("""
         SELECT COUNT(*) FROM warehouse_stock ws
         WHERE ws.warehouse_id IS NOT NULL 
-        AND ws.warehouse_id NOT IN (SELECT warehouse_id FROM warehouses)
+        AND ws.warehouse_id NOT IN (SELECT id FROM warehouses)
     """)
     orphan_stock = cursor.fetchone()[0]
     if orphan_stock == 0:
@@ -193,7 +197,7 @@ def test_database_integrity():
     # Test 4: Check for duplicate builty numbers
     cursor.execute("""
         SELECT builty_number, COUNT(*) as cnt FROM builty 
-        GROUP BY builty_number HAVING cnt > 1
+        GROUP BY builty_number HAVING COUNT(*) > 1
     """)
     duplicate_builties = cursor.fetchall()
     if len(duplicate_builties) == 0:
@@ -267,23 +271,23 @@ def test_data_consistency():
     else:
         results.add_fail('logic', f"Found {neg_stock} warehouse stock entries with negative quantities")
     
-    # Test 4: Future dates (suspicious data)
-    future_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-    cursor.execute(f"SELECT COUNT(*) FROM rakes WHERE date > '{future_date}'")
+    # Test 4: Future dates (suspicious data) - PostgreSQL date handling
+    future_date = (datetime.now() + timedelta(days=1)).date()
+    cursor.execute("SELECT COUNT(*) FROM rakes WHERE date > %s", (future_date,))
     future_rakes = cursor.fetchone()[0]
     if future_rakes == 0:
         results.add_pass('database', "No rakes with future dates")
     else:
         results.add_warning('database', f"{future_rakes} rakes have future dates")
     
-    # Test 5: Check warehouse stock balance consistency
+    # Test 5: Check warehouse stock balance consistency (PostgreSQL UUID support)
     cursor.execute("""
-        SELECT w.warehouse_id, w.warehouse_name,
+        SELECT w.id, w.warehouse_name,
             COALESCE(SUM(CASE WHEN ws.transaction_type = 'IN' THEN ws.quantity_mt ELSE 0 END), 0) as total_in,
             COALESCE(SUM(CASE WHEN ws.transaction_type = 'OUT' THEN ws.quantity_mt ELSE 0 END), 0) as total_out
         FROM warehouses w
-        LEFT JOIN warehouse_stock ws ON w.warehouse_id = ws.warehouse_id
-        GROUP BY w.warehouse_id, w.warehouse_name
+        LEFT JOIN warehouse_stock ws ON w.id = ws.warehouse_id
+        GROUP BY w.id, w.warehouse_name
     """)
     warehouses = cursor.fetchall()
     negative_balance = False

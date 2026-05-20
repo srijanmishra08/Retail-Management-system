@@ -113,7 +113,7 @@
 
 <!-- Stock Balance by Warehouse Table with Account Details -->
 <div class="row">
-    <div class="col-md-7">
+    <div class="col-md-12">
         <div class="card mb-4">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-building"></i> Stock Balance by Warehouse</h5>
@@ -136,7 +136,9 @@
                         <tbody>
                             {% if warehouse_balances %}
                                 {% for balance in warehouse_balances %}
-                                <tr class="warehouse-row" data-warehouse-id="{{ balance[0] }}" style="cursor: pointer;">
+                                <tr class="warehouse-row"
+                                    data-detail-url="{{ url_for('warehouse_balance_summary', warehouse_id=balance[0], date_filter=date_filter, start_date=start_date, end_date=end_date) }}"
+                                    style="cursor: pointer;">
                                     <td>{{ loop.index }}</td>
                                     <td><strong>{{ balance[1] }}</strong></td>
                                     <td>{{ balance[2] }}</td>
@@ -182,21 +184,6 @@
                             {% endif %}
                         </tbody>
                     </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Account Stock Panel (Shows when warehouse is clicked) -->
-    <div class="col-md-5">
-        <div class="card mb-4" id="accountStockPanel">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="bi bi-people"></i> <span id="accountPanelTitle">Account Stock Details</span></h5>
-            </div>
-            <div class="card-body" id="accountStockContent">
-                <div class="text-center text-muted py-4">
-                    <i class="bi bi-hand-index-thumb fs-1"></i>
-                    <p class="mt-2">Click on a warehouse row to see which accounts' stock is stored there</p>
                 </div>
             </div>
         </div>
@@ -264,87 +251,12 @@ function toggleCustomDate() {
 // Load account stock when warehouse row is clicked
 document.querySelectorAll('.warehouse-row').forEach(row => {
     row.addEventListener('click', function() {
-        const warehouseId = this.dataset.warehouseId;
-        const warehouseName = this.querySelector('td:nth-child(2) strong').textContent;
-        loadAccountStock(warehouseId, warehouseName);
-        
-        // Highlight selected row
-        document.querySelectorAll('.warehouse-row').forEach(r => r.classList.remove('table-active'));
-        this.classList.add('table-active');
+        const detailUrl = this.dataset.detailUrl;
+        if (detailUrl) {
+            window.location.href = detailUrl;
+        }
     });
 });
-
-function loadAccountStock(warehouseId, warehouseName) {
-    document.getElementById('accountPanelTitle').textContent = `Accounts in ${warehouseName}`;
-    document.getElementById('accountStockContent').innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-2">Loading account details...</p>
-        </div>
-    `;
-    
-    fetch(`/api/warehouse-account-stock/${warehouseId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.length === 0) {
-                document.getElementById('accountStockContent').innerHTML = `
-                    <div class="text-center text-muted py-4">
-                        <i class="bi bi-inbox fs-1"></i>
-                        <p class="mt-2">No account stock data for this warehouse</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let html = `
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Account Name</th>
-                                <th>Type</th>
-                                <th class="text-end">Stock (MT)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            let totalStock = 0;
-            data.forEach(account => {
-                totalStock += account.total_stock;
-                html += `
-                    <tr>
-                        <td><strong>${account.account_name}</strong></td>
-                        <td><span class="badge bg-secondary">${account.account_type}</span></td>
-                        <td class="text-end fw-bold text-success">${account.total_stock.toFixed(2)}</td>
-                    </tr>
-                `;
-            });
-            
-            html += `
-                        </tbody>
-                        <tfoot class="table-primary">
-                            <tr class="fw-bold">
-                                <td colspan="2">Total</td>
-                                <td class="text-end">${totalStock.toFixed(2)} MT</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            `;
-            
-            document.getElementById('accountStockContent').innerHTML = html;
-        })
-        .catch(error => {
-            document.getElementById('accountStockContent').innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle"></i> Error loading account data
-                </div>
-            `;
-        });
-}
 
 function exportToExcel() {
     // Get table data
@@ -386,15 +298,12 @@ function exportToExcel() {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
-    form, #accountStockPanel {
+    form {
         display: none !important;
     }
 }
 .warehouse-row:hover {
     background-color: rgba(0, 123, 255, 0.1) !important;
-}
-.warehouse-row.table-active {
-    background-color: rgba(0, 123, 255, 0.2) !important;
 }
 </style>
 {% endblock %}

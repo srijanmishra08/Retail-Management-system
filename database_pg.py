@@ -603,7 +603,8 @@ class Database:
         total_quantity = rake_result[0]
         unit_per_bag = rake_result[1] if rake_result[1] else 50.0
         cursor.execute(
-            'SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips WHERE rake_code = %s',
+            '''SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips
+               WHERE rake_code = %s''',
             (rake_code,)
         )
         dispatched_quantity = cursor.fetchone()[0]
@@ -630,6 +631,7 @@ class Database:
                    COALESCE(SUM(ls.quantity_mt), 0) AS dispatched
             FROM rakes r
             LEFT JOIN loading_slips ls ON r.rake_code = ls.rake_code
+            WHERE r.rake_code != 'WAREHOUSE'
             GROUP BY r.rake_code, r.rr_quantity
         ''')
         results = {}
@@ -682,8 +684,10 @@ class Database:
                        COALESCE((SELECT SUM(ls.quantity_mt)
                                  FROM loading_slips ls WHERE ls.rake_code = r.rake_code), 0) AS dispatched,
                        COALESCE((SELECT SUM(b.quantity_mt)
-                                 FROM builty b WHERE b.rake_code = r.rake_code), 0) AS builty_total
+                                 FROM builty b WHERE b.rake_code = r.rake_code
+                                   AND b.rake_code IS NOT NULL), 0) AS builty_total
                 FROM rakes r
+                WHERE r.rake_code != 'WAREHOUSE'
                 ORDER BY r.created_at DESC
                 {limit_clause}
             ''')
@@ -894,7 +898,8 @@ class Database:
             if not rake_result:
                 return False, "Rake not found"
             cursor.execute(
-                'SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips WHERE rake_code = %s',
+                '''SELECT COALESCE(SUM(quantity_mt), 0) FROM loading_slips
+                   WHERE rake_code = %s''',
                 (rake_code,)
             )
             shortage = rake_result[0] - cursor.fetchone()[0]
@@ -1630,7 +1635,9 @@ class Database:
                    COALESCE(a.account_name, w.warehouse_name, cg.society_name) AS destination_name,
                    ls.wagon_number, ls.quantity_bags, ls.quantity_mt, t.truck_number,
                    ls.goods_name, ls.truck_driver, ls.truck_owner,
-                   ls.mobile_number_1, ls.mobile_number_2
+                   ls.mobile_number_1, ls.mobile_number_2,
+                   ls.account_id, ls.warehouse_id, ls.cgmf_id,
+                   COALESCE(a.account_type::text, '') AS account_type
             FROM loading_slips ls
             LEFT JOIN accounts   a  ON ls.account_id   = a.id
             LEFT JOIN warehouses w  ON ls.warehouse_id  = w.id

@@ -49,14 +49,7 @@
                     <small class="text-muted">Product and loading point will auto-fill when rake is selected</small>
                 </div>
                 
-                <!-- Product Selection (shown when rake has multiple products) -->
-                <div class="col-md-6 mb-3" id="product_select_container" style="display: none;">
-                    <label for="selected_product" class="form-label">Select Product <span class="text-danger">*</span></label>
-                    <select class="form-select" id="selected_product" name="selected_product">
-                        <option value="">Select Product</option>
-                    </select>
-                    <small class="text-muted">This rake has multiple products. Select one.</small>
-                </div>
+
                 
                 <div class="col-md-6 mb-3" id="serial_number_container">
                     <label for="serial_number" class="form-label">Serial Number (S.No) <span class="text-danger">*</span></label>
@@ -157,17 +150,48 @@
                 </div>
             </div>
             
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="quantity_in_bags" class="form-label">Quantity in Bags <span class="text-danger">*</span></label>
-                    <input type="number" class="form-control" id="quantity_in_bags" name="quantity_in_bags" required placeholder="Enter quantity">
+            <!-- Single-product section (default) -->
+            <div id="single_product_section">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="goods_name" class="form-label">Goods Name</label>
+                        <input type="text" class="form-control" id="goods_name" name="goods_name" placeholder="Auto-filled from rake" readonly>
+                        <small class="text-muted">Auto-filled from selected rake</small>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="quantity_in_bags" class="form-label">Quantity in Bags <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="quantity_in_bags" name="quantity_in_bags" required placeholder="Enter quantity">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="quantity_in_mt" class="form-label">Quantity in MT <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" class="form-control" id="quantity_in_mt" name="quantity_in_mt" required placeholder="0.00">
+                    </div>
                 </div>
-                
-                <div class="col-md-4 mb-3">
-                    <label for="quantity_in_mt" class="form-label">Quantity in MT <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" class="form-control" id="quantity_in_mt" name="quantity_in_mt" required placeholder="0.00">
+            </div>
+
+            <!-- Multi-product section (shown only when rake has multiple products) -->
+            <div id="multi_product_section" style="display:none;">
+                <div class="alert alert-secondary mt-2">
+                    <i class="bi bi-box-seam"></i> <strong>Products to Dispatch</strong>
+                    <small class="text-muted d-block">Only products in the selected rake are available.</small>
                 </div>
-                
+                <div id="product_rows_container"></div>
+                <button type="button" class="btn btn-outline-success btn-sm mb-3" id="add_product_row">
+                    <i class="bi bi-plus-circle"></i> Add Another Product
+                </button>
+                <div class="row">
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label fw-semibold">Total Bags</label>
+                        <input type="text" class="form-control bg-light" id="total_bags_display" readonly value="0">
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label fw-semibold">Total MT</label>
+                        <input type="text" class="form-control bg-light" id="total_mt_display" readonly value="0.00">
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-2">
                 <div class="col-md-4 mb-3">
                     <label for="truck_number" class="form-label">Truck Number <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="truck_number" name="truck_number" required placeholder="Enter truck number">
@@ -201,12 +225,6 @@
                     <label for="mobile_number_2" class="form-label">Mobile Number 2</label>
                     <input type="tel" class="form-control" id="mobile_number_2" name="mobile_number_2" placeholder="Optional">
                 </div>
-                
-                <div class="col-md-4 mb-3">
-                    <label for="goods_name" class="form-label">Goods Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="goods_name" name="goods_name" required placeholder="Auto-filled from rake" readonly>
-                    <small class="text-muted">Auto-filled from rake product (cannot be changed)</small>
-                </div>
             </div>
             
             <div class="row">
@@ -235,33 +253,164 @@
 {% block extra_js %}
 <script>
 let currentRakeBalance = null;
-let currentUnitPerBag = 50; // Default value, will be updated when rake is selected
-let currentRakeProducts = []; // Store products for selected rake
+let currentRakeProducts = []; // [{product_name, product_code, unit_per_bag, quantity_mt}, ...]
+let isMultiProductMode = false;
+let currentUnitPerBag = 50;
 
-// Auto-calculate MT from bags using product's unit_per_bag
+// ── Multi-product row helpers ──────────────────────────────────────────────
+function buildProductRow(index) {
+    const row = document.createElement('div');
+    row.className = 'row align-items-end border rounded p-2 mb-2 product-row';
+    row.dataset.index = index;
+    row.innerHTML = `
+        <div class="col-md-5 mb-2">
+            <label class="form-label">Product <span class="text-danger">*</span></label>
+            <select class="form-select product-select" name="product_name[]" required>
+                <option value="">-- Select Product --</option>
+            </select>
+            <small class="text-muted avail-display"></small>
+        </div>
+        <div class="col-md-3 mb-2">
+            <label class="form-label">Bags <span class="text-danger">*</span></label>
+            <input type="number" class="form-control bags-input" name="quantity_bags[]" min="1" required placeholder="0">
+        </div>
+        <div class="col-md-2 mb-2">
+            <label class="form-label">MT <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" class="form-control mt-input" name="quantity_mt[]" required placeholder="0.00">
+        </div>
+        <div class="col-md-2 mb-2 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-danger btn-sm remove-row-btn w-100">
+                <i class="bi bi-trash"></i> Remove
+            </button>
+        </div>
+    `;
+    populateProductSelect(row.querySelector('.product-select'));
+
+    row.querySelector('.product-select').addEventListener('change', function() {
+        const pname = this.value;
+        const prod = currentRakeProducts.find(p => p.product_name === pname);
+        const unitPerBag = prod ? (prod.unit_per_bag || 50) : 50;
+        row.setAttribute('data-unit-per-bag', unitPerBag);
+        row.querySelector('.avail-display').textContent =
+            prod ? `In rake: ${parseFloat(prod.quantity_mt).toFixed(2)} MT` : '';
+        const bags = parseFloat(row.querySelector('.bags-input').value) || 0;
+        if (bags > 0) row.querySelector('.mt-input').value = ((bags * unitPerBag) / 1000).toFixed(2);
+        updateTotals();
+        refreshAllProductSelects();
+    });
+
+    row.querySelector('.bags-input').addEventListener('input', function() {
+        const bags = parseFloat(this.value) || 0;
+        const upb = parseFloat(row.getAttribute('data-unit-per-bag')) || 50;
+        row.querySelector('.mt-input').value = ((bags * upb) / 1000).toFixed(2);
+        updateTotals();
+    });
+
+    row.querySelector('.mt-input').addEventListener('input', updateTotals);
+
+    row.querySelector('.remove-row-btn').addEventListener('click', function() {
+        if (document.querySelectorAll('.product-row').length > 1) {
+            row.remove(); updateTotals(); refreshAllProductSelects();
+        } else {
+            alert('At least one product row is required.');
+        }
+    });
+
+    return row;
+}
+
+function getSelectedProducts() {
+    const selected = new Set();
+    document.querySelectorAll('.product-row .product-select').forEach(sel => { if (sel.value) selected.add(sel.value); });
+    return selected;
+}
+
+function refreshAllProductSelects() {
+    const selected = getSelectedProducts();
+    document.querySelectorAll('.product-row .product-select').forEach(sel => {
+        const cur = sel.value;
+        sel.querySelectorAll('option').forEach(opt => {
+            opt.disabled = (opt.value && opt.value !== cur && selected.has(opt.value));
+        });
+    });
+    // Disable Add button when all products already have a row
+    const addBtn = document.getElementById('add_product_row');
+    if (addBtn) addBtn.disabled = document.querySelectorAll('.product-row').length >= currentRakeProducts.length;
+}
+
+function populateProductSelect(selectEl) {
+    const cur = selectEl.value;
+    const selected = getSelectedProducts();
+    selectEl.innerHTML = '<option value="">-- Select Product --</option>';
+    currentRakeProducts.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.product_name;
+        opt.dataset.unitPerBag = p.unit_per_bag || 50;
+        opt.textContent = `${p.product_name} — ${parseFloat(p.quantity_mt).toFixed(2)} MT in rake`;
+        if (p.product_name !== cur && selected.has(p.product_name)) opt.disabled = true;
+        selectEl.appendChild(opt);
+    });
+    if (cur) selectEl.value = cur;
+}
+
+function updateTotals() {
+    let totalBags = 0, totalMt = 0;
+    document.querySelectorAll('.product-row').forEach(row => {
+        totalBags += parseInt(row.querySelector('.bags-input').value) || 0;
+        totalMt   += parseFloat(row.querySelector('.mt-input').value)  || 0;
+    });
+    document.getElementById('total_bags_display').value = totalBags;
+    document.getElementById('total_mt_display').value   = totalMt.toFixed(2);
+}
+
+function switchToMultiProductMode() {
+    isMultiProductMode = true;
+    document.getElementById('single_product_section').style.display = 'none';
+    document.getElementById('multi_product_section').style.display = 'block';
+    document.getElementById('quantity_in_bags').required = false;
+    document.getElementById('quantity_in_mt').required = false;
+    const container = document.getElementById('product_rows_container');
+    container.innerHTML = '';
+    container.appendChild(buildProductRow(0));
+    updateTotals();
+}
+
+function switchToSingleProductMode() {
+    isMultiProductMode = false;
+    document.getElementById('single_product_section').style.display = 'block';
+    document.getElementById('multi_product_section').style.display = 'none';
+    document.getElementById('quantity_in_bags').required = true;
+    document.getElementById('quantity_in_mt').required = true;
+    document.getElementById('product_rows_container').innerHTML = '';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('add_product_row').addEventListener('click', function() {
+        const count = document.querySelectorAll('.product-row').length;
+        if (count >= currentRakeProducts.length) return;
+        document.getElementById('product_rows_container').appendChild(buildProductRow(count));
+        refreshAllProductSelects();
+    });
+});
+
+// ── Single-product qty auto-calc ─────────────────────────────────────────────
 document.getElementById('quantity_in_bags').addEventListener('input', function() {
     const bags = parseFloat(this.value) || 0;
     const mt = (bags * currentUnitPerBag) / 1000;
     document.getElementById('quantity_in_mt').value = mt.toFixed(2);
-    
-    // Validate against rake remaining quantity
     validateQuantity(mt);
 });
 
-// Validate quantity against rake balance
 document.getElementById('quantity_in_mt').addEventListener('input', function() {
     validateQuantity(parseFloat(this.value) || 0);
 });
 
 function validateQuantity(quantity) {
     if (currentRakeBalance && quantity > 0) {
-        const remaining = currentRakeBalance.remaining;
         const quantityField = document.getElementById('quantity_in_mt');
-        
-        if (quantity > remaining) {
+        if (quantity > currentRakeBalance.remaining) {
             quantityField.classList.add('border-danger');
             quantityField.classList.remove('border-success');
-            alert(`Error: Quantity exceeds remaining rake balance!\nRemaining: ${remaining.toFixed(2)} MT\nRequested: ${quantity.toFixed(2)} MT`);
         } else {
             quantityField.classList.remove('border-danger');
             quantityField.classList.add('border-success');
@@ -269,257 +418,111 @@ function validateQuantity(quantity) {
     }
 }
 
-// Auto-fill goods name and loading point from rake selection
+// ── Rake selection handler ───────────────────────────────────────────────────
 document.getElementById('rake_code').addEventListener('change', function() {
-    this.blur(); // Prevent arrow-key from changing value after selection
+    this.blur();
     const selectedOption = this.options[this.selectedIndex];
     const rakeCode = this.value;
-    
-    // Get data attributes (fallback values from rakes table)
     const fallbackProduct = selectedOption.getAttribute('data-product');
     const rakePoint = selectedOption.getAttribute('data-rakepoint');
-    
+
     const goodsField = document.getElementById('goods_name');
     const loadingField = document.getElementById('loading_point');
     const serialField = document.getElementById('serial_number');
     const balanceAlert = document.getElementById('rake-balance-alert');
-    const productSelectContainer = document.getElementById('product_select_container');
-    const productSelect = document.getElementById('selected_product');
-    const serialContainer = document.getElementById('serial_number_container');
-    
-    console.log('Elements found:', {
-        goodsField: !!goodsField,
-        productSelectContainer: !!productSelectContainer,
-        productSelect: !!productSelect,
-        serialContainer: !!serialContainer
-    });
-    
-    // Auto-fill loading point
+
     if (rakePoint) {
         loadingField.value = rakePoint;
         loadingField.classList.add('bg-light', 'border-success');
     }
-    
-    // Fetch next serial number
+
     if (rakeCode) {
         fetch(`/api/next-serial-number/${encodeURIComponent(rakeCode)}`)
-            .then(response => response.json())
-            .then(data => {
-                serialField.value = data.next_serial;
-                serialField.classList.add('bg-light', 'border-success');
-            })
-            .catch(error => {
-                console.error('Error fetching serial number:', error);
-            });
+            .then(r => r.json())
+            .then(data => { serialField.value = data.next_serial; serialField.classList.add('bg-light', 'border-success'); })
+            .catch(err => console.error('Error fetching serial:', err));
     }
-    
-    // Fetch rake products
+
     if (rakeCode) {
         fetch(`/api/rake-products/${encodeURIComponent(rakeCode)}`)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
-                console.log('Rake Products API Response:', data);
                 currentRakeProducts = data.products || [];
-                console.log('Products count:', currentRakeProducts.length);
-                
                 if (currentRakeProducts.length > 1) {
-                    // Multiple products - show dropdown
-                    productSelectContainer.style.display = 'block';
-                    productSelect.required = true;
-                    
-                    // Clear all existing options
-                    productSelect.length = 0;
-                    
-                    // Add placeholder option using Option constructor
-                    productSelect.add(new Option('Select Product', ''));
-                    
-                    // Add product options
-                    currentRakeProducts.forEach((product, index) => {
-                        console.log('Adding product:', index, product.product_name);
-                        const optionText = `${product.product_name} (${product.product_code || 'N/A'}) - ${product.quantity_mt} MT`;
-                        const opt = new Option(optionText, index.toString());
-                        opt.dataset.productName = product.product_name;
-                        opt.dataset.productCode = product.product_code || '';
-                        opt.dataset.unitPerBag = product.unit_per_bag || 50;
-                        productSelect.add(opt);
-                    });
-                    
-                    console.log('Select now has', productSelect.length, 'options');
-                    
-                    // Adjust layout - get element reference first before modifying
-                    const rakeCodeCol = document.getElementById('rake_code').closest('[class*="col-md-"]');
-                    if (rakeCodeCol) {
-                        rakeCodeCol.classList.remove('col-md-6');
-                        rakeCodeCol.classList.add('col-md-4');
-                    }
-                    productSelectContainer.classList.remove('col-md-6');
-                    productSelectContainer.classList.add('col-md-4');
-                    serialContainer.classList.remove('col-md-6');
-                    serialContainer.classList.add('col-md-4');
-                    
-                    // Clear goods field until product is selected
-                    goodsField.value = '';
-                    goodsField.classList.remove('bg-light', 'border-success');
-                    
+                    switchToMultiProductMode();
                 } else if (currentRakeProducts.length === 1) {
-                    // Single product - auto-fill and hide dropdown
-                    productSelectContainer.style.display = 'none';
-                    productSelect.required = false;
-                    
+                    switchToSingleProductMode();
                     const product = currentRakeProducts[0];
                     goodsField.value = product.product_name;
                     goodsField.classList.add('bg-light', 'border-success');
                     currentUnitPerBag = product.unit_per_bag || 50;
-                    
-                    // Reset layout
-                    resetLayoutColumns();
-                    
                 } else {
-                    // No products found - use fallback
-                    productSelectContainer.style.display = 'none';
-                    productSelect.required = false;
-                    
-                    if (fallbackProduct) {
-                        goodsField.value = fallbackProduct;
-                        goodsField.classList.add('bg-light', 'border-success');
-                    }
+                    switchToSingleProductMode();
+                    if (fallbackProduct) { goodsField.value = fallbackProduct; goodsField.classList.add('bg-light', 'border-success'); }
                     currentUnitPerBag = 50;
-                    
-                    // Reset layout
-                    resetLayoutColumns();
                 }
             })
-            .catch(error => {
-                console.error('Error fetching rake products:', error);
-                // Fallback to old behavior
-                if (fallbackProduct) {
-                    goodsField.value = fallbackProduct;
-                    goodsField.classList.add('bg-light', 'border-success');
-                }
-                productSelectContainer.style.display = 'none';
+            .catch(err => {
+                console.error('Error fetching rake products:', err);
+                switchToSingleProductMode();
+                if (fallbackProduct) { goodsField.value = fallbackProduct; goodsField.classList.add('bg-light', 'border-success'); }
             });
     }
-    
-    // Fetch and display rake balance
+
     if (rakeCode) {
         fetch(`/api/rake-balance/${encodeURIComponent(rakeCode)}`)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
                 if (!data.error) {
                     currentRakeBalance = data;
-                    
-                    // Update balance display
                     document.getElementById('rake-total').textContent = data.total.toFixed(2);
                     document.getElementById('rake-dispatched').textContent = data.dispatched.toFixed(2);
                     document.getElementById('rake-remaining').textContent = data.remaining.toFixed(2);
-                    
-                    // Show balance alert
                     balanceAlert.style.display = 'block';
-                    
-                    // Color code remaining quantity
-                    const remainingSpan = document.getElementById('rake-remaining');
-                    if (data.remaining <= 0) {
-                        remainingSpan.classList.remove('text-success');
-                        remainingSpan.classList.add('text-danger');
-                    } else if (data.remaining < data.total * 0.2) {
-                        remainingSpan.classList.remove('text-success');
-                        remainingSpan.classList.add('text-warning');
-                    } else {
-                        remainingSpan.classList.add('text-success');
-                        remainingSpan.classList.remove('text-danger', 'text-warning');
-                    }
+                    const rem = document.getElementById('rake-remaining');
+                    if (data.remaining <= 0) { rem.className = 'text-danger fw-bold'; }
+                    else if (data.remaining < data.total * 0.2) { rem.className = 'text-warning fw-bold'; }
+                    else { rem.className = 'text-success fw-bold'; }
                 }
             })
-            .catch(error => {
-                console.error('Error fetching rake balance:', error);
-            });
+            .catch(err => console.error('Error fetching rake balance:', err));
     } else {
-        // Clear fields and hide balance if "Select Rake" option is chosen
-        goodsField.value = '';
-        loadingField.value = '';
-        serialField.value = '';
+        goodsField.value = ''; loadingField.value = ''; serialField.value = '';
         goodsField.classList.remove('bg-light', 'border-success');
         loadingField.classList.remove('bg-light', 'border-success');
         serialField.classList.remove('bg-light', 'border-success');
         balanceAlert.style.display = 'none';
-        currentRakeBalance = null;
-        currentUnitPerBag = 50; // Reset to default
-        currentRakeProducts = [];
-        
-        // Hide product dropdown and reset layout
-        productSelectContainer.style.display = 'none';
-        productSelect.required = false;
-        resetLayoutColumns();
+        currentRakeBalance = null; currentRakeProducts = []; currentUnitPerBag = 50;
+        switchToSingleProductMode();
     }
 });
 
-// Handle product selection change
-document.getElementById('selected_product').addEventListener('change', function() {
-    const selectedIndex = this.value;
-    const goodsField = document.getElementById('goods_name');
-    
-    if (selectedIndex !== '' && currentRakeProducts[selectedIndex]) {
-        const product = currentRakeProducts[selectedIndex];
-        goodsField.value = product.product_name;
-        goodsField.classList.add('bg-light', 'border-success');
-        currentUnitPerBag = product.unit_per_bag || 50;
-        
-        // Recalculate MT if bags is filled
-        const bags = parseFloat(document.getElementById('quantity_in_bags').value) || 0;
-        if (bags > 0) {
-            const mt = (bags * currentUnitPerBag) / 1000;
-            document.getElementById('quantity_in_mt').value = mt.toFixed(2);
-        }
-    } else {
-        goodsField.value = '';
-        goodsField.classList.remove('bg-light', 'border-success');
-        currentUnitPerBag = 50;
-    }
-});
-
-// Helper function to reset layout columns
-function resetLayoutColumns() {
-    const rakeCol = document.getElementById('rake_code').closest('.col-md-4, .col-md-6');
-    const productCol = document.getElementById('product_select_container');
-    const serialCol = document.getElementById('serial_number_container');
-    
-    if (rakeCol) {
-        rakeCol.classList.remove('col-md-4');
-        rakeCol.classList.add('col-md-6');
-    }
-    productCol.classList.remove('col-md-4');
-    productCol.classList.add('col-md-6');
-    serialCol.classList.remove('col-md-4');
-    serialCol.classList.add('col-md-6');
-}
-
-// Form submission validation
+// ── Form submit validation ───────────────────────────────────────────────────
 document.querySelector('form').addEventListener('submit', function(e) {
-    const quantity = parseFloat(document.getElementById('quantity_in_mt').value) || 0;
-    
-    if (currentRakeBalance && quantity > currentRakeBalance.remaining) {
-        e.preventDefault();
-        alert(`Cannot create loading slip!\nRemaining rake quantity: ${currentRakeBalance.remaining.toFixed(2)} MT\nRequested quantity: ${quantity.toFixed(2)} MT`);
-        return false;
-    }
-    
-    // Validate account is selected
-    const accountValue = document.getElementById('account').value;
-    if (!accountValue) {
-        e.preventDefault();
-        alert('Please select an account/warehouse!');
-        return false;
-    }
-    
-    // Validate sub_head if Payal account is selected
-    const subHeadContainer = document.getElementById('sub_head_container');
-    if (subHeadContainer.style.display !== 'none') {
-        const subHead = document.getElementById('sub_head').value.trim();
-        if (!subHead) {
+    if (isMultiProductMode) {
+        const totalMt = parseFloat(document.getElementById('total_mt_display').value) || 0;
+        if (currentRakeBalance && totalMt > currentRakeBalance.remaining) {
             e.preventDefault();
-            alert('Sub Head is required for Payal accounts!');
+            alert(`Cannot create loading slip!\nRemaining rake quantity: ${currentRakeBalance.remaining.toFixed(2)} MT\nRequested: ${totalMt.toFixed(2)} MT`);
             return false;
         }
+        let hasProduct = false;
+        document.querySelectorAll('.product-row .product-select').forEach(sel => { if (sel.value) hasProduct = true; });
+        if (!hasProduct) { e.preventDefault(); alert('Please select at least one product.'); return false; }
+    } else {
+        const qty = parseFloat(document.getElementById('quantity_in_mt').value) || 0;
+        if (currentRakeBalance && qty > currentRakeBalance.remaining) {
+            e.preventDefault();
+            alert(`Cannot create loading slip!\nRemaining: ${currentRakeBalance.remaining.toFixed(2)} MT\nRequested: ${qty.toFixed(2)} MT`);
+            return false;
+        }
+    }
+    if (!document.getElementById('account').value) {
+        e.preventDefault(); alert('Please select an account/warehouse!'); return false;
+    }
+    const subHeadContainer = document.getElementById('sub_head_container');
+    if (subHeadContainer.style.display !== 'none' && !document.getElementById('sub_head').value.trim()) {
+        e.preventDefault(); alert('Sub Head is required for Payal accounts!'); return false;
     }
 });
 

@@ -66,15 +66,28 @@
                                 {% endfor %}
                             </optgroup>
                             {% endif %}
-                            {% for acc_type in ['Payal', 'Dealer', 'Retailer'] %}
-                            <optgroup label="👤 {{ acc_type }}">
+                            <optgroup label="👤 Payal">
                                 {% for account in accounts %}
-                                    {% if account[2] == acc_type %}
+                                    {% set acc_type = (account[2] or '')|lower %}
+                                    {% if acc_type in ['payal', 'company'] %}
                                     <option value="{{ account[0] }}">{{ account[1] }}</option>
                                     {% endif %}
                                 {% endfor %}
                             </optgroup>
-                            {% endfor %}
+                            <optgroup label="🏪 Dealer">
+                                {% for account in accounts %}
+                                    {% if (account[2] or '')|lower == 'dealer' %}
+                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="🛒 Retailer">
+                                {% for account in accounts %}
+                                    {% if (account[2] or '')|lower == 'retailer' %}
+                                    <option value="{{ account[0] }}">{{ account[1] }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
                         </select>
                     </div>
 
@@ -122,6 +135,7 @@
                                 <th>Warehouse</th>
                                 <th>Account</th>
                                 <th>Type</th>
+                                <th>Product</th>
                                 <th class="text-end">Balance (MT)</th>
                                 <th>Action</th>
                             </tr>
@@ -133,10 +147,11 @@
                                     <td>{{ stock[1] }}</td>
                                     <td><strong>{{ stock[3] }}</strong></td>
                                     <td><span class="badge bg-{{ 'primary' if stock[4] == 'Company' else ('warning text-dark' if stock[4] == 'CGMF' else ('info' if stock[4] == 'Payal' else ('success' if stock[4] == 'Dealer' else 'secondary'))) }}">{{ stock[4] }}</span></td>
-                                    <td class="text-end fw-bold text-success">{{ "%.2f"|format(stock[5]) }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ stock[5] }}</span></td>
+                                    <td class="text-end fw-bold text-success">{{ "%.2f"|format(stock[6]) }}</td>
                                     <td>
                                         <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                onclick="selectFromAccount({{ stock[0] }}, {{ stock[2] }}, {{ stock[5] }}, '{{ stock[4] }}')">
+                                                onclick="selectFromAccount('{{ stock[0] }}', '{{ stock[2] }}', '{{ stock[4] }}')">
                                             <i class="bi bi-arrow-right"></i>
                                         </button>
                                     </td>
@@ -144,7 +159,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
+                                    <td colspan="6" class="text-center text-muted py-4">
                                         <i class="bi bi-inbox"></i> No stock assigned to any account yet
                                     </td>
                                 </tr>
@@ -223,20 +238,45 @@ document.getElementById('allotment_date').value = new Date().toISOString().split
 const accountStock = [
     {% for stock in account_stock %}
     {
-        warehouse_id: {{ stock[0] }},
+        warehouse_id: "{{ stock[0] }}",
         warehouse_name: "{{ stock[1] }}",
-        entity_id: {{ stock[2] }},
+        entity_id: "{{ stock[2] }}",
         entity_name: "{{ stock[3] }}",
         entity_type: "{{ stock[4] }}",
-        balance: {{ stock[5] }}
+        product_name: "{{ stock[5] }}",
+        balance: {{ stock[6] }}
     },
     {% endfor %}
 ];
 
+// Aggregate stock by entity for FROM selection, while table remains product-wise.
+const entityStock = Object.values(accountStock.reduce((acc, row) => {
+    const key = `${row.warehouse_id}|${row.entity_type}|${row.entity_id}`;
+    if (!acc[key]) {
+        acc[key] = {
+            warehouse_id: row.warehouse_id,
+            warehouse_name: row.warehouse_name,
+            entity_id: row.entity_id,
+            entity_name: row.entity_name,
+            entity_type: row.entity_type,
+            balance: 0,
+            products: new Set()
+        };
+    }
+    acc[key].balance += Number(row.balance || 0);
+    if (row.product_name && row.product_name !== 'N/A') {
+        acc[key].products.add(row.product_name);
+    }
+    return acc;
+}, {})).map(item => ({
+    ...item,
+    products: Array.from(item.products)
+}));
+
 // All accounts for TO dropdown
 const allAccounts = [
     {% for acc in accounts %}
-    { id: {{ acc[0] }}, name: "{{ acc[1] }}", type: "{{ acc[2] }}" },
+    { id: "{{ acc[0] }}", name: "{{ acc[1] }}", type: "{{ acc[2] }}" },
     {% endfor %}
 ];
 
@@ -255,7 +295,7 @@ function filterAccountsByWarehouse() {
     }
     
     // Filter entities that have stock in selected warehouse
-    const filtered = accountStock.filter(s => s.warehouse_id == warehouseId);
+    const filtered = entityStock.filter(s => s.warehouse_id == warehouseId);
     
     if (filtered.length === 0) {
         fromSelect.innerHTML = '<option value="">-- No accounts with stock in this warehouse --</option>';
@@ -293,8 +333,9 @@ function filterAccountsByWarehouse() {
                 if (s.entity_type === 'CGMF') valuePrefix = 'CGMF:';
                 else if (s.entity_type === 'Company') valuePrefix = 'COMPANY:';
                 // Regular accounts use plain ID
+                const productHint = s.products.length ? ` | Products: ${s.products.slice(0, 3).join(', ')}${s.products.length > 3 ? '...' : ''}` : '';
                 
-                fromSelect.innerHTML += `<option value="${valuePrefix}${s.entity_id}" data-balance="${s.balance}">${s.entity_name} (${s.balance.toFixed(2)} MT)</option>`;
+                fromSelect.innerHTML += `<option value="${valuePrefix}${s.entity_id}" data-balance="${s.balance}">${s.entity_name} (${s.balance.toFixed(2)} MT)${productHint}</option>`;
             });
             fromSelect.innerHTML += '</optgroup>';
         }
@@ -323,7 +364,7 @@ function updateAvailableQty() {
     }
     
     // Find matching stock
-    const match = accountStock.find(s => {
+    const match = entityStock.find(s => {
         if (s.warehouse_id != warehouseId) return false;
         if (s.entity_type === entityType || 
             (entityType === 'Account' && ['Payal', 'Dealer', 'Retailer'].includes(s.entity_type))) {
@@ -344,7 +385,7 @@ function updateAvailableQty() {
     }
 }
 
-function selectFromAccount(warehouseId, entityId, balance, entityType) {
+function selectFromAccount(warehouseId, entityId, entityType) {
     // Set warehouse
     document.getElementById('warehouse_id').value = warehouseId;
     filterAccountsByWarehouse();

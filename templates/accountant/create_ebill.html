@@ -24,15 +24,15 @@
                         {% for builty in builties %}
                         <option value="{{ builty[0] }}" 
                                 data-builty-number="{{ builty[1] }}"
-                                data-truck="{{ builty[22] }}"
-                                data-goods="{{ builty[10] }}"
-                                data-quantity="{{ builty[12] }}"
-                                data-account="{{ builty[20] }}"
-                                data-loading="{{ builty[8] }}"
-                                data-unloading="{{ builty[9] }}"
-                                data-freight="{{ builty[15] }}"
-                                data-lr="{{ builty[16] }}">
-                            Builty: {{ builty[1] }} | LR: {{ builty[16] }} | Truck: {{ builty[22] }} | {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT)
+                                data-truck="{{ builty[26] }}"
+                                data-goods="{{ builty[11] }}"
+                                data-quantity="{{ builty[13] }}"
+                                data-account="{{ builty[27] }}"
+                                data-loading="{{ builty[9] }}"
+                                data-unloading="{{ builty[10] }}"
+                                data-freight="{{ builty[16] }}"
+                                data-lr="{{ builty[19] }}">
+                            Builty: {{ builty[1] }} | LR: {{ builty[19] }} | Truck: {{ builty[26] }} | {{ builty[11] }} ({{ "%.2f"|format(builty[13]) }} MT)
                         </option>
                         {% endfor %}
                     </select>

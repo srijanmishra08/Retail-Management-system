@@ -163,6 +163,7 @@
                         <tr>
                             <th>Type</th>
                             <th>Account/Destination</th>
+                            <th>Supply Term</th>
                             <th>QT (MT)</th>
                             <th>KM Distance</th>
                             <th>Rate (₹)</th>
@@ -171,12 +172,12 @@
                     </thead>
                     <tbody id="rakeTransportBody">
                         <tr>
-                            <td colspan="6" class="text-center text-muted">Select a rake to load data</td>
+                            <td colspan="7" class="text-center text-muted">Select a rake to load data</td>
                         </tr>
                     </tbody>
                     <tfoot class="table-secondary">
                         <tr>
-                            <th colspan="5" class="text-end">Rake Transport Total:</th>
+                            <th colspan="6" class="text-end">Rake Transport Total:</th>
                             <th id="rakeTransportTotal">₹ 0.00</th>
                         </tr>
                     </tfoot>
@@ -590,7 +591,7 @@ function renderRakeTransportTable(data) {
         return;
     }
     
-    // Group by destination type
+    // Group by destination type, then for each account group by supply_term
     const grouped = {};
     data.forEach(item => {
         if (!grouped[item.dest_type]) {
@@ -604,11 +605,15 @@ function renderRakeTransportTable(data) {
     
     typeOrder.forEach(type => {
         if (grouped[type]) {
-            grouped[type].forEach((item, idx) => {
+            // For accounts: check if any have EX/FOR split for the same dest_name
+            const accountRows = grouped[type];
+            accountRows.forEach((item, idx) => {
+                const termLabel = item.supply_term ? `<span class="badge bg-${item.supply_term === 'EX' ? 'info' : 'warning'} text-dark">${item.supply_term}</span>` : '-';
                 html += `
                     <tr data-dest-type="${item.dest_type}" data-dest-id="${item.dest_id}">
                         <td>${idx === 0 ? '<strong>' + type + '</strong>' : ''}</td>
                         <td>${item.dest_name}</td>
+                        <td>${termLabel}</td>
                         <td><input type="number" class="form-control form-control-sm transport-qty" value="${item.quantity}" step="0.01" min="0" onchange="calculateTransportRowRake(this)"></td>
                         <td><input type="number" class="form-control form-control-sm transport-km" value="${item.distance || 0}" step="0.1" min="0" onchange="calculateTransportRowRake(this)"></td>
                         <td><input type="number" class="form-control form-control-sm transport-rate" step="0.01" min="0" onchange="calculateTransportRowRake(this)"></td>
@@ -619,7 +624,7 @@ function renderRakeTransportTable(data) {
         }
     });
     
-    tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">No dispatch data for this rake</td></tr>';
+    tbody.innerHTML = html || '<tr><td colspan="7" class="text-center text-muted">No dispatch data for this rake</td></tr>';
 }
 
 function calculateTransportRowRake(input) {

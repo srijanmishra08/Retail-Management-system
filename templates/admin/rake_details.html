@@ -17,9 +17,26 @@
 
 <!-- ===== BUILTY DETAIL REPORT (hidden by default) ===== -->
 <div id="builtyDetailPanel" style="display:none;">
-    <div class="d-flex align-items-center justify-content-between mb-3 no-print">
+    <div class="d-flex align-items-center justify-content-between mb-3 no-print flex-wrap gap-2">
         <h5 class="mb-0"><i class="bi bi-table text-success"></i> Builty Detail Report — {{ rake_info[0] }}</h5>
-        <button class="btn btn-primary" onclick="printBuiltyReport()"><i class="bi bi-printer"></i> Print Report</button>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="d-flex align-items-center gap-1">
+                <label class="form-label mb-0 small text-muted fw-semibold">Type:</label>
+                <select class="form-select form-select-sm" id="builtyTypeFilter" onchange="filterBuiltyType()" style="min-width:140px;">
+                    <option value="">All Types</option>
+                    <option value="Dealer">Dealer</option>
+                    <option value="Retailer">Retailer</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="CGMF">CGMF</option>
+                </select>
+            </div>
+            <button class="btn btn-success btn-sm" onclick="downloadBuiltyExcel()">
+                <i class="bi bi-file-earmark-excel"></i> Download Excel
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="printBuiltyReport()">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </div>
     </div>
     <div class="table-responsive">
         <table class="table table-bordered table-sm" id="builtyDetailTable" style="font-size:13px;">
@@ -41,7 +58,7 @@
                 {% for b in rake_builties %}
                 {% set ns.total_mt = ns.total_mt + (b[6]|float if b[6] else 0) %}
                 {% set ns.total_bags = ns.total_bags + (b[7]|int if b[7] else 0) %}
-                <tr>
+                <tr data-type="{{ b[8] or 'Unknown' }}">
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ b[0] or 'N/A' }}</strong></td>
                     <td>{{ b[1]|format_date if b[1] else 'N/A' }}</td>
@@ -363,6 +380,77 @@ document.querySelectorAll('input[name="viewMode"]').forEach(function(radio) {
     });
 });
 
+// Type filter for builty detail table
+function filterBuiltyType() {
+    var filter = document.getElementById('builtyTypeFilter').value;
+    var table = document.getElementById('builtyDetailTable');
+    var rows = table.querySelector('tbody').rows;
+    var totalMT = 0, totalBags = 0;
+    for (var i = 0; i < rows.length; i++) {
+        var type = rows[i].dataset.type || '';
+        var show = !filter || type === filter;
+        rows[i].style.display = show ? '' : 'none';
+        if (show) {
+            var cells = rows[i].querySelectorAll('td');
+            totalMT += parseFloat(cells[7].textContent) || 0;
+            totalBags += parseInt(cells[8].textContent) || 0;
+        }
+    }
+    // Update tfoot totals
+    var tfootCells = table.querySelectorAll('tfoot td');
+    if (tfootCells.length >= 3) {
+        tfootCells[1].textContent = totalMT.toFixed(2);
+        tfootCells[2].textContent = totalBags;
+    }
+}
+
+// Download visible builty rows as CSV
+function downloadBuiltyExcel() {
+    function csvCell(v) {
+        var s = String(v == null ? '' : v);
+        if (s.search(/[",\r\n]/) >= 0) s = '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    }
+
+    var table = document.getElementById('builtyDetailTable');
+    var rows = table.querySelector('tbody').rows;
+    var lines = [['#','Builty Number','Date','LR Number','Account','Type','Sub Head','Truck Number','Qt (Ton)','Qt (Bags)'].map(csvCell).join(',')];
+    var totalMT = 0, totalBags = 0, idx = 1;
+    for (var i = 0; i < rows.length; i++) {
+        if (rows[i].style.display === 'none') continue;
+        var cells = rows[i].querySelectorAll('td');
+        if (cells.length < 9) continue;
+        var type = rows[i].dataset.type || '';
+        var mt   = parseFloat(cells[7].textContent) || 0;
+        var bags = parseInt(cells[8].textContent)   || 0;
+        totalMT += mt; totalBags += bags;
+        lines.push([
+            idx++,
+            cells[1].textContent.trim(),
+            cells[2].textContent.trim(),
+            cells[3].textContent.trim(),
+            cells[4].textContent.trim(),
+            type,
+            cells[5].textContent.trim(),
+            cells[6].textContent.trim(),
+            mt, bags
+        ].map(csvCell).join(','));
+    }
+    lines.push(['','TOTAL','','','','','','', totalMT.toFixed(2), totalBags].map(csvCell).join(','));
+
+    var typeFilter = document.getElementById('builtyTypeFilter').value;
+    var suffix = typeFilter ? '_' + typeFilter : '_All';
+    var filename = 'Builty_Report_{{ rake_info[0] }}' + suffix + '.csv';
+
+    var blob = new Blob([lines.join('\r\n')], {type: 'text/csv;charset=utf-8'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
 // Print the builty detail table in a clean page
 function printBuiltyReport() {
     var table = document.getElementById('builtyDetailTable').outerHTML;
@@ -426,3 +514,5 @@ function sendOtp() {
 }
 </script>
 {% endblock %}
+
+{% block extra_js %}{% endblock %}

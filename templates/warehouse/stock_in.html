@@ -67,10 +67,10 @@
                             <option value="">Select Builty</option>
                             {% for builty in builties %}
                             <option value="{{ builty[0] }}" 
-                                    data-goods="{{ builty[10] }}" 
-                                    data-quantity="{{ builty[12] }}"
+                                    data-goods="{{ builty[11] }}" 
+                                    data-quantity="{{ builty[13] }}"
                                     data-warehouse="{{ builty.dest_warehouse_name if builty.dest_warehouse_name else builty[-1] }}">
-                                {{ builty[1] }} - {{ builty[10] }} ({{ "%.2f"|format(builty[12]) }} MT) → {{ builty.dest_warehouse_name if builty.dest_warehouse_name else builty[-1] }}
+                                {{ builty[1] }} - {{ builty[11] }} ({{ "%.2f"|format(builty[13]) }} MT) → {{ builty.dest_warehouse_name if builty.dest_warehouse_name else builty[-1] }}
                             </option>
                             {% endfor %}
                         </select>
@@ -153,21 +153,22 @@
                         {% endif %}
                         <optgroup label="👤 Payal">
                             {% for account in accounts %}
-                                {% if account[2] == 'Payal' %}
+                                {% set acc_type = (account[2] or '')|lower %}
+                                {% if acc_type in ['payal', 'company'] %}
                             <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }}</option>
                                 {% endif %}
                             {% endfor %}
                         </optgroup>
                         <optgroup label="👥 Dealer">
                             {% for account in accounts %}
-                                {% if account[2] == 'Dealer' %}
+                                {% if (account[2] or '')|lower == 'dealer' %}
                             <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }}</option>
                                 {% endif %}
                             {% endfor %}
                         </optgroup>
                         <optgroup label="🛒 Retailer">
                             {% for account in accounts %}
-                                {% if account[2] == 'Retailer' %}
+                                {% if (account[2] or '')|lower == 'retailer' %}
                             <option value="{{ account[0] }}" data-type="{{ account[2] }}">{{ account[1] }}</option>
                                 {% endif %}
                             {% endfor %}
@@ -343,12 +344,12 @@ document.querySelectorAll('input[name="source_type"]').forEach(radio => {
 function toggleSubHead() {
     const accountSelect = document.getElementById('account_id');
     const selectedOption = accountSelect.options[accountSelect.selectedIndex];
-    const accountType = selectedOption.dataset.type;
+    const accountType = (selectedOption.dataset.type || '').toLowerCase();
     const subHeadContainer = document.getElementById('sub_head_container');
     const subHeadInput = document.getElementById('sub_head');
     const remarksContainer = document.getElementById('remarks_container');
     
-    if (accountType === 'Payal') {
+    if (accountType === 'payal' || accountType === 'company') {
         subHeadContainer.style.display = 'block';
         subHeadInput.required = true;
         // Adjust remarks container to next row
@@ -367,9 +368,9 @@ function toggleSubHead() {
 document.querySelector('form').addEventListener('submit', function(e) {
     const accountSelect = document.getElementById('account_id');
     const selectedOption = accountSelect.options[accountSelect.selectedIndex];
-    const accountType = selectedOption.dataset.type;
+    const accountType = (selectedOption.dataset.type || '').toLowerCase();
     
-    if (accountType === 'Payal') {
+    if (accountType === 'payal' || accountType === 'company') {
         const subHead = document.getElementById('sub_head').value.trim();
         if (!subHead) {
             e.preventDefault();

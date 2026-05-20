@@ -1937,14 +1937,17 @@ class Database:
         cursor.execute('''
             SELECT ls.slip_id, ls.rake_code, ls.slip_number, ls.loading_point_name, 
                    ls.destination, 
-                   COALESCE(a.account_name, w.warehouse_name) as destination_name,
+                   COALESCE(a.account_name, w.warehouse_name, cg.society_name) as destination_name,
                    ls.wagon_number, 
                    ls.quantity_bags, ls.quantity_mt, t.truck_number,
                    ls.goods_name, ls.truck_driver, ls.truck_owner,
-                   ls.mobile_number_1, ls.mobile_number_2
+                   ls.mobile_number_1, ls.mobile_number_2,
+                   ls.account_id, ls.warehouse_id, ls.cgmf_id,
+                   COALESCE(a.account_type, '') as account_type
             FROM loading_slips ls
             LEFT JOIN accounts a ON ls.account_id = a.account_id
             LEFT JOIN warehouses w ON ls.warehouse_id = w.warehouse_id
+            LEFT JOIN cgmf cg ON ls.cgmf_id = cg.cgmf_id
             LEFT JOIN trucks t ON ls.truck_id = t.truck_id
             WHERE ls.builty_id IS NULL
             AND ls.loading_point_name IN (SELECT warehouse_name FROM warehouses)
