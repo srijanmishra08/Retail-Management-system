@@ -4937,106 +4937,74 @@ def warehouse_balance_summary(warehouse_id):
     start_date = request.args.get('start_date', '')
     end_date = request.args.get('end_date', '')
 
-    from datetime import datetime, timedelta
     date_condition = ""
     date_params = []
     if date_filter == 'today':
-        date_condition = " AND DATE(ws.date) = ?"
+        date_condition = " AND ws.date = ?"
         date_params = [datetime.now().strftime('%Y-%m-%d')]
     elif date_filter == 'week':
-        date_condition = " AND DATE(ws.date) >= ?"
+        date_condition = " AND ws.date >= ?"
         date_params = [(datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')]
     elif date_filter == 'month':
-        date_condition = " AND DATE(ws.date) >= ?"
+        date_condition = " AND ws.date >= ?"
         date_params = [(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')]
     elif date_filter == 'custom' and start_date and end_date:
-        date_condition = " AND DATE(ws.date) >= ? AND DATE(ws.date) <= ?"
+        date_condition = " AND ws.date >= ? AND ws.date <= ?"
         date_params = [start_date, end_date]
 
-    def _pk_col(table_name, legacy_pk):
-        try:
-            cols = db.execute_custom_query(
-                f"SELECT name FROM pragma_table_info('{table_name}')"
-            ) or []
-            names = [c[0] for c in cols if c and len(c) > 0]
-            if names:
-                return 'id' if 'id' in names else legacy_pk
-        except Exception:
-            pass
-        try:
-            cols = db.execute_custom_query(
-                f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
-            ) or []
-            names = [c[0] for c in cols if c and len(c) > 0]
-            if names:
-                return 'id' if 'id' in names else legacy_pk
-        except Exception:
-            pass
-        return legacy_pk
-
-    account_pk = _pk_col('accounts', 'account_id')
-    cgmf_pk = _pk_col('cgmf', 'cgmf_id')
-    company_pk = _pk_col('companies', 'company_id')
-
-    _date_cond = date_condition  # plain string, safe to embed in non-f-string via format
-    _wh = warehouse_id
-    _dp = list(date_params)
-
+    # account_type is a PostgreSQL ENUM — must cast to TEXT before string operations
     _acct_rows = db.execute_custom_query(
         '''SELECT a.account_name,
-                  CASE WHEN LOWER(COALESCE(a.account_type,'')) IN ('company','payal') THEN 'Payal'
-                       WHEN LOWER(COALESCE(a.account_type,'')) = 'dealer' THEN 'Dealer'
-                       WHEN LOWER(COALESCE(a.account_type,'')) = 'retailer' THEN 'Retailer'
-                       ELSE COALESCE(a.account_type,'Account') END,
-                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+                  CASE WHEN LOWER(a.account_type::TEXT) IN ('company','payal') THEN 'Payal'
+                       WHEN LOWER(a.account_type::TEXT) = 'dealer' THEN 'Dealer'
+                       WHEN LOWER(a.account_type::TEXT) = 'retailer' THEN 'Retailer'
+                       ELSE a.account_type::TEXT END,
+                  COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
            FROM warehouse_stock ws
-           JOIN accounts a ON ws.account_id = a.''' + account_pk + '''
-           WHERE ws.warehouse_id = ? AND ws.account_id IS NOT NULL''' + _date_cond + '''
-           GROUP BY a.account_name, CASE WHEN LOWER(COALESCE(a.account_type,'')) IN ('company','payal') THEN 'Payal'
-                       WHEN LOWER(COALESCE(a.account_type,'')) = 'dealer' THEN 'Dealer'
-                       WHEN LOWER(COALESCE(a.account_type,'')) = 'retailer' THEN 'Retailer'
-                       ELSE COALESCE(a.account_type,'Account') END
-           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           JOIN accounts a ON ws.account_id = a.id
+           WHERE ws.warehouse_id = ? AND ws.account_id IS NOT NULL''' + date_condition + '''
+           GROUP BY a.account_name, a.account_type
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
            ORDER BY 3 DESC, 1''',
-        [_wh] + _dp
+        [warehouse_id] + date_params
     ) or []
 
     _cgmf_rows = db.execute_custom_query(
         '''SELECT c.society_name, 'CGMF',
-                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+                  COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
            FROM warehouse_stock ws
-           JOIN cgmf c ON ws.cgmf_id = c.''' + cgmf_pk + '''
-           WHERE ws.warehouse_id = ? AND ws.cgmf_id IS NOT NULL''' + _date_cond + '''
+           JOIN cgmf c ON ws.cgmf_id = c.id
+           WHERE ws.warehouse_id = ? AND ws.cgmf_id IS NOT NULL''' + date_condition + '''
            GROUP BY c.society_name
-           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
            ORDER BY 3 DESC, 1''',
-        [_wh] + _dp
+        [warehouse_id] + date_params
     ) or []
 
     _company_rows = db.execute_custom_query(
         '''SELECT co.company_name, 'Company',
-                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+                  COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
            FROM warehouse_stock ws
-           JOIN companies co ON ws.company_id = co.''' + company_pk + '''
-           WHERE ws.warehouse_id = ? AND ws.account_id IS NULL AND ws.cgmf_id IS NULL''' + _date_cond + '''
+           JOIN companies co ON ws.company_id = co.id
+           WHERE ws.warehouse_id = ? AND ws.account_id IS NULL AND ws.cgmf_id IS NULL''' + date_condition + '''
            GROUP BY co.company_name
-           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
            ORDER BY 3 DESC, 1''',
-        [_wh] + _dp
+        [warehouse_id] + date_params
     ) or []
 
     account_stock = _acct_rows + _cgmf_rows + _company_rows
 
     product_stock = db.execute_custom_query(
-        '''SELECT COALESCE(p.product_name,'N/A'),
-                  COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0)
+        '''SELECT COALESCE(p.product_name, 'N/A'),
+                  COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
            FROM warehouse_stock ws
            LEFT JOIN products p ON ws.product_id = p.id
-           WHERE ws.warehouse_id = ?''' + _date_cond + '''
-           GROUP BY COALESCE(p.product_name,'N/A')
-           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type='IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END),0) > 0
+           WHERE ws.warehouse_id = ?''' + date_condition + '''
+           GROUP BY COALESCE(p.product_name, 'N/A')
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
            ORDER BY 2 DESC, 1''',
-        [_wh] + _dp
+        [warehouse_id] + date_params
     ) or []
 
     total_account_stock = sum(float(row[2] or 0) for row in account_stock)
