@@ -80,27 +80,9 @@
     </span>
 </div>
 
-<!-- Summary Cards (Stock IN, Stock OUT, Balance) -->
+<!-- Summary Cards -->
 <div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card bg-success text-white h-100">
-            <div class="card-body text-center py-4">
-                <h3><i class="bi bi-arrow-down-circle-fill"></i></h3>
-                <h1 class="display-4 fw-bold">{{ "%.2f"|format(total_stock_in or 0) }}</h1>
-                <p class="mb-0 fs-5">Total Stock IN (MT)</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-danger text-white h-100">
-            <div class="card-body text-center py-4">
-                <h3><i class="bi bi-arrow-up-circle-fill"></i></h3>
-                <h1 class="display-4 fw-bold">{{ "%.2f"|format(total_stock_out or 0) }}</h1>
-                <p class="mb-0 fs-5">Total Stock OUT (MT)</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
+    <div class="col-md-12">
         <div class="card bg-primary text-white h-100">
             <div class="card-body text-center py-4">
                 <h3><i class="bi bi-box-seam-fill"></i></h3>
