@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Warehouse Summary Details - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-diagram-3"></i> {{ warehouse[1] }} - Summary Details</h2>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('warehouse_balance_all', warehouse=warehouse[0], date_filter=date_filter, start_date=start_date, end_date=end_date) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Balance
+        </a>
+        <button class="btn btn-primary" onclick="window.print()">
+            <i class="bi bi-printer"></i> Print
+        </button>
+    </div>
+</div>
+
+<div class="mb-3">
+    <span class="badge bg-info fs-6">
+        <i class="bi bi-building"></i> {{ warehouse[1] }}
+    </span>
+    <span class="badge bg-secondary fs-6 ms-2">
+        <i class="bi bi-calendar"></i>
+        {% if date_filter == 'all' %}All Time
+        {% elif date_filter == 'today' %}Today
+        {% elif date_filter == 'week' %}Last 7 Days
+        {% elif date_filter == 'month' %}Last 30 Days
+        {% elif date_filter == 'custom' %}{{ start_date }} to {{ end_date }}
+        {% endif %}
+    </span>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body text-center py-4">
+                <h5 class="mb-2">Account-wise Total</h5>
+                <h2 class="mb-0">{{ "%.2f"|format(total_account_stock or 0) }} MT</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-success text-white h-100">
+            <div class="card-body text-center py-4">
+                <h5 class="mb-2">Product-wise Total</h5>
+                <h2 class="mb-0">{{ "%.2f"|format(total_product_stock or 0) }} MT</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-people"></i> Account-wise Summary</h5>
+                <span class="badge bg-light text-dark">{{ account_stock|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Account / Entity</th>
+                                <th>Type</th>
+                                <th class="text-end">Stock (MT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if account_stock %}
+                                {% for row in account_stock %}
+                                <tr>
+                                    <td><strong>{{ row[0] }}</strong></td>
+                                    <td>
+                                        {% set type = row[1] %}
+                                        {% set color = 'secondary' %}
+                                        {% if type == 'Company' %}{% set color = 'primary' %}{% endif %}
+                                        {% if type == 'CGMF' %}{% set color = 'warning text-dark' %}{% endif %}
+                                        {% if type == 'Payal' %}{% set color = 'info' %}{% endif %}
+                                        {% if type == 'Dealer' %}{% set color = 'success' %}{% endif %}
+                                        <span class="badge bg-{{ color }}">{{ type }}</span>
+                                    </td>
+                                    <td class="text-end fw-bold">{{ "%.2f"|format(row[2] or 0) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">No account-wise data found</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                        <tfoot class="table-primary">
+                            <tr class="fw-bold">
+                                <td colspan="2">Total</td>
+                                <td class="text-end">{{ "%.2f"|format(total_account_stock or 0) }} MT</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-box-seam"></i> Product-wise Summary</h5>
+                <span class="badge bg-light text-dark">{{ product_stock|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-end">Stock (MT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if product_stock %}
+                                {% for row in product_stock %}
+                                <tr>
+                                    <td><strong>{{ row[0] }}</strong></td>
+                                    <td class="text-end fw-bold">{{ "%.2f"|format(row[1] or 0) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted py-4">No product-wise data found</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                        <tfoot class="table-success">
+                            <tr class="fw-bold">
+                                <td>Total</td>
+                                <td class="text-end">{{ "%.2f"|format(total_product_stock or 0) }} MT</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .btn {
+        display: none !important;
+    }
+}
+</style>
+{% endblock %}
