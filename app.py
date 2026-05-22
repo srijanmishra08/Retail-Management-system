@@ -4995,6 +4995,52 @@ def warehouse_balance_summary(warehouse_id):
 
     account_stock = _acct_rows + _cgmf_rows + _company_rows
 
+    # Per-account product breakdown (for inline expansion in template)
+    _acct_prod = db.execute_custom_query(
+        '''SELECT a.account_name, COALESCE(p.product_name, 'N/A'),
+                  COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
+           FROM warehouse_stock ws
+           JOIN accounts a ON ws.account_id = a.id
+           LEFT JOIN products p ON ws.product_id = p.id
+           WHERE ws.warehouse_id = ? AND ws.account_id IS NOT NULL''' + date_condition + '''
+           GROUP BY a.account_name, COALESCE(p.product_name, 'N/A')
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+           ORDER BY 1, 3 DESC''',
+        [warehouse_id] + date_params
+    ) or []
+
+    _cgmf_prod = db.execute_custom_query(
+        '''SELECT c.society_name, COALESCE(p.product_name, 'N/A'),
+                  COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
+           FROM warehouse_stock ws
+           JOIN cgmf c ON ws.cgmf_id = c.id
+           LEFT JOIN products p ON ws.product_id = p.id
+           WHERE ws.warehouse_id = ? AND ws.cgmf_id IS NOT NULL''' + date_condition + '''
+           GROUP BY c.society_name, COALESCE(p.product_name, 'N/A')
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+           ORDER BY 1, 3 DESC''',
+        [warehouse_id] + date_params
+    ) or []
+
+    _co_prod = db.execute_custom_query(
+        '''SELECT co.company_name, COALESCE(p.product_name, 'N/A'),
+                  COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
+           FROM warehouse_stock ws
+           JOIN companies co ON ws.company_id = co.id
+           LEFT JOIN products p ON ws.product_id = p.id
+           WHERE ws.warehouse_id = ? AND ws.account_id IS NULL AND ws.cgmf_id IS NULL''' + date_condition + '''
+           GROUP BY co.company_name, COALESCE(p.product_name, 'N/A')
+           HAVING COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0) > 0
+           ORDER BY 1, 3 DESC''',
+        [warehouse_id] + date_params
+    ) or []
+
+    # Build dict: entity_name -> [(product, qty), ...]
+    account_products = {}
+    for row in (_acct_prod + _cgmf_prod + _co_prod):
+        name = row[0]
+        account_products.setdefault(name, []).append((row[1], float(row[2] or 0)))
+
     product_stock = db.execute_custom_query(
         '''SELECT COALESCE(p.product_name, 'N/A'),
                   COALESCE(SUM(CASE WHEN ws.transaction_type::TEXT = 'IN' THEN ws.quantity_mt ELSE -ws.quantity_mt END), 0)
@@ -5014,6 +5060,7 @@ def warehouse_balance_summary(warehouse_id):
         'warehouse/balance_summary.html',
         warehouse=warehouse,
         account_stock=account_stock,
+        account_products=account_products,
         product_stock=product_stock,
         total_account_stock=total_account_stock,
         total_product_stock=total_product_stock,

@@ -69,8 +69,15 @@
                         <tbody>
                             {% if account_stock %}
                                 {% for row in account_stock %}
-                                <tr>
-                                    <td><strong>{{ row[0] }}</strong></td>
+                                {% set products = account_products.get(row[0], []) %}
+                                <tr class="{% if products %}cursor-pointer{% endif %}"
+                                    {% if products %}onclick="toggleProducts(this)"{% endif %}>
+                                    <td>
+                                        <strong>{{ row[0] }}</strong>
+                                        {% if products %}
+                                        <span class="text-muted ms-1 toggle-icon">▸</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% set type = row[1] %}
                                         {% set color = 'secondary' %}
@@ -82,6 +89,20 @@
                                     </td>
                                     <td class="text-end fw-bold">{{ "%.2f"|format(row[2] or 0) }}</td>
                                 </tr>
+                                {% if products %}
+                                <tr class="product-detail d-none bg-light">
+                                    <td colspan="3" class="py-1 px-4">
+                                        <div class="d-flex flex-wrap gap-3 py-1">
+                                            {% for prod, qty in products %}
+                                            <span class="badge bg-white border text-dark fs-6 px-3 py-2">
+                                                <span class="text-secondary">{{ prod }}</span>
+                                                <span class="fw-bold ms-2 text-primary">{{ "%.2f"|format(qty) }} MT</span>
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endif %}
                                 {% endfor %}
                             {% else %}
                                 <tr>
@@ -144,10 +165,26 @@
 </div>
 
 <style>
+.cursor-pointer { cursor: pointer; }
+.cursor-pointer:hover { background-color: #f0f4ff !important; }
 @media print {
-    .btn {
-        display: none !important;
-    }
+    .btn { display: none !important; }
+    .product-detail { display: table-row !important; }
+    .toggle-icon { display: none !important; }
 }
 </style>
+<script>
+function toggleProducts(row) {
+    var detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains('product-detail')) return;
+    var icon = row.querySelector('.toggle-icon');
+    if (detail.classList.contains('d-none')) {
+        detail.classList.remove('d-none');
+        if (icon) icon.textContent = '▾';
+    } else {
+        detail.classList.add('d-none');
+        if (icon) icon.textContent = '▸';
+    }
+}
+</script>
 {% endblock %}
