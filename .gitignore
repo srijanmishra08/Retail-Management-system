@@ -1,0 +1,17 @@
+*.bak
+.vercel
+.env
+.env.*
+*.db
+*.db-*
+*.db.backup*
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.DS_Store
+uploads/.DS_Store
+package-lock.json
+startup.log
+retail_management.db
+

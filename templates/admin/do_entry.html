@@ -68,7 +68,7 @@
                     <input type="number" class="form-control" name="quantity_bags"
                            id="qtyBags" step="1" min="0" placeholder="0"
                            oninput="calcMt()">
-                    <small class="text-muted">Auto-calculated at 50 kg/bag; edit if needed</small>
+                    <small class="text-muted" id="bagWeightNote">Auto-calculated; select a rake to set bag weight</small>
                 </div>
                 <!-- Notes -->
                 <div class="col-md-6">
@@ -86,25 +86,46 @@
 </div>
 
 <script>
-// Auto-fill product from rake selection
+var currentBagWeightKg = 50; // default; updated when rake is selected
+
+// Auto-fill product and bag weight from rake selection
 function onRakeChange() {
     var sel = document.getElementById('rakeSelect');
     var opt = sel.options[sel.selectedIndex];
     if (opt && opt.dataset.product) {
         document.getElementById('productName').value = opt.dataset.product;
     }
+    var rakeCode = sel.value;
+    if (!rakeCode) return;
+
+    fetch('/api/rake-products/' + encodeURIComponent(rakeCode))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if (data.products && data.products.length > 0) {
+                // Use first product's bag weight (or match by product name if multiple)
+                var productName = document.getElementById('productName').value;
+                var product = data.products.find(function(p){ return p.product_name === productName; })
+                              || data.products[0];
+                currentBagWeightKg = product.unit_per_bag || 50;
+                document.getElementById('bagWeightNote').textContent =
+                    'Auto-calculated at ' + currentBagWeightKg + ' kg/bag; edit if needed';
+                // Recalculate bags if MT is already filled
+                calcBags();
+            }
+        })
+        .catch(function(){ /* fallback to default */ });
 }
 
-// Auto-calculate bags from MT (50 kg/bag)
+// Auto-calculate bags from MT
 function calcBags() {
     var mt = parseFloat(document.getElementById('qtyMt').value) || 0;
-    document.getElementById('qtyBags').value = Math.round(mt * 20);  // 1 MT = 20 bags @ 50kg
+    document.getElementById('qtyBags').value = Math.round((mt * 1000) / currentBagWeightKg);
 }
 
 // Auto-calculate MT from bags
 function calcMt() {
     var bags = parseInt(document.getElementById('qtyBags').value) || 0;
-    document.getElementById('qtyMt').value = (bags * 50 / 1000).toFixed(2);
+    document.getElementById('qtyMt').value = (bags * currentBagWeightKg / 1000).toFixed(2);
 }
 </script>
 {% endblock %}
