@@ -420,24 +420,8 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_cgmf    ON dispatch_orders(cgmf_id)")
             conn.commit()
 
-            # Run schema migrations in a separate autocommit connection so they
-            # are independent of the main init transaction.
-            mig_conn = self.get_connection()
-            old_autocommit = mig_conn.autocommit
-            mig_conn.autocommit = True
-            mig_cur = mig_conn.cursor()
-            for stmt in [
-                "ALTER TABLE dispatch_orders ALTER COLUMN account_id DROP NOT NULL",
-                "ALTER TABLE dispatch_orders ADD COLUMN IF NOT EXISTS cgmf_id UUID REFERENCES cgmf(id) ON DELETE SET NULL",
-                "CREATE INDEX IF NOT EXISTS idx_dispatch_orders_cgmf ON dispatch_orders(cgmf_id)",
-            ]:
-                try:
-                    mig_cur.execute(stmt)
-                except Exception as mig_err:
-                    print(f"Migration (non-fatal): {mig_err}")
-            mig_cur.close()
-            mig_conn.autocommit = old_autocommit
-            self.close_connection(mig_conn)
+            # Run idempotent schema migrations (separate method handles errors gracefully)
+            self._ensure_dispatch_orders_schema()
 
             Database._initialized = True
             print("Database initialized successfully (Supabase/PostgreSQL)")
@@ -2487,25 +2471,54 @@ class Database:
     # Dispatch Order (DO) Operations
     # ==================================================================
 
+    def _ensure_dispatch_orders_schema(self):
+        """Idempotent migration: make account_id nullable & add cgmf_id if missing."""
+        conn = self.get_connection()
+        cur = conn.cursor()
+        for stmt in [
+            "ALTER TABLE dispatch_orders ALTER COLUMN account_id DROP NOT NULL",
+            "ALTER TABLE dispatch_orders ADD COLUMN IF NOT EXISTS cgmf_id UUID REFERENCES cgmf(id) ON DELETE SET NULL",
+            "CREATE INDEX IF NOT EXISTS idx_dispatch_orders_cgmf ON dispatch_orders(cgmf_id)",
+        ]:
+            try:
+                cur.execute(stmt)
+            except Exception as e:
+                print(f"DO schema migration (non-fatal): {e}")
+        cur.close()
+
     def create_dispatch_order(self, account_id, rake_code, product_name,
                               quantity_bags, quantity_mt, notes=None, created_by=None,
                               cgmf_id=None):
         conn = self.get_connection()
         cursor = conn.cursor()
-        try:
-            cursor.execute('''
-                INSERT INTO dispatch_orders
-                    (account_id, cgmf_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            ''', (account_id, cgmf_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by))
-            row = cursor.fetchone()
-            conn.commit()
-            return row[0] if row else None
-        except Exception as e:
-            print(f"Error creating dispatch order: {e}")
-            conn.rollback()
-            return None
+        for attempt in range(2):
+            try:
+                cursor.execute('''
+                    INSERT INTO dispatch_orders
+                        (account_id, cgmf_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                ''', (account_id, cgmf_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by))
+                row = cursor.fetchone()
+                return row[0] if row else None
+            except Exception as e:
+                err_msg = str(e)
+                print(f"Error creating dispatch order (attempt {attempt+1}): {err_msg}")
+                if attempt == 0 and ('cgmf_id' in err_msg or 'account_id' in err_msg or 'column' in err_msg.lower()):
+                    # Schema is out of date — run migration and retry
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                    self._ensure_dispatch_orders_schema()
+                    cursor = conn.cursor()
+                else:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                    return None
+        return None
 
     def delete_dispatch_order(self, do_id):
         conn = self.get_connection()
