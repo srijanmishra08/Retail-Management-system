@@ -459,7 +459,9 @@ def admin_do():
             return redirect(url_for('admin_do'))
 
         # Create
-        account_id   = request.form.get('account_id', '').strip()
+        dest_type    = request.form.get('dest_type', 'account')
+        account_id   = request.form.get('account_id', '').strip() or None
+        cgmf_id      = request.form.get('cgmf_id', '').strip() or None
         rake_code    = request.form.get('rake_code', '').strip()
         product_name = request.form.get('product_name', '').strip()
         notes        = request.form.get('notes', '').strip()
@@ -470,7 +472,12 @@ def admin_do():
             flash('Invalid quantity values.', 'error')
             return redirect(url_for('admin_do'))
 
-        if not (account_id and rake_code and product_name and quantity_mt > 0):
+        if dest_type == 'cgmf':
+            account_id = None
+        else:
+            cgmf_id = None
+
+        if not (rake_code and product_name and quantity_mt > 0 and (account_id or cgmf_id)):
             flash('Please fill in all required fields.', 'error')
             return redirect(url_for('admin_do'))
 
@@ -481,7 +488,8 @@ def admin_do():
             quantity_bags=quantity_bags,
             quantity_mt=quantity_mt,
             notes=notes,
-            created_by=current_user.username
+            created_by=current_user.username,
+            cgmf_id=cgmf_id
         )
         if result:
             flash('Dispatch Order created successfully.', 'success')
@@ -489,10 +497,11 @@ def admin_do():
             flash('Failed to create Dispatch Order.', 'error')
         return redirect(url_for('admin_do'))
 
-    accounts = db.get_all_accounts()
-    rakes    = db.get_rakes_with_balances()
-    dos      = db.get_all_dispatch_orders() or []
-    return render_template('admin/do_entry.html', accounts=accounts, rakes=rakes, dos=dos)
+    accounts  = db.get_all_accounts()
+    rakes     = db.get_rakes_with_balances()
+    cgmf_list = db.get_all_cgmf()
+    dos       = db.get_all_dispatch_orders() or []
+    return render_template('admin/do_entry.html', accounts=accounts, rakes=rakes, dos=dos, cgmf_list=cgmf_list)
 
 
 @app.route('/admin/rake-details/<path:rake_code>')

@@ -404,7 +404,8 @@ class Database:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS dispatch_orders (
                     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    account_id    UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    account_id    UUID REFERENCES accounts(id) ON DELETE CASCADE,
+                    cgmf_id       UUID REFERENCES cgmf(id) ON DELETE SET NULL,
                     rake_code     TEXT NOT NULL REFERENCES rakes(rake_code) ON DELETE CASCADE,
                     product_name  TEXT NOT NULL,
                     quantity_bags INTEGER NOT NULL DEFAULT 0,
@@ -416,6 +417,13 @@ class Database:
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_account ON dispatch_orders(account_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_rake    ON dispatch_orders(rake_code)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_cgmf    ON dispatch_orders(cgmf_id)")
+            # Migration: make account_id nullable and add cgmf_id to existing tables
+            try:
+                cursor.execute("ALTER TABLE dispatch_orders ALTER COLUMN account_id DROP NOT NULL")
+                cursor.execute("ALTER TABLE dispatch_orders ADD COLUMN IF NOT EXISTS cgmf_id UUID REFERENCES cgmf(id) ON DELETE SET NULL")
+            except Exception:
+                pass  # Already applied
             conn.commit()
 
             Database._initialized = True
@@ -2467,16 +2475,17 @@ class Database:
     # ==================================================================
 
     def create_dispatch_order(self, account_id, rake_code, product_name,
-                              quantity_bags, quantity_mt, notes=None, created_by=None):
+                              quantity_bags, quantity_mt, notes=None, created_by=None,
+                              cgmf_id=None):
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             cursor.execute('''
                 INSERT INTO dispatch_orders
-                    (account_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (account_id, cgmf_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            ''', (account_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by))
+            ''', (account_id, cgmf_id, rake_code, product_name, quantity_bags, quantity_mt, notes, created_by))
             row = cursor.fetchone()
             conn.commit()
             return row[0] if row else None
@@ -2499,11 +2508,15 @@ class Database:
 
     def get_all_dispatch_orders(self):
         return self.execute_custom_query('''
-            SELECT do.id, a.account_name, a.account_type, do.rake_code,
+            SELECT do.id,
+                   COALESCE(a.account_name, cg.society_name) AS destination_name,
+                   COALESCE(a.account_type::text, CASE WHEN cg.id IS NOT NULL THEN 'CGMF' ELSE NULL END) AS destination_type,
+                   do.rake_code,
                    r.date AS rake_date, do.product_name,
                    do.quantity_bags, do.quantity_mt, do.notes, do.created_by, do.created_at
             FROM dispatch_orders do
-            JOIN accounts a ON do.account_id = a.id
-            JOIN rakes r ON do.rake_code = r.rake_code
+            LEFT JOIN accounts a  ON do.account_id = a.id
+            LEFT JOIN cgmf    cg  ON do.cgmf_id    = cg.id
+            JOIN  rakes        r  ON do.rake_code   = r.rake_code
             ORDER BY do.created_at DESC
         ''')
