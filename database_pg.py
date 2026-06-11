@@ -418,13 +418,26 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_account ON dispatch_orders(account_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_rake    ON dispatch_orders(rake_code)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dispatch_orders_cgmf    ON dispatch_orders(cgmf_id)")
-            # Migration: make account_id nullable and add cgmf_id to existing tables
-            try:
-                cursor.execute("ALTER TABLE dispatch_orders ALTER COLUMN account_id DROP NOT NULL")
-                cursor.execute("ALTER TABLE dispatch_orders ADD COLUMN IF NOT EXISTS cgmf_id UUID REFERENCES cgmf(id) ON DELETE SET NULL")
-            except Exception:
-                pass  # Already applied
             conn.commit()
+
+            # Run schema migrations in a separate autocommit connection so they
+            # are independent of the main init transaction.
+            mig_conn = self.get_connection()
+            old_autocommit = mig_conn.autocommit
+            mig_conn.autocommit = True
+            mig_cur = mig_conn.cursor()
+            for stmt in [
+                "ALTER TABLE dispatch_orders ALTER COLUMN account_id DROP NOT NULL",
+                "ALTER TABLE dispatch_orders ADD COLUMN IF NOT EXISTS cgmf_id UUID REFERENCES cgmf(id) ON DELETE SET NULL",
+                "CREATE INDEX IF NOT EXISTS idx_dispatch_orders_cgmf ON dispatch_orders(cgmf_id)",
+            ]:
+                try:
+                    mig_cur.execute(stmt)
+                except Exception as mig_err:
+                    print(f"Migration (non-fatal): {mig_err}")
+            mig_cur.close()
+            mig_conn.autocommit = old_autocommit
+            self.close_connection(mig_conn)
 
             Database._initialized = True
             print("Database initialized successfully (Supabase/PostgreSQL)")
