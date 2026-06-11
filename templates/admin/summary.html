@@ -533,6 +533,7 @@
                         <th class="text-end">Dispatched (MT)</th>
                         <th class="text-end">Dispatched (Bags)</th>
                         <th class="text-end">Difference (MT)</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="doSummaryBody">
@@ -553,6 +554,16 @@
                         <td class="text-end fw-bold {% if row.difference > 0 %}text-danger{% else %}text-success{% endif %}">
                             {{ "%.2f"|format(row.difference) }}
                             {% if row.difference > 0 %}<i class="bi bi-arrow-up-circle-fill ms-1"></i>{% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_do') }}"
+                                  onsubmit="return confirm('Delete this Dispatch Order?')">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="do_id" value="{{ row.do_id }}">
+                                <button type="submit" class="btn btn-sm btn-danger py-0 px-2">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
                         </td>
                     </tr>
                     {% else %}

@@ -70,8 +70,9 @@
                 <!-- Product -->
                 <div class="col-md-4">
                     <label class="form-label fw-bold">Product <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" name="product_name" id="productName"
-                           placeholder="Auto-filled from rake or type manually" required>
+                    <select class="form-select" name="product_name" id="productName" required onchange="onProductChange()">
+                        <option value="">— Select Rake first —</option>
+                    </select>
                 </div>
                 <!-- Qt in Ton -->
                 <div class="col-md-3">
@@ -114,32 +115,52 @@ function onDestTypeChange() {
     document.getElementById('cgmfSelect').required      = (t === 'cgmf');
 }
 
-// Auto-fill product and bag weight from rake selection
+// Auto-fill product dropdown and bag weight from rake selection
 function onRakeChange() {
     var sel = document.getElementById('rakeSelect');
-    var opt = sel.options[sel.selectedIndex];
-    if (opt && opt.dataset.product) {
-        document.getElementById('productName').value = opt.dataset.product;
-    }
     var rakeCode = sel.value;
-    if (!rakeCode) return;
+    var productSel = document.getElementById('productName');
+
+    // Reset product dropdown
+    productSel.innerHTML = '<option value="">— Loading... —</option>';
+
+    if (!rakeCode) {
+        productSel.innerHTML = '<option value="">— Select Rake first —</option>';
+        return;
+    }
 
     fetch('/api/rake-products/' + encodeURIComponent(rakeCode))
         .then(function(r){ return r.json(); })
         .then(function(data){
+            productSel.innerHTML = '';
             if (data.products && data.products.length > 0) {
-                // Use first product's bag weight (or match by product name if multiple)
-                var productName = document.getElementById('productName').value;
-                var product = data.products.find(function(p){ return p.product_name === productName; })
-                              || data.products[0];
-                currentBagWeightKg = product.unit_per_bag || 50;
-                document.getElementById('bagWeightNote').textContent =
-                    'Auto-calculated at ' + currentBagWeightKg + ' kg/bag; edit if needed';
-                // Recalculate bags if MT is already filled
-                calcBags();
+                data.products.forEach(function(p) {
+                    var opt = document.createElement('option');
+                    opt.value = p.product_name;
+                    opt.textContent = p.product_name;
+                    opt.dataset.bagWeight = p.unit_per_bag || 50;
+                    productSel.appendChild(opt);
+                });
+                // Set bag weight for the first product
+                onProductChange();
+            } else {
+                productSel.innerHTML = '<option value="">— No products found —</option>';
             }
         })
-        .catch(function(){ /* fallback to default */ });
+        .catch(function(){
+            productSel.innerHTML = '<option value="">— Error loading products —</option>';
+        });
+}
+
+function onProductChange() {
+    var productSel = document.getElementById('productName');
+    var selectedOpt = productSel.options[productSel.selectedIndex];
+    if (selectedOpt && selectedOpt.dataset.bagWeight) {
+        currentBagWeightKg = parseFloat(selectedOpt.dataset.bagWeight) || 50;
+        document.getElementById('bagWeightNote').textContent =
+            'Auto-calculated at ' + currentBagWeightKg + ' kg/bag; edit if needed';
+        calcBags();
+    }
 }
 
 // Auto-calculate bags from MT

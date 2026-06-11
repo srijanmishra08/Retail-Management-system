@@ -366,9 +366,10 @@ def admin_summary():
         raw_dos = db.execute_custom_query('''
             SELECT do_t.account_id::text, a.account_name, a.account_type,
                    do_t.rake_code, r.date AS rake_date,
-                   do_t.product_name, do_t.quantity_bags, do_t.quantity_mt
+                   do_t.product_name, do_t.quantity_bags, do_t.quantity_mt,
+                   do_t.id::text
             FROM dispatch_orders do_t
-            JOIN accounts a ON do_t.account_id = a.id
+            LEFT JOIN accounts a ON do_t.account_id = a.id
             JOIN rakes r ON do_t.rake_code = r.rake_code
             ORDER BY a.account_name, do_t.product_name, r.date, do_t.rake_code
         ''') or []
@@ -401,12 +402,14 @@ def admin_summary():
                 do_mt        = float(do[7] or 0)
                 do_bags      = int(do[6] or 0)
                 rake_date    = do[4]
+                do_id        = do[8]
 
                 disp_mt, disp_bags = dispatched_map.get((account_id, rake_code), (0.0, 0))
                 total_expected = carry_forward + do_mt
                 difference     = total_expected - disp_mt
 
                 do_summary_rows.append({
+                    'do_id':          do_id,
                     'account_name':   account_name,
                     'account_type':   account_type,
                     'product':        product,
