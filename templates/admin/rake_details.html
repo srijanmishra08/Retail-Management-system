@@ -84,7 +84,7 @@
                     <td colspan="7" class="text-end">TOTAL</td>
                     <td class="text-end">{{ "%.2f"|format(ns.total_mt) }}</td>
                     <td class="text-end">{{ ns.total_bags }}</td>
-                    <td class="text-end">₹{{ "{:,.2f}".format(ns.total_freight) }}</td>
+                    <td class="text-end">₹{{ "%.2f"|format(ns.total_freight) }}</td>
                 </tr>
                 <tr class="table-secondary">
                     <td colspan="7" class="text-end fw-bold">RR Quantity</td>
