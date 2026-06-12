@@ -51,13 +51,15 @@
                     <th>Truck Number</th>
                     <th>Qt (Ton)</th>
                     <th>Qt (Bags)</th>
+                    <th>Freight (₹)</th>
                 </tr>
             </thead>
             <tbody>
-                {% set ns = namespace(total_mt=0, total_bags=0) %}
+                {% set ns = namespace(total_mt=0, total_bags=0, total_freight=0) %}
                 {% for b in rake_builties %}
                 {% set ns.total_mt = ns.total_mt + (b[6]|float if b[6] else 0) %}
                 {% set ns.total_bags = ns.total_bags + (b[7]|int if b[7] else 0) %}
+                {% set ns.total_freight = ns.total_freight + (b[9]|float if b[9] else 0) %}
                 <tr data-type="{{ b[8] or 'Unknown' }}">
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ b[0] or 'N/A' }}</strong></td>
@@ -68,6 +70,7 @@
                     <td>{{ b[5] or 'N/A' }}</td>
                     <td class="text-end">{{ "%.2f"|format(b[6]|float) if b[6] else '0.00' }}</td>
                     <td class="text-end">{{ b[7] if b[7] else '0' }}</td>
+                    <td class="text-end">{{ "%.2f"|format(b[9]|float) if b[9] else '0.00' }}</td>
                 </tr>
                 {% else %}
                 <tr><td colspan="9" class="text-center text-muted">No builties found for this rake.</td></tr>
@@ -75,10 +78,23 @@
             </tbody>
             {% if rake_builties %}
             <tfoot>
+                {% set rr_qty = rake_info[4]|float %}
+                {% set diff = rr_qty - ns.total_mt %}
                 <tr class="table-dark fw-bold">
                     <td colspan="7" class="text-end">TOTAL</td>
                     <td class="text-end">{{ "%.2f"|format(ns.total_mt) }}</td>
                     <td class="text-end">{{ ns.total_bags }}</td>
+                    <td class="text-end">₹{{ "{:,.2f}".format(ns.total_freight) }}</td>
+                </tr>
+                <tr class="table-secondary">
+                    <td colspan="7" class="text-end fw-bold">RR Quantity</td>
+                    <td class="text-end fw-bold">{{ "%.2f"|format(rr_qty) }}</td>
+                    <td colspan="2"></td>
+                </tr>
+                <tr class="{% if diff > 0 %}table-danger{% else %}table-success{% endif %}">
+                    <td colspan="7" class="text-end fw-bold">Difference (RR − Total Sent)</td>
+                    <td class="text-end fw-bold">{{ "%.2f"|format(diff) }}</td>
+                    <td colspan="2"></td>
                 </tr>
             </tfoot>
             {% endif %}
@@ -128,8 +144,9 @@
             <table class="table table-hover table-sm">
                 <thead>
                     <tr>
-                        <th>Account Name</th>
                         <th>Type</th>
+                        <th>Account Name</th>
+                        <th>Location</th>
                         <th>Total Quantity (MT)</th>
                         <th>Builties</th>
                         <th>Details</th>
@@ -138,15 +155,16 @@
                 <tbody>
                     {% for dispatch in account_dispatches %}
                     <tr>
-                        <td><strong>{{ dispatch[0] }}</strong></td>
                         <td><span class="badge bg-secondary">{{ dispatch[1] }}</span></td>
+                        <td><strong>{{ dispatch[0] }}</strong></td>
+                        <td><small class="text-muted">{{ dispatch[5] or '—' }}</small></td>
                         <td class="text-end text-primary"><strong>{{ "%.2f"|format(dispatch[2]) }} MT</strong></td>
                         <td class="text-center">{{ dispatch[3] }}</td>
                         <td><small class="text-muted">{{ dispatch[4][:100] + '...' if dispatch[4] and dispatch[4]|length > 100 else dispatch[4] or '-' }}</small></td>
                     </tr>
                     {% endfor %}
                     <tr class="table-light fw-bold">
-                        <td colspan="2">TOTAL TO ACCOUNTS</td>
+                        <td colspan="3">TOTAL TO ACCOUNTS</td>
                         <td class="text-end">{{ "%.2f"|format(total_to_accounts) }} MT</td>
                         <td colspan="2"></td>
                     </tr>
@@ -392,15 +410,23 @@ function filterBuiltyType() {
         rows[i].style.display = show ? '' : 'none';
         if (show) {
             var cells = rows[i].querySelectorAll('td');
-            totalMT += parseFloat(cells[7].textContent) || 0;
-            totalBags += parseInt(cells[8].textContent) || 0;
+            totalMT   += parseFloat(cells[7].textContent) || 0;
+            totalBags += parseInt(cells[8].textContent)   || 0;
         }
     }
-    // Update tfoot totals
-    var tfootCells = table.querySelectorAll('tfoot td');
-    if (tfootCells.length >= 3) {
-        tfootCells[1].textContent = totalMT.toFixed(2);
-        tfootCells[2].textContent = totalBags;
+    // Update tfoot: first row has MT at col index 7 (colspan=7 counts as 1 td) → td[1], bags → td[2]
+    var tfootFirstRow = table.querySelector('tfoot tr:first-child');
+    if (tfootFirstRow) {
+        var tds = tfootFirstRow.querySelectorAll('td');
+        if (tds.length >= 3) { tds[1].textContent = totalMT.toFixed(2); tds[2].textContent = totalBags; }
+    }
+    // Update difference row (3rd tfoot row)
+    var rrQty = {{ rake_info[4]|float }};
+    var tfootRows = table.querySelectorAll('tfoot tr');
+    if (tfootRows.length >= 3) {
+        var diffTds = tfootRows[2].querySelectorAll('td');
+        if (diffTds.length >= 2) { diffTds[1].textContent = (rrQty - totalMT).toFixed(2); }
+        tfootRows[2].className = (rrQty - totalMT) > 0 ? 'table-danger' : 'table-success';
     }
 }
 
@@ -414,16 +440,17 @@ function downloadBuiltyExcel() {
 
     var table = document.getElementById('builtyDetailTable');
     var rows = table.querySelector('tbody').rows;
-    var lines = [['#','Builty Number','Date','LR Number','Account','Type','Sub Head','Truck Number','Qt (Ton)','Qt (Bags)'].map(csvCell).join(',')];
-    var totalMT = 0, totalBags = 0, idx = 1;
+    var lines = [['#','Builty Number','Date','LR Number','Account','Type','Sub Head','Truck Number','Qt (Ton)','Qt (Bags)','Freight (Rs)'].map(csvCell).join(',')];
+    var totalMT = 0, totalBags = 0, totalFreight = 0, idx = 1;
     for (var i = 0; i < rows.length; i++) {
         if (rows[i].style.display === 'none') continue;
         var cells = rows[i].querySelectorAll('td');
-        if (cells.length < 9) continue;
+        if (cells.length < 10) continue;
         var type = rows[i].dataset.type || '';
-        var mt   = parseFloat(cells[7].textContent) || 0;
-        var bags = parseInt(cells[8].textContent)   || 0;
-        totalMT += mt; totalBags += bags;
+        var mt      = parseFloat(cells[7].textContent) || 0;
+        var bags    = parseInt(cells[8].textContent)   || 0;
+        var freight = parseFloat(cells[9].textContent.replace(/[^0-9.-]/g,'')) || 0;
+        totalMT += mt; totalBags += bags; totalFreight += freight;
         lines.push([
             idx++,
             cells[1].textContent.trim(),
@@ -433,10 +460,13 @@ function downloadBuiltyExcel() {
             type,
             cells[5].textContent.trim(),
             cells[6].textContent.trim(),
-            mt, bags
+            mt, bags, freight.toFixed(2)
         ].map(csvCell).join(','));
     }
-    lines.push(['','TOTAL','','','','','','', totalMT.toFixed(2), totalBags].map(csvCell).join(','));
+    lines.push(['','TOTAL','','','','','','', totalMT.toFixed(2), totalBags, totalFreight.toFixed(2)].map(csvCell).join(','));
+    var rrQty = {{ rake_info[4]|float }};
+    lines.push(['','RR Quantity','','','','','','', rrQty.toFixed(2), '', ''].map(csvCell).join(','));
+    lines.push(['','Difference (RR - Total)','','','','','','', (rrQty - totalMT).toFixed(2), '', ''].map(csvCell).join(','));
 
     var typeFilter = document.getElementById('builtyTypeFilter').value;
     var suffix = typeFilter ? '_' + typeFilter : '_All';

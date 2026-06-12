@@ -534,15 +534,16 @@ def admin_rake_details(rake_code):
     
     # Get stock dispatched to accounts FROM LOADING SLIPS (the actual dispatch record)
     account_dispatches = db.execute_custom_query('''
-        SELECT a.account_name, a.account_type, 
+        SELECT a.account_name, a.account_type,
                SUM(ls.quantity_mt) as total_quantity,
                COUNT(ls.id) as slip_count,
-               STRING_AGG(COALESCE('Builty#' || b.builty_number, 'Slip#' || ls.slip_number::text) || ' (' || ls.quantity_mt::text || ' MT)', ', ') as slip_details
+               STRING_AGG(COALESCE('Builty#' || b.builty_number, 'Slip#' || ls.slip_number::text) || ' (' || ls.quantity_mt::text || ' MT)', ', ') as slip_details,
+               a.address
         FROM loading_slips ls
         JOIN accounts a ON ls.account_id = a.id
         LEFT JOIN builty b ON ls.builty_id = b.id
         WHERE ls.rake_code = ?
-        GROUP BY a.id, a.account_name, a.account_type
+        GROUP BY a.id, a.account_name, a.account_type, a.address
         ORDER BY total_quantity DESC
     ''', (rake_code,))
     
@@ -589,7 +590,8 @@ def admin_rake_details(rake_code):
                    WHEN w.id IS NOT NULL THEN 'Warehouse'
                    WHEN c.id IS NOT NULL THEN 'CGMF'
                    ELSE 'Unknown'
-               END AS dispatch_type
+               END AS dispatch_type,
+               COALESCE(b.total_freight, 0) AS total_freight
         FROM builty b
         LEFT JOIN accounts   a ON b.account_id  = a.id
         LEFT JOIN warehouses w ON b.warehouse_id = w.id
@@ -832,12 +834,13 @@ def admin_download_rake_details_excel(rake_code):
                SUM(ls.quantity_mt) as total_quantity,
                COUNT(ls.id) as slip_count,
                COUNT(b.id) as builty_count,
-               STRING_AGG(b.builty_number, ', ' ORDER BY b.builty_number) as builty_numbers
+               STRING_AGG(b.builty_number, ', ' ORDER BY b.builty_number) as builty_numbers,
+               a.address
         FROM loading_slips ls
         JOIN accounts a ON ls.account_id = a.id
         LEFT JOIN builty b ON ls.builty_id = b.id
         WHERE ls.rake_code = ?
-        GROUP BY a.id, a.account_name, a.account_type
+        GROUP BY a.id, a.account_name, a.account_type, a.address
         ORDER BY total_quantity DESC
     ''', (rake_code,))
 
@@ -934,7 +937,7 @@ def admin_download_rake_details_excel(rake_code):
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
     row += 1
     
-    acc_headers = ['Account Name', 'Type', 'Quantity (MT)', 'Loading Slips', 'Builties', 'Builty Numbers']
+    acc_headers = ['Type', 'Account Name', 'Location', 'Quantity (MT)', 'Loading Slips', 'Builties', 'Builty Numbers']
     for col, header in enumerate(acc_headers, 1):
         cell = ws.cell(row=row, column=col, value=header)
         cell.font = header_font
@@ -943,16 +946,17 @@ def admin_download_rake_details_excel(rake_code):
     row += 1
     
     for acc in account_dispatches:
-        ws.cell(row=row, column=1, value=acc[0]).border = border
-        ws.cell(row=row, column=2, value=acc[1]).border = border
-        ws.cell(row=row, column=3, value=round(acc[2], 2)).border = border
-        ws.cell(row=row, column=4, value=acc[3]).border = border
-        ws.cell(row=row, column=5, value=acc[4]).border = border
-        ws.cell(row=row, column=6, value=acc[5] or '-').border = border
+        ws.cell(row=row, column=1, value=acc[1]).border = border  # type
+        ws.cell(row=row, column=2, value=acc[0]).border = border  # account_name
+        ws.cell(row=row, column=3, value=acc[6] or '').border = border  # address
+        ws.cell(row=row, column=4, value=round(acc[2], 2)).border = border
+        ws.cell(row=row, column=5, value=acc[3]).border = border
+        ws.cell(row=row, column=6, value=acc[4]).border = border
+        ws.cell(row=row, column=7, value=acc[5] or '-').border = border
         row += 1
     
     ws.cell(row=row, column=1, value="Total to Accounts:").font = Font(bold=True)
-    ws.cell(row=row, column=3, value=round(total_to_accounts, 2)).font = Font(bold=True)
+    ws.cell(row=row, column=4, value=round(total_to_accounts, 2)).font = Font(bold=True)
     row += 2
     
     # Warehouses Section
@@ -1058,29 +1062,47 @@ def admin_download_rake_details_excel(rake_code):
 
     detail_row = 4
     for b in all_builties:
-        ws2.cell(row=detail_row, column=1,  value=b[0]).border = border   # builty_number
-        ws2.cell(row=detail_row, column=2,  value=str(b[1]) if b[1] else '').border = border  # date
-        ws2.cell(row=detail_row, column=3,  value=b[2] or '').border = border   # lr_number
-        ws2.cell(row=detail_row, column=4,  value=b[3]).border = border   # recipient
-        ws2.cell(row=detail_row, column=5,  value=b[4] or '').border = border   # sub_head
-        ws2.cell(row=detail_row, column=6,  value=b[5] or '').border = border   # truck_number
-        ws2.cell(row=detail_row, column=7,  value=b[6]).border = border   # number_of_bags
-        ws2.cell(row=detail_row, column=8,  value=round(b[7], 2)).border = border  # quantity_mt
-        ws2.cell(row=detail_row, column=9,  value=b[8] or '').border = border   # loading_point
-        ws2.cell(row=detail_row, column=10, value=b[9] or '').border = border   # unloading_point
-        ws2.cell(row=detail_row, column=11, value=round(b[10], 2) if b[10] else 0).border = border  # total_freight
+        ws2.cell(row=detail_row, column=1,  value=b[0]).border = border
+        ws2.cell(row=detail_row, column=2,  value=str(b[1]) if b[1] else '').border = border
+        ws2.cell(row=detail_row, column=3,  value=b[2] or '').border = border
+        ws2.cell(row=detail_row, column=4,  value=b[3]).border = border
+        ws2.cell(row=detail_row, column=5,  value=b[4] or '').border = border
+        ws2.cell(row=detail_row, column=6,  value=b[5] or '').border = border
+        ws2.cell(row=detail_row, column=7,  value=b[6]).border = border
+        ws2.cell(row=detail_row, column=8,  value=round(b[7], 2)).border = border
+        ws2.cell(row=detail_row, column=9,  value=b[8] or '').border = border
+        ws2.cell(row=detail_row, column=10, value=b[9] or '').border = border
+        ws2.cell(row=detail_row, column=11, value=round(b[10], 2) if b[10] else 0).border = border
         detail_row += 1
 
     # Total row for detail sheet
+    total_bags_sum   = sum(b[6] for b in all_builties) if all_builties else 0
+    total_mt_sum     = round(sum(b[7] for b in all_builties), 2) if all_builties else 0
+    total_freight_sum = round(sum((b[10] or 0) for b in all_builties), 2) if all_builties else 0
+    rr_qty           = round(float(rake_info[4]), 2)
+    difference       = round(rr_qty - total_mt_sum, 2)
+
     total_row_cell = ws2.cell(row=detail_row, column=1, value="TOTAL")
     total_row_cell.font = Font(bold=True, color="FFFFFF")
     total_row_cell.fill = total_fill
     total_row_cell.border = border
     for col in range(2, 12):
         ws2.cell(row=detail_row, column=col).fill = total_fill
+        ws2.cell(row=detail_row, column=col).font = Font(bold=True, color="FFFFFF")
         ws2.cell(row=detail_row, column=col).border = border
-    ws2.cell(row=detail_row, column=7, value=sum(b[6] for b in all_builties) if all_builties else 0).font = Font(bold=True, color="FFFFFF")
-    ws2.cell(row=detail_row, column=8, value=round(sum(b[7] for b in all_builties), 2) if all_builties else 0).font = Font(bold=True, color="FFFFFF")
+    ws2.cell(row=detail_row, column=7, value=total_bags_sum)
+    ws2.cell(row=detail_row, column=8, value=total_mt_sum)
+    ws2.cell(row=detail_row, column=11, value=total_freight_sum)
+
+    # RR Qty / Difference rows
+    detail_row += 1
+    ws2.cell(row=detail_row, column=7, value="RR Quantity (MT):").font = Font(bold=True)
+    ws2.cell(row=detail_row, column=8, value=rr_qty).font = Font(bold=True)
+    detail_row += 1
+    diff_cell = ws2.cell(row=detail_row, column=7, value="Difference (RR − Total MT):")
+    diff_cell.font = Font(bold=True)
+    diff_val_cell = ws2.cell(row=detail_row, column=8, value=difference)
+    diff_val_cell.font = Font(bold=True, color="FF0000" if difference > 0 else "22C55E")
 
     # Column widths for detail sheet
     ws2.column_dimensions['A'].width = 22
