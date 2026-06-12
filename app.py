@@ -1076,11 +1076,11 @@ def admin_download_rake_details_excel(rake_code):
         detail_row += 1
 
     # Total row for detail sheet
-    total_bags_sum   = sum(b[6] for b in all_builties) if all_builties else 0
-    total_mt_sum     = round(sum(b[7] for b in all_builties), 2) if all_builties else 0
-    total_freight_sum = round(sum((b[10] or 0) for b in all_builties), 2) if all_builties else 0
-    rr_qty           = round(float(rake_info[4]), 2)
-    difference       = round(rr_qty - total_mt_sum, 2)
+    total_bags_sum    = int(sum(b[6] for b in all_builties)) if all_builties else 0
+    total_mt_sum      = round(float(sum(b[7] for b in all_builties)), 2) if all_builties else 0.0
+    total_freight_sum = round(float(sum(float(b[10] or 0) for b in all_builties)), 2) if all_builties else 0.0
+    rr_qty            = round(float(rake_info[4]), 2)
+    difference        = round(rr_qty - total_mt_sum, 2)
 
     total_row_cell = ws2.cell(row=detail_row, column=1, value="TOTAL")
     total_row_cell.font = Font(bold=True, color="FFFFFF")
