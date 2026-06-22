@@ -266,6 +266,9 @@
                 <a class="nav-link {% if 'warehouse_balance_all' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_balance_all') }}">
                     <i class="bi bi-bar-chart-fill"></i> Summary
                 </a>
+                <a class="nav-link {% if 'warehouse_warehouse_summary' in request.endpoint %}active{% endif %}" href="{{ url_for('warehouse_warehouse_summary') }}">
+                    <i class="bi bi-building"></i> Warehouse Summary
+                </a>
             {% elif current_user.role == 'Accountant' %}
                 <a class="nav-link {% if 'accountant_dashboard' in request.endpoint %}active{% endif %}" href="{{ url_for('accountant_dashboard') }}">
                     <i class="bi bi-speedometer2"></i> Dashboard

@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Warehouse Summary - FIMS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-bar-chart-fill"></i> Warehouse Transaction Summary</h2>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success" onclick="exportToExcel()">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+        <button class="btn btn-primary" onclick="window.print()">
+            <i class="bi bi-printer"></i> Print Report
+        </button>
+    </div>
+</div>
+
+<!-- Filters Section -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('warehouse_warehouse_summary') }}" id="filterForm">
+            <div class="row align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label fw-bold"><i class="bi bi-building"></i> Warehouse</label>
+                    <select name="warehouse" class="form-select">
+                        <option value="all" {% if selected_warehouse == 'all' %}selected{% endif %}>All</option>
+                        {% for wh in warehouses %}
+                        <option value="{{ wh[0] }}" {% if selected_warehouse|string == wh[0]|string %}selected{% endif %}>{{ wh[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold"><i class="bi bi-briefcase"></i> Company</label>
+                    <select name="company" class="form-select">
+                        <option value="all" {% if selected_company == 'all' %}selected{% endif %}>All</option>
+                        {% for company in companies %}
+                        <option value="{{ company[0] }}" {% if selected_company|string == company[0]|string %}selected{% endif %}>{{ company[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold"><i class="bi bi-box-seam"></i> Product</label>
+                    <select name="product" class="form-select">
+                        <option value="all" {% if selected_product == 'all' %}selected{% endif %}>All</option>
+                        {% for product in products %}
+                        <option value="{{ product[0] }}" {% if selected_product|string == product[0]|string %}selected{% endif %}>{{ product[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold"><i class="bi bi-person"></i> Account</label>
+                    <select name="account" class="form-select">
+                        <option value="all" {% if selected_account == 'all' %}selected{% endif %}>All</option>
+                        {% for account in accounts %}
+                        <option value="{{ account[0] }}" {% if selected_account|string == account[0]|string %}selected{% endif %}>{{ account[1] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold"><i class="bi bi-calendar3"></i> Timeline</label>
+                    <select name="date_filter" class="form-select" id="dateFilterSelect" onchange="toggleCustomDate()">
+                        <option value="all" {% if date_filter == 'all' %}selected{% endif %}>All Time</option>
+                        <option value="today" {% if date_filter == 'today' %}selected{% endif %}>Today</option>
+                        <option value="week" {% if date_filter == 'week' %}selected{% endif %}>Last 7 Days</option>
+                        <option value="month" {% if date_filter == 'month' %}selected{% endif %}>Last 30 Days</option>
+                        <option value="custom" {% if date_filter == 'custom' %}selected{% endif %}>Custom Range</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel"></i> Apply Filters
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-3" id="customDateRange" style="{% if date_filter != 'custom' %}display: none;{% endif %}">
+                <div class="col-md-3">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">End Date</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Stats Card -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <h6 class="mb-1">Total Products</h6>
+                        <h3 class="mb-0">{{ grouped_data|length }}</h3>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="mb-1">Total Stock IN</h6>
+                        <h3 class="mb-0">{{ "%.2f"|format(total_quantity) }} MT</h3>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="mb-1">Showing</h6>
+                        <h3 class="mb-0">
+                            {% if date_filter == 'all' %}All Time
+                            {% elif date_filter == 'today' %}Today
+                            {% elif date_filter == 'week' %}Last 7 Days
+                            {% elif date_filter == 'month' %}Last 30 Days
+                            {% elif date_filter == 'custom' %}Custom Range
+                            {% endif %}
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Product Summary Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="warehouseTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 20%">Product</th>
+                        <th style="width: 15%" class="text-end">Total QT (MT)</th>
+                        <th style="width: 25%">Company</th>
+                        <th style="width: 15%" class="text-end">Company's QT (MT)</th>
+                        <th style="width: 25%">Warehouse</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if grouped_data %}
+                        {% for product, data in grouped_data.items() %}
+                            {% for company_data in data.companies %}
+                            <tr>
+                                {% if loop.first %}
+                                <td rowspan="{{ data.companies|length }}" class="align-middle fw-bold bg-light">{{ product }}</td>
+                                <td rowspan="{{ data.companies|length }}" class="align-middle text-end fw-bold bg-light">{{ "%.2f"|format(data.total) }}</td>
+                                {% endif %}
+                                <td>{{ company_data.company }}</td>
+                                <td class="text-end">{{ "%.2f"|format(company_data.qty) }}</td>
+                                <td>{{ company_data.warehouse }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
+                        <tr class="table-primary fw-bold">
+                            <td class="text-end">GRAND TOTAL</td>
+                            <td class="text-end">{{ "%.2f"|format(total_quantity) }} MT</td>
+                            <td colspan="3"></td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox"></i> No transactions found for the selected filters
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .btn, .card-body form, .no-print { display: none !important; }
+    .card { border: none !important; box-shadow: none !important; }
+    h2 { font-size: 18px; margin-bottom: 10px; }
+    table { font-size: 12px; }
+    .table-info { background-color: #e0e0e0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+
+<script>
+function toggleCustomDate() {
+    const v = document.getElementById('dateFilterSelect').value;
+    document.getElementById('customDateRange').style.display = v === 'custom' ? 'flex' : 'none';
+}
+
+function exportToExcel() {
+    const table = document.getElementById('warehouseTable');
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.table_to_sheet(table);
+    XLSX.utils.book_append_sheet(wb, ws, "Warehouse Summary");
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    XLSX.writeFile(wb, `warehouse_summary_${timestamp}.xlsx`);
+}
+
+if (!window.XLSX) {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+    document.head.appendChild(script);
+}
+</script>
+
+{% endblock %}

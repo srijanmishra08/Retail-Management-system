@@ -5450,6 +5450,103 @@ def warehouse_download_eway_bill(filename):
         flash('File not found', 'error')
         return redirect(url_for('warehouse_view_ebills'))
 
+@app.route('/warehouse/warehouse-summary')
+@login_required
+def warehouse_warehouse_summary():
+    if current_user.role != 'Warehouse':
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+
+    selected_warehouse = request.args.get('warehouse', 'all')
+    selected_company = request.args.get('company', 'all')
+    selected_product = request.args.get('product', 'all')
+    selected_account = request.args.get('account', 'all')
+    date_filter = request.args.get('date_filter', 'all')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+
+    warehouses = db.get_all_warehouses()
+    companies = db.get_all_companies()
+    products = db.get_all_products()
+    accounts = db.get_all_accounts()
+
+    conditions = ["1=1"]
+    params = []
+
+    if selected_warehouse != 'all':
+        conditions.append("w.id = ?")
+        params.append(selected_warehouse)
+    if selected_company != 'all':
+        conditions.append("c.id = ?")
+        params.append(selected_company)
+    if selected_product != 'all':
+        conditions.append("p.id = ?")
+        params.append(selected_product)
+    if selected_account != 'all':
+        conditions.append("a.id = ?")
+        params.append(selected_account)
+
+    from datetime import datetime, timedelta
+    if date_filter == 'today':
+        conditions.append("DATE(ws.date) = ?")
+        params.append(datetime.now().strftime('%Y-%m-%d'))
+    elif date_filter == 'week':
+        conditions.append("DATE(ws.date) >= ?")
+        params.append((datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'))
+    elif date_filter == 'month':
+        conditions.append("DATE(ws.date) >= ?")
+        params.append((datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    elif date_filter == 'custom' and start_date and end_date:
+        conditions.append("DATE(ws.date) >= ? AND DATE(ws.date) <= ?")
+        params.extend([start_date, end_date])
+
+    where_clause = " AND ".join(conditions)
+
+    product_summary = db.execute_custom_query(f'''
+        SELECT p.product_name,
+               SUM(ws.quantity_mt) as total_qty,
+               c.company_name,
+               SUM(ws.quantity_mt) as company_qty,
+               w.warehouse_name
+        FROM warehouse_stock ws
+        LEFT JOIN warehouses w ON ws.warehouse_id = w.id
+        LEFT JOIN companies c ON ws.company_id = c.id
+        LEFT JOIN products p ON ws.product_id = p.id
+        LEFT JOIN accounts a ON ws.account_id = a.id
+        WHERE {where_clause} AND ws.transaction_type = 'IN' AND (ws.source_type IS NULL OR ws.source_type::text != 'allotment')
+        GROUP BY p.product_name, c.company_name, w.warehouse_name
+        ORDER BY p.product_name, c.company_name, w.warehouse_name
+    ''', tuple(params)) or []
+
+    from collections import OrderedDict
+    grouped_data = OrderedDict()
+    for row in product_summary:
+        product = row[0] or 'Unknown'
+        company = row[2] or 'Unknown'
+        qty = row[3] or 0
+        warehouse = row[4] or 'Unknown'
+        if product not in grouped_data:
+            grouped_data[product] = {'total': 0, 'companies': []}
+        grouped_data[product]['total'] += qty
+        grouped_data[product]['companies'].append({'company': company, 'qty': qty, 'warehouse': warehouse})
+
+    total_quantity = sum(data['total'] for data in grouped_data.values())
+
+    return render_template('warehouse/warehouse_summary.html',
+                           grouped_data=grouped_data,
+                           total_quantity=total_quantity,
+                           warehouses=warehouses,
+                           companies=companies,
+                           products=products,
+                           accounts=accounts,
+                           selected_warehouse=selected_warehouse,
+                           selected_company=selected_company,
+                           selected_product=selected_product,
+                           selected_account=selected_account,
+                           date_filter=date_filter,
+                           start_date=start_date,
+                           end_date=end_date)
+
 # ========== ACCOUNTANT Dashboard & Routes ==========
 
 @app.route('/accountant/dashboard')
