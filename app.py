@@ -4048,6 +4048,31 @@ def warehouse_dashboard():
                          today_stock_in=stats['today_stock_in'],
                          account_stock=all_stock)
 
+@app.route('/warehouse/add-product', methods=['POST'])
+@login_required
+def warehouse_add_product():
+    if current_user.role not in ('Warehouse', 'Admin'):
+        flash('Unauthorized access', 'error')
+        return redirect(url_for('index'))
+
+    product_name = request.form.get('product_name')
+    product_code = request.form.get('product_code')
+    product_type = request.form.get('product_type', 'Fertilizer')
+    unit = request.form.get('unit', 'MT')
+    unit_per_bag = float(request.form.get('unit_per_bag', 50.0))
+    unit_type = request.form.get('unit_type', 'kg')
+    description = request.form.get('description', '')
+
+    product_id = db.add_product(product_name, product_code, product_type, unit, unit_per_bag, unit_type, description)
+
+    if product_id:
+        flash(f'Product {product_name} added successfully!', 'success')
+    else:
+        flash('Error adding product. Product may already exist.', 'error')
+
+    return redirect(url_for('warehouse_stock_in'))
+
+
 @app.route('/warehouse/stock-in', methods=['GET', 'POST'])
 @login_required
 def warehouse_stock_in():

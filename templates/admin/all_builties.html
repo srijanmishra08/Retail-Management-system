@@ -166,7 +166,7 @@
                                 </a>
                                 <button type="button" class="btn btn-sm btn-warning ms-1" 
                                         title="Edit Builty"
-                                        onclick="openEditBuiltyModal('{{ builty[0] }}', '{{ builty[10] if builty[10] else '' }}', {{ builty[12] }}, {{ builty[13] }}, {{ builty[15] if builty[15] else 0 }}, {{ builty[16] if builty[16] else 0 }}, {{ builty[17] if builty[17] else 0 }}, {{ builty[18] if builty[18] else 0 }}, '{{ builty[3] if builty[3] else '' }}')">
+                                        onclick="openEditBuiltyModal('{{ builty[0] }}', '{{ builty[10] if builty[10] else '' }}', {{ builty[12] }}, {{ builty[13] }}, {{ builty[15] if builty[15] else 0 }}, {{ builty[16] if builty[16] else 0 }}, {{ builty[17] if builty[17] else 0 }}, {{ builty[18] if builty[18] else 0 }}, '{{ builty[3] if builty[3] else '' }}', '{{ builty[5] if builty[5] else '' }}', '{{ builty[6] if builty[6] else '' }}', '{{ builty[7] if builty[7] else '' }}')">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-danger ms-1" 
@@ -460,7 +460,7 @@
     }
     
     // Edit builty modal
-    function openEditBuiltyModal(builtyId, unloadingPoint, bags, mt, rate, freight, advance, toPay, dateStr) {
+    function openEditBuiltyModal(builtyId, unloadingPoint, bags, mt, rate, freight, advance, toPay, dateStr, accountId, warehouseId, cgmfId) {
         document.getElementById('editBuiltyForm').action = '/admin/edit-builty/' + builtyId;
         document.getElementById('edit_unloading_point').value = unloadingPoint || '';
         document.getElementById('edit_number_of_bags').value = bags;
@@ -478,25 +478,38 @@
             dateField.value = '';
         }
         
-        // Reset to manual entry by default with current unloading point
-        document.getElementById('edit_unloading_type').value = 'manual';
-        toggleUnloadingOptions();
+        // Pre-select unloading type and corresponding account/warehouse/cgmf
+        if (accountId) {
+            document.getElementById('edit_unloading_type').value = 'account';
+            document.getElementById('edit_builty_account_select').value = accountId;
+        } else if (warehouseId) {
+            document.getElementById('edit_unloading_type').value = 'warehouse';
+            document.getElementById('edit_builty_warehouse_select').value = warehouseId;
+        } else if (cgmfId) {
+            document.getElementById('edit_unloading_type').value = 'cgmf';
+            document.getElementById('edit_builty_cgmf_select').value = cgmfId;
+        } else {
+            document.getElementById('edit_unloading_type').value = 'manual';
+        }
+        toggleUnloadingOptions(true);
         
         new bootstrap.Modal(document.getElementById('editBuiltyModal')).show();
     }
     
     // Toggle unloading options based on type
-    function toggleUnloadingOptions() {
+    function toggleUnloadingOptions(preserveSelections) {
         const type = document.getElementById('edit_unloading_type').value;
         document.getElementById('edit_builty_account_div').style.display = type === 'account' ? 'block' : 'none';
         document.getElementById('edit_builty_warehouse_div').style.display = type === 'warehouse' ? 'block' : 'none';
         document.getElementById('edit_builty_cgmf_div').style.display = type === 'cgmf' ? 'block' : 'none';
         document.getElementById('edit_builty_manual_div').style.display = type === 'manual' ? 'block' : 'none';
         
-        // Clear selections
-        if (type !== 'account') document.getElementById('edit_builty_account_select').value = '';
-        if (type !== 'warehouse') document.getElementById('edit_builty_warehouse_select').value = '';
-        if (type !== 'cgmf') document.getElementById('edit_builty_cgmf_select').value = '';
+        // Clear selections only when user manually changes the type
+        if (!preserveSelections) {
+            if (type !== 'account') document.getElementById('edit_builty_account_select').value = '';
+            if (type !== 'warehouse') document.getElementById('edit_builty_warehouse_select').value = '';
+            if (type !== 'cgmf') document.getElementById('edit_builty_cgmf_select').value = '';
+        }
     }
     
     // Set unloading point value before form submit
